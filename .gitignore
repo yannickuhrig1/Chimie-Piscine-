@@ -1,0 +1,9 @@
+node_modules/
+.vercel/
+apk-build/
+android-build/
+*.apk
+*.aab
+*.keystore
+.env
+.DS_Store
