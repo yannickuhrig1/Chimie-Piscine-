@@ -33,7 +33,7 @@
     --shadow:0 20px 60px -20px rgba(4,29,46,.6);
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-  html,body{height:100%;overscroll-behavior-y:none}
+  html{height:100%;overscroll-behavior-y:none}
   body{
     font-family:'Manrope',sans-serif;
     color:var(--foam);
@@ -44,7 +44,8 @@
       radial-gradient(circle at 20% 80%,rgba(34,180,212,.15) 0%,transparent 40%),
       linear-gradient(180deg,var(--abyss) 0%,#072a44 100%);
     min-height:100vh;
-    padding-bottom:calc(180px + env(safe-area-inset-bottom));
+    overscroll-behavior-y:none;
+    padding-bottom:calc(140px + env(safe-area-inset-bottom));
     padding-top:env(safe-area-inset-top);
     overflow-x:hidden;
     position:relative;
