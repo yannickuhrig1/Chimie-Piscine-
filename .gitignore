@@ -7,3 +7,4 @@ android-build/
 *.keystore
 .env
 .DS_Store
+.claude/

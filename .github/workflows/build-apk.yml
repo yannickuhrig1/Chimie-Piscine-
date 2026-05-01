@@ -1,0 +1,145 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'README.md'
+      - '.gitignore'
+  workflow_dispatch:
+    inputs:
+      pwa_url:
+        description: 'URL HTTPS de la PWA déployée'
+        required: true
+        default: 'https://chimie-piscine.vercel.app'
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install Bubblewrap CLI
+        run: npm install -g @bubblewrap/cli
+
+      - name: Determine PWA URL
+        id: url
+        run: |
+          if [ -n "${{ github.event.inputs.pwa_url }}" ]; then
+            echo "url=${{ github.event.inputs.pwa_url }}" >> $GITHUB_OUTPUT
+          else
+            echo "url=${{ vars.PWA_URL || 'https://chimie-piscine.vercel.app' }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate signing keystore
+        run: |
+          mkdir -p android-build
+          cd android-build
+          keytool -genkey -v -keystore android.keystore \
+            -alias android -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass chimiepiscine -keypass chimiepiscine \
+            -dname "CN=Yannick Uhrig, OU=Personal, O=YU, L=Moselle, S=Grand Est, C=FR"
+
+      - name: Initialize Bubblewrap project
+        working-directory: android-build
+        run: |
+          cat > twa-manifest.json <<EOF
+          {
+            "packageId": "fr.yannickuhrig.chimiepiscine",
+            "host": "$(echo "${{ steps.url.outputs.url }}" | sed 's|https://||;s|/.*||')",
+            "name": "Chimie Piscine",
+            "launcherName": "Piscine",
+            "display": "standalone",
+            "themeColor": "#0a3d62",
+            "navigationColor": "#0a3d62",
+            "navigationColorDark": "#041d2e",
+            "navigationDividerColor": "#0a3d62",
+            "navigationDividerColorDark": "#041d2e",
+            "backgroundColor": "#041d2e",
+            "enableNotifications": true,
+            "startUrl": "/index.html",
+            "iconUrl": "${{ steps.url.outputs.url }}/icon-512.png",
+            "maskableIconUrl": "${{ steps.url.outputs.url }}/icon-512.png",
+            "appVersionName": "1.0.0",
+            "appVersionCode": 1,
+            "shortcuts": [],
+            "generatorApp": "bubblewrap-cli",
+            "webManifestUrl": "${{ steps.url.outputs.url }}/manifest.json",
+            "fallbackType": "customtabs",
+            "features": {},
+            "alphaDependencies": {"enabled": false},
+            "enableSiteSettingsShortcut": true,
+            "isChromeOSOnly": false,
+            "isMetaQuest": false,
+            "fullScopeUrl": "${{ steps.url.outputs.url }}/",
+            "minSdkVersion": 21,
+            "orientation": "portrait",
+            "fingerprints": [],
+            "additionalTrustedOrigins": [],
+            "retainedBundles": [],
+            "signingKey": {
+              "path": "./android.keystore",
+              "alias": "android"
+            }
+          }
+          EOF
+          
+          # Init avec auto-accept des prompts
+          echo "Y" | bubblewrap init --manifest="${{ steps.url.outputs.url }}/manifest.json" --directory=. || true
+          
+          # Override avec notre manifest custom
+          mv twa-manifest.json twa-manifest.json.tmp
+          cp twa-manifest.json.tmp twa-manifest.json
+
+      - name: Build APK
+        working-directory: android-build
+        env:
+          BUBBLEWRAP_KEYSTORE_PASSWORD: chimiepiscine
+          BUBBLEWRAP_KEY_PASSWORD: chimiepiscine
+        run: |
+          bubblewrap build --skipPwaValidation || \
+            (echo "Build failed, trying update..." && bubblewrap update && bubblewrap build --skipPwaValidation)
+
+      - name: Find APK
+        id: find_apk
+        working-directory: android-build
+        run: |
+          APK=$(find . -name "*.apk" -not -path "*/build/intermediates/*" | head -1)
+          echo "Found: $APK"
+          echo "apk_path=android-build/$APK" >> $GITHUB_OUTPUT
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: chimie-piscine-apk
+          path: android-build/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload AAB (for Play Store)
+        uses: actions/upload-artifact@v4
+        with:
+          name: chimie-piscine-aab
+          path: android-build/*.aab
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Create release on tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            android-build/*.apk
+            android-build/*.aab
+          generate_release_notes: true
