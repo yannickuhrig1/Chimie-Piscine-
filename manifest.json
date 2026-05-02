@@ -2,7 +2,7 @@
   "name": "Chimie Piscine",
   "short_name": "Piscine",
   "description": "Calculateur et suivi de chimie de piscine",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
@@ -28,7 +28,7 @@
     {
       "name": "Nouvelle mesure",
       "short_name": "Mesurer",
-      "url": "./index.html#mesure",
+      "url": "./#mesure",
       "icons": [{"src": "icon-192.png", "sizes": "192x192"}]
     }
   ]

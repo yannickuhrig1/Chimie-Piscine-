@@ -1,7 +1,6 @@
-const CACHE = 'chimie-piscine-v4';
+const CACHE = 'chimie-piscine-v5';
 const ASSETS = [
   './',
-  './index.html',
   './app.js',
   './manifest.json',
   './icon-192.png',
@@ -48,9 +47,9 @@ self.addEventListener('notificationclick', e => {
   e.waitUntil(
     clients.matchAll({type:'window'}).then(list => {
       for(const c of list){
-        if(c.url.includes('index.html') && 'focus' in c) return c.focus();
+        if('focus' in c) return c.focus();
       }
-      if(clients.openWindow) return clients.openWindow('./index.html');
+      if(clients.openWindow) return clients.openWindow('./');
     })
   );
 });
