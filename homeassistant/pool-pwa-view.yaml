@@ -1,0 +1,388 @@
+# =============================================================
+# Vue "Style PWA" pour dashboard_piscine
+# Reproduit l'app https://chimie-piscine.vercel.app dans Home Assistant
+# - Mesures du jour (cartes glass sombres)
+# - Cibles & volume (helpers réglables)
+# - Corrections recommandées (calculées en temps réel par templates Jinja)
+# - Plages idéales (référence)
+# - Historique 7j (mini-graph-card)
+# =============================================================
+title: Style PWA
+path: pwa
+icon: mdi:water-pump
+type: sections
+max_columns: 3
+sections:
+
+  # ============== MESURES DU JOUR ==============
+  - type: grid
+    cards:
+      - type: heading
+        heading: Mesures du jour
+        icon: mdi:test-tube
+        heading_style: title
+
+      - type: custom:mushroom-template-card
+        primary: pH
+        secondary: "{{ states('sensor.piscine_sampling_point_pl_ph') }}"
+        icon: mdi:flask
+        icon_color: |-
+          {% set v = states('sensor.piscine_sampling_point_pl_ph') | float(0) %}
+          {% if v < 6.8 or v > 7.6 %}red
+          {% elif v < 7.0 or v > 7.4 %}amber
+          {% else %}green{% endif %}
+        fill_container: true
+        tap_action:
+          action: more-info
+          entity: sensor.piscine_sampling_point_pl_ph
+        card_mod:
+          style: |
+            ha-card {
+              background: linear-gradient(135deg, rgba(34,180,212,.18), rgba(127,219,218,.06)) !important;
+              border: 1px solid rgba(127,219,218,.25) !important;
+              border-radius: 22px !important;
+              backdrop-filter: blur(12px) saturate(140%);
+            }
+
+      - type: custom:mushroom-template-card
+        primary: Chlore libre
+        secondary: "{{ states('sensor.piscine_sampling_point_pl_chlorine_free') }} mg/l"
+        icon: mdi:water-percent
+        icon_color: |-
+          {% set v = states('sensor.piscine_sampling_point_pl_chlorine_free') | float(0) %}
+          {% if v < 0.5 %}red
+          {% elif v < 1.0 or v > 3.0 %}amber
+          {% else %}green{% endif %}
+        fill_container: true
+        tap_action:
+          action: more-info
+          entity: sensor.piscine_sampling_point_pl_chlorine_free
+        card_mod:
+          style: |
+            ha-card {
+              background: linear-gradient(135deg, rgba(34,180,212,.18), rgba(127,219,218,.06)) !important;
+              border: 1px solid rgba(127,219,218,.25) !important;
+              border-radius: 22px !important;
+            }
+
+      - type: custom:mushroom-template-card
+        primary: Chlore combiné
+        secondary: >-
+          {% set fcl = states('sensor.piscine_sampling_point_pl_chlorine_free') | float(0) %}
+          {% set tcl = states('sensor.piscine_sampling_point_pl_chlorine_total') | float(0) %}
+          {{ (tcl - fcl) | round(2) }} mg/l
+        icon: mdi:flask-empty
+        icon_color: >-
+          {% set fcl = states('sensor.piscine_sampling_point_pl_chlorine_free') | float(0) %}
+          {% set tcl = states('sensor.piscine_sampling_point_pl_chlorine_total') | float(0) %}
+          {% set ccl = tcl - fcl %}
+          {% if ccl > 0.6 %}red
+          {% elif ccl > 0.4 %}amber
+          {% else %}green{% endif %}
+        fill_container: true
+        card_mod:
+          style: |
+            ha-card {
+              background: linear-gradient(135deg, rgba(255,107,107,.10), rgba(255,209,102,.05)) !important;
+              border: 1px solid rgba(127,219,218,.25) !important;
+              border-radius: 22px !important;
+            }
+
+      - type: custom:mushroom-template-card
+        primary: TAC
+        secondary: "{{ states('sensor.piscine_sampling_point_pl_alkalinity') }} ppm"
+        icon: mdi:gauge
+        icon_color: |-
+          {% set v = states('sensor.piscine_sampling_point_pl_alkalinity') | float(0) %}
+          {% if v < 60 or v > 150 %}amber
+          {% elif v >= 80 and v <= 120 %}green
+          {% else %}cyan{% endif %}
+        fill_container: true
+        tap_action:
+          action: more-info
+          entity: sensor.piscine_sampling_point_pl_alkalinity
+        card_mod:
+          style: |
+            ha-card {
+              background: linear-gradient(135deg, rgba(255,209,102,.12), rgba(127,219,218,.04)) !important;
+              border: 1px solid rgba(127,219,218,.25) !important;
+              border-radius: 22px !important;
+            }
+
+      - type: custom:mushroom-template-card
+        primary: CYA (stabilisant)
+        secondary: "{{ states('sensor.piscine_sampling_point_pl_cyanuric_acid') }} ppm"
+        icon: mdi:shield-sun
+        icon_color: |-
+          {% set v = states('sensor.piscine_sampling_point_pl_cyanuric_acid') | float(0) %}
+          {% if v >= 30 and v <= 50 %}green
+          {% elif v >= 20 and v <= 70 %}amber
+          {% else %}red{% endif %}
+        fill_container: true
+        tap_action:
+          action: more-info
+          entity: sensor.piscine_sampling_point_pl_cyanuric_acid
+        card_mod:
+          style: |
+            ha-card {
+              background: linear-gradient(135deg, rgba(6,214,160,.12), rgba(127,219,218,.04)) !important;
+              border: 1px solid rgba(127,219,218,.25) !important;
+              border-radius: 22px !important;
+            }
+
+      - type: custom:mushroom-template-card
+        primary: Température eau
+        secondary: "{{ states('sensor.0xa4c138027c64ffff_temperature') }} °C"
+        icon: mdi:thermometer-water
+        icon_color: cyan
+        fill_container: true
+        tap_action:
+          action: more-info
+          entity: sensor.0xa4c138027c64ffff_temperature
+        card_mod:
+          style: |
+            ha-card {
+              background: linear-gradient(135deg, rgba(34,180,212,.18), rgba(10,61,98,.20)) !important;
+              border: 1px solid rgba(127,219,218,.25) !important;
+              border-radius: 22px !important;
+            }
+
+  # ============== VOLUME & CIBLES ==============
+  - type: grid
+    cards:
+      - type: heading
+        heading: Volume & cibles
+        icon: mdi:tune
+        heading_style: title
+
+      - type: tile
+        entity: input_number.bassin_volume
+        name: Volume bassin
+        color: cyan
+        features:
+          - type: numeric-input
+
+      - type: tile
+        entity: input_number.bassin_ph_souhaite
+        name: pH souhaité
+        color: purple
+        features:
+          - type: numeric-input
+            style: slider
+
+      - type: tile
+        entity: input_number.bassin_tac_souhaite
+        name: TAC souhaité
+        color: amber
+        features:
+          - type: numeric-input
+            style: slider
+
+  # ============== CORRECTIONS RECOMMANDÉES ==============
+  - type: grid
+    cards:
+      - type: heading
+        heading: Corrections recommandées
+        icon: mdi:flask-round-bottom
+        heading_style: title
+
+      - type: markdown
+        content: |
+          {%- set vol = states('input_number.bassin_volume') | float(43) -%}
+          {%- set ph = states('sensor.piscine_sampling_point_pl_ph') | float(0) -%}
+          {%- set ph_cible = states('input_number.bassin_ph_souhaite') | float(7.2) -%}
+          {%- set fcl = states('sensor.piscine_sampling_point_pl_chlorine_free') | float(0) -%}
+          {%- set tcl = states('sensor.piscine_sampling_point_pl_chlorine_total') | float(0) -%}
+          {%- set tac = states('sensor.piscine_sampling_point_pl_alkalinity') | float(0) -%}
+          {%- set tac_cible = states('input_number.bassin_tac_souhaite') | float(80) -%}
+          {%- set cya = states('sensor.piscine_sampling_point_pl_cyanuric_acid') | float(0) -%}
+          {%- set ccl = (tcl - fcl) | round(2) -%}
+          {%- set fcl_vise = (cya / 10) | round(2) -%}
+          {%- set delta_ph = (ph - ph_cible) | round(2) -%}
+          {%- set actions = namespace(any=false) -%}
+
+          {%- if delta_ph > 0 -%}
+          {%- set actions.any = true -%}
+          ### 🟣 Correction pH — Δ {{ delta_ph }}
+          | Produit | Dose |
+          |---|---|
+          | Acide chlorhydrique | **{{ ((vol / 50) * (delta_ph / 0.3) * 0.5) | round(2) }} L** |
+          | pH- poudre (estim.) | **{{ (vol * (delta_ph / 0.3) * 13) | round(0) }} g** |
+
+          ⚠️ Appliquer 1/3 à 1/2 de la dose, remesurer le lendemain.
+          ___
+          {%- endif -%}
+
+          {%- if cya > 0 and fcl_vise > fcl -%}
+          {%- set actions.any = true -%}
+          ### 🟢 Chloration — cible {{ fcl_vise }} mg/l
+          | Produit | Dose |
+          |---|---|
+          | Javel 9.6° | **{{ ((fcl_vise - fcl) * vol / 100) | round(2) }} L** |
+
+          Fcl visé = CYA / 10 = {{ fcl_vise }} mg/l
+          ___
+          {%- endif -%}
+
+          {%- if ccl > 0.6 -%}
+          {%- set actions.any = true -%}
+          ### 🔴 Superchloration — Ccl {{ ccl }} mg/l
+          | Produit | Dose |
+          |---|---|
+          | Hypochlorite Ca | **{{ (ccl * vol * 15) | round(0) }} g** |
+          | Javel 9.6° | **{{ (ccl * vol * 0.1) | round(2) }} L** |
+
+          ⚠️ Chloramines élevées — superchloration nécessaire.
+          ___
+          {%- endif -%}
+
+          {%- if tac < tac_cible and tac > 0 -%}
+          {%- set actions.any = true -%}
+          ### 🟡 Augmentation TAC — Δ {{ (tac_cible - tac) | round(0) }} ppm
+          | Produit | Dose |
+          |---|---|
+          | TAC+ | **{{ (1.7 * (tac_cible - tac) * vol) | round(0) }} g** |
+
+          Base : 17 g/m³ pour +10 ppm.
+          ___
+          {%- endif -%}
+
+          {%- if cya > 0 -%}
+          {%- set choc_javel = (5 * (fcl_vise - fcl) * vol / 100) | round(2) -%}
+          {%- if choc_javel > 0 -%}
+          {%- set actions.any = true -%}
+          ### ⚡ Chloration choc (préventive ×5)
+          | Produit | Dose |
+          |---|---|
+          | Javel 9.6° | **{{ choc_javel }} L** |
+          | Hypochlorite Ca | **{{ (15 * cya * 5 * vol / 100) | round(0) }} g** |
+
+          Facteur ×5 — soit {{ (5 * cya / 10) | round(1) }} ppm de chlore visé.
+          ___
+          {%- endif -%}
+          {%- endif -%}
+
+          {%- if not actions.any -%}
+          ### ✅ Eau équilibrée
+          Aucune correction nécessaire selon les mesures actuelles.
+          {%- endif -%}
+        card_mod:
+          style: |
+            ha-card {
+              background: linear-gradient(135deg, rgba(4,29,46,.6), rgba(10,61,98,.4)) !important;
+              border: 1px solid rgba(127,219,218,.25) !important;
+              border-radius: 22px !important;
+              backdrop-filter: blur(20px) saturate(150%);
+            }
+            ha-markdown {
+              padding: 18px !important;
+            }
+            ha-markdown h3 {
+              font-family: 'Fraunces', serif !important;
+              font-weight: 500 !important;
+              letter-spacing: -0.01em !important;
+              margin-top: 0 !important;
+            }
+            ha-markdown table {
+              width: 100% !important;
+              margin: 8px 0 !important;
+            }
+            ha-markdown td {
+              padding: 6px 0 !important;
+            }
+            ha-markdown td strong {
+              color: #7fdbda !important;
+              font-family: 'JetBrains Mono', monospace !important;
+            }
+
+  # ============== PLAGES IDÉALES ==============
+  - type: grid
+    cards:
+      - type: heading
+        heading: Plages idéales
+        icon: mdi:check-circle-outline
+        heading_style: title
+
+      - type: markdown
+        content: |
+          | Paramètre | Plage |
+          |---|---|
+          | pH | **7.0 – 7.4** |
+          | Chlore libre | **1 – 3 mg/l** |
+          | Chlore combiné | **< 0.6 mg/l** |
+          | TAC | **80 – 120 ppm** |
+          | CYA | **30 – 50 ppm** |
+          | Température | **24 – 28 °C** |
+        card_mod:
+          style: |
+            ha-card {
+              background: rgba(255,255,255,.04) !important;
+              border: 1px solid rgba(127,219,218,.18) !important;
+              border-radius: 22px !important;
+            }
+
+  # ============== HISTORIQUE 7J ==============
+  - type: grid
+    cards:
+      - type: heading
+        heading: Historique 7 jours
+        icon: mdi:chart-line
+        heading_style: title
+
+      - type: custom:mini-graph-card
+        name: pH
+        icon: mdi:flask
+        entities:
+          - entity: sensor.piscine_sampling_point_pl_ph
+        hours_to_show: 168
+        points_per_hour: 1
+        line_color: "#9c27b0"
+        line_width: 3
+        show:
+          fill: fade
+          extrema: true
+
+      - type: custom:mini-graph-card
+        name: Chlore libre / total
+        icon: mdi:water-percent
+        entities:
+          - entity: sensor.piscine_sampling_point_pl_chlorine_free
+            name: Libre
+            color: "#4caf50"
+          - entity: sensor.piscine_sampling_point_pl_chlorine_total
+            name: Total
+            color: "#7fdbda"
+        hours_to_show: 168
+        points_per_hour: 1
+        line_width: 3
+        show:
+          fill: fade
+
+      - type: custom:mini-graph-card
+        name: TAC & CYA
+        icon: mdi:gauge
+        entities:
+          - entity: sensor.piscine_sampling_point_pl_alkalinity
+            name: TAC
+            color: "#ffd166"
+          - entity: sensor.piscine_sampling_point_pl_cyanuric_acid
+            name: CYA
+            color: "#06d6a0"
+        hours_to_show: 168
+        points_per_hour: 1
+        line_width: 3
+        show:
+          fill: fade
+
+      - type: custom:mini-graph-card
+        name: Température eau
+        icon: mdi:thermometer-water
+        entities:
+          - entity: sensor.0xa4c138027c64ffff_temperature
+        hours_to_show: 168
+        points_per_hour: 2
+        line_color: "#03a9f4"
+        line_width: 3
+        show:
+          fill: fade
+          extrema: true
