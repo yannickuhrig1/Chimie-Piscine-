@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "fr.yannickuhrig.chimiepiscine",
+      "sha256_cert_fingerprints": [
+        "94:FD:50:4B:D8:41:2A:6D:F4:3E:95:9C:93:25:76:72:24:06:0C:57:BD:FD:CA:26:20:2F:AA:31:06:A6:8C:24"
+      ]
+    }
+  }
+]
