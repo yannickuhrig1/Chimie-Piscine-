@@ -163,6 +163,13 @@ function evaluateStatus(m){
   if(m.tac !== null){
     if(m.tac < 60 || m.tac > 150) issues.push({level:'warn', msg:'TAC'});
   }
+  if(m.cya !== null){
+    // Plage SOS Piscine / TFP : CYA bas pour ne pas séquestrer le chlore actif.
+    // > 50 = danger (chlore lock), > 30 = warn (à surveiller).
+    if(m.cya > 50) issues.push({level:'danger', msg:'CYA trop élevé'});
+    else if(m.cya > 30) issues.push({level:'warn', msg:'CYA'});
+    else if(m.cya < 20) issues.push({level:'warn', msg:'CYA bas'});
+  }
   if(issues.some(i=>i.level==='danger')) return {level:'danger', text:'Action requise'};
   if(issues.length) return {level:'warn', text:'À surveiller'};
   return {level:'ok', text:'Eau équilibrée'};
