@@ -322,6 +322,33 @@
   .switch input:checked + .switch-slider{background:linear-gradient(135deg,var(--water),var(--mid));border-color:var(--water)}
   .switch input:checked + .switch-slider::before{transform:translateX(18px);background:white}
 
+  /* Saved pill (auto-save indicator) */
+  .bassin-saved-pill{
+    position:fixed;top:calc(env(safe-area-inset-top) + 16px);right:18px;z-index:150;
+    display:inline-flex;align-items:center;gap:6px;
+    padding:6px 12px;border-radius:99px;
+    background:rgba(6,214,160,.18);color:var(--leaf);
+    border:1px solid rgba(6,214,160,.35);
+    font-size:11px;font-weight:600;letter-spacing:.05em;
+    backdrop-filter:blur(12px);
+    opacity:0;transform:translateY(-6px);pointer-events:none;
+    transition:opacity .25s,transform .25s;
+  }
+  .bassin-saved-pill.show{opacity:1;transform:translateY(0)}
+  .bassin-saved-pill::before{
+    content:'';width:6px;height:6px;border-radius:50%;background:var(--leaf);box-shadow:0 0 8px var(--leaf);
+  }
+
+  /* Last control info */
+  .last-control-info{
+    display:flex;align-items:center;gap:8px;
+    padding:8px 14px;margin:-8px 0 16px;
+    background:rgba(127,219,218,.06);border:1px solid var(--border);
+    border-radius:14px;
+    font-size:12px;color:var(--shallow);font-weight:500;
+  }
+  .last-control-info svg{width:14px;height:14px;flex-shrink:0;color:var(--shallow);opacity:.85}
+
   /* Install banner */
   .install-banner{
     background:linear-gradient(135deg,rgba(255,209,102,.15),rgba(255,209,102,.05));
@@ -358,6 +385,11 @@
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m0 0l-5-5m5 5l5-5M5 21h14"/></svg>
     <div class="ib-text">Installer l'app sur l'écran d'accueil</div>
     <button id="installBtn">Installer</button>
+  </div>
+
+  <div id="lastControlInfo" class="last-control-info" style="display:none">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+    <span id="lastControlText">Dernier contrôle : —</span>
   </div>
 
   <!-- =================== MESURE =================== -->
@@ -510,6 +542,47 @@
     <h1 class="page-title">Rappels <em>de contrôle</em></h1>
     <p class="page-sub">Programme tes notifications</p>
 
+    <div class="divider">Configurer mon bassin</div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="dot"></span>Paramètres permanents</div>
+      </div>
+      <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6;margin-bottom:14px">
+        Renseigne tes valeurs cibles une fois pour toutes — elles seront pré-remplies à chaque mesure.
+      </p>
+      <div class="field">
+        <label>Volume du bassin</label>
+        <div class="input-wrap">
+          <input type="number" id="cfgVolume" step="0.1" placeholder="70" inputmode="decimal">
+          <span class="input-unit">m³</span>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>pH souhaité</label>
+          <div class="input-wrap">
+            <input type="number" id="cfgPhSouhaite" step="0.1" placeholder="7.2" inputmode="decimal">
+          </div>
+        </div>
+        <div class="field">
+          <label>TAC visé</label>
+          <div class="input-wrap">
+            <input type="number" id="cfgTacSouhaite" step="1" placeholder="80" inputmode="decimal">
+            <span class="input-unit">ppm</span>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>CYA (stabilisant)</label>
+        <div class="input-wrap">
+          <input type="number" id="cfgCya" step="1" placeholder="30" inputmode="decimal">
+          <span class="input-unit">ppm</span>
+        </div>
+      </div>
+      <button class="btn-primary" onclick="saveBassinConfigFromRappels()">Configurer mon bassin</button>
+    </div>
+
+    <div class="divider">Notifications</div>
     <div class="card">
       <div class="card-header">
         <div class="card-title"><span class="dot"></span>Notifications</div>
@@ -599,6 +672,7 @@
   </div>
 </nav>
 
+<div id="bassinSavedPill" class="bassin-saved-pill">Bassin sauvegardé</div>
 <div id="toast" class="toast"></div>
 
 <script src="app.js"></script>

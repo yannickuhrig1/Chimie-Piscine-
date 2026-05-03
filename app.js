@@ -201,6 +201,97 @@ function loadLastInputs(){
   if(last.phSouhaite!==null) $('phSouhaite').value = last.phSouhaite;
   if(last.tacSouhaite!==null) $('tacSouhaite').value = last.tacSouhaite;
   if(last.cya!==null) $('cya').value = last.cya;
+  // Synchronise aussi les champs miroir de la page Rappels (Configurer mon bassin)
+  ['cfgVolume','cfgPhSouhaite','cfgTacSouhaite','cfgCya'].forEach(id => {
+    const el = $(id);
+    if(!el) return;
+    const key = id.replace('cfg','').replace(/^[A-Z]/, c=>c.toLowerCase());
+    if(last[key] !== null && last[key] !== undefined) el.value = last[key];
+  });
+}
+
+// ============== Auto-save bassin (volume + cibles) ==============
+let savedPillTimer = null;
+function showSavedPill(){
+  const p = $('bassinSavedPill');
+  if(!p) return;
+  p.classList.add('show');
+  clearTimeout(savedPillTimer);
+  savedPillTimer = setTimeout(()=>p.classList.remove('show'), 1600);
+}
+
+function autoSaveBassinParams(){
+  const current = loadJSON(STORAGE_KEYS.lastInputs, {}) || {};
+  const next = {
+    volume: num('volume'),
+    phSouhaite: num('phSouhaite'),
+    tacSouhaite: num('tacSouhaite'),
+    cya: num('cya')
+  };
+  // Ne sauve que les champs renseignés sans écraser les anciens
+  const merged = {...current};
+  Object.entries(next).forEach(([k,v]) => { if(v !== null) merged[k] = v; });
+  saveJSON(STORAGE_KEYS.lastInputs, merged);
+  // Synchronise les champs miroir de la page Rappels
+  if(next.volume !== null && $('cfgVolume')) $('cfgVolume').value = next.volume;
+  if(next.phSouhaite !== null && $('cfgPhSouhaite')) $('cfgPhSouhaite').value = next.phSouhaite;
+  if(next.tacSouhaite !== null && $('cfgTacSouhaite')) $('cfgTacSouhaite').value = next.tacSouhaite;
+  if(next.cya !== null && $('cfgCya')) $('cfgCya').value = next.cya;
+  showSavedPill();
+}
+
+function saveBassinConfigFromRappels(){
+  const cfg = {
+    volume: parseFloat($('cfgVolume').value) || null,
+    phSouhaite: parseFloat($('cfgPhSouhaite').value) || null,
+    tacSouhaite: parseFloat($('cfgTacSouhaite').value) || null,
+    cya: parseFloat($('cfgCya').value) || null
+  };
+  if(cfg.volume === null){
+    toast('Renseigne au moins le volume', 'warn');
+    return;
+  }
+  const current = loadJSON(STORAGE_KEYS.lastInputs, {}) || {};
+  const merged = {...current};
+  Object.entries(cfg).forEach(([k,v]) => { if(v !== null) merged[k] = v; });
+  saveJSON(STORAGE_KEYS.lastInputs, merged);
+  // Reflète sur la page Mesures
+  if(cfg.volume !== null) $('volume').value = cfg.volume;
+  if(cfg.phSouhaite !== null) $('phSouhaite').value = cfg.phSouhaite;
+  if(cfg.tacSouhaite !== null) $('tacSouhaite').value = cfg.tacSouhaite;
+  if(cfg.cya !== null) $('cya').value = cfg.cya;
+  toast('Bassin configuré ✓');
+  showSavedPill();
+}
+
+// ============== Affichage "dernier contrôle il y a X" ==============
+function relativeTime(dateStr){
+  const d = new Date(dateStr);
+  const diffMs = Date.now() - d.getTime();
+  const min = Math.round(diffMs / 60000);
+  if(min < 1) return "à l'instant";
+  if(min < 60) return `il y a ${min} min`;
+  const h = Math.round(min / 60);
+  if(h < 24) return `il y a ${h} h`;
+  const days = Math.round(h / 24);
+  if(days === 1) return 'hier';
+  if(days < 30) return `il y a ${days} jours`;
+  const months = Math.round(days / 30);
+  if(months < 12) return `il y a ${months} mois`;
+  return `il y a ${Math.round(months/12)} an${months>=24?'s':''}`;
+}
+
+function updateLastControlInfo(){
+  const el = $('lastControlInfo');
+  if(!el) return;
+  const list = loadJSON(STORAGE_KEYS.measurements, []);
+  if(!list.length){
+    el.style.display = 'none';
+    return;
+  }
+  const last = list[list.length - 1];
+  $('lastControlText').textContent = `Dernier contrôle ${relativeTime(last.date)}`;
+  el.style.display = 'flex';
 }
 
 function resetForm(){
@@ -234,6 +325,7 @@ function saveAndCalc(){
 
   updateStatus(m);
   updateCclBadge(m);
+  updateLastControlInfo();
   renderCorrections();
   toast('Mesure enregistrée');
   setTimeout(()=>switchTab('correction'), 600);
@@ -445,6 +537,7 @@ function deleteMeasurement(idx){
   saveJSON(STORAGE_KEYS.measurements, list);
   renderHistory();
   renderCharts();
+  updateLastControlInfo();
   toast('Mesure supprimée');
 }
 
@@ -741,16 +834,36 @@ document.addEventListener('DOMContentLoaded', ()=>{
   loadLastInputs();
   loadReminders();
   renderHistory();
+  updateLastControlInfo();
 
   // Met à jour le badge si données pré-saisies
   const m = readInputs();
   if(m.fcl!==null && m.tcl!==null) updateCclBadge(m);
+
+  // Auto-save sur les paramètres bassin (debounced via input event)
+  ['volume','phSouhaite','tacSouhaite','cya'].forEach(id => {
+    const el = $(id);
+    if(el) el.addEventListener('input', autoSaveBassinParams);
+  });
+  ['cfgVolume','cfgPhSouhaite','cfgTacSouhaite','cfgCya'].forEach(id => {
+    const el = $(id);
+    if(el) el.addEventListener('input', () => {
+      // Mirror config fields to main fields, then save
+      const map = {cfgVolume:'volume',cfgPhSouhaite:'phSouhaite',cfgTacSouhaite:'tacSouhaite',cfgCya:'cya'};
+      const target = $(map[id]);
+      if(target) target.value = el.value;
+      autoSaveBassinParams();
+    });
+  });
 
   // Vérifier permission notifications
   if('Notification' in window && Notification.permission === 'granted'){
     $('enableNotifBtn').textContent = 'Activées';
     $('enableNotifBtn').style.color = 'var(--leaf)';
   }
+
+  // Rafraîchit le "il y a X jours" toutes les minutes
+  setInterval(updateLastControlInfo, 60000);
 
   // Vérifier les rappels périodiquement
   setInterval(checkRemindersDue, 60000);
