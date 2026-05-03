@@ -432,6 +432,14 @@ function renderCorrections(){
           <div class="result-note">Pour atteindre Fcl visé = CYA/10 = ${fmt(chl.fclVise, 2)} ppm</div>
         </div>
       </div>`;
+    } else {
+      html += `<div class="card">
+        <div class="card-header"><div class="card-title"><span class="dot"></span>Chloration</div></div>
+        <div class="result ok">
+          <div class="result-label">Niveau correct</div>
+          <div class="result-note">Fcl mesuré (${fmt(m.fcl,2)} ppm) ≥ cible (CYA/10 = ${fmt(chl.fclVise, 2)} ppm). Aucune chloration journalière à apporter.</div>
+        </div>
+      </div>`;
     }
   }
 
@@ -458,6 +466,14 @@ function renderCorrections(){
             </div>
           </div>
           <div class="result-note">Ccl &gt; 0.6 ppm — superchloration nécessaire</div>
+        </div>
+      </div>`;
+    } else {
+      html += `<div class="card">
+        <div class="card-header"><div class="card-title"><span class="dot"></span>Chlore combiné</div></div>
+        <div class="result ok">
+          <div class="result-label">Pas de chloramines</div>
+          <div class="result-note">Ccl mesuré (${fmt(ccl,2)} ppm) ≤ 0.6 ppm. Pas de superchloration à prévoir.</div>
         </div>
       </div>`;
     }
@@ -500,6 +516,14 @@ function renderCorrections(){
           <div class="result-label">TAC+ à ajouter</div>
           <div class="result-value">${fmt(tacPlus.totalG, 0)}<span class="unit">g</span></div>
           <div class="result-note">Base : 17 g/m³ pour +10 ppm</div>
+        </div>
+      </div>`;
+    } else {
+      html += `<div class="card">
+        <div class="card-header"><div class="card-title"><span class="dot"></span>TAC</div></div>
+        <div class="result ok">
+          <div class="result-label">TAC suffisant</div>
+          <div class="result-note">TAC mesuré (${fmt(m.tac,0)} ppm) ≥ TAC visé (${fmt(m.tacSouhaite,0)} ppm). Pas d'ajout de TAC+.</div>
         </div>
       </div>`;
     }
