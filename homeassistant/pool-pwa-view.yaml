@@ -115,8 +115,8 @@ sections:
         icon: mdi:shield-sun
         icon_color: |-
           {% set v = states('sensor.piscine_sampling_point_pl_cyanuric_acid') | float(0) %}
-          {% if v >= 20 and v <= 30 %}green
-          {% elif v > 50 %}red
+          {% if v >= 15 and v <= 20 %}green
+          {% elif v > 40 %}red
           {% elif v < 10 %}red
           {% else %}amber{% endif %}
         fill_container: true
@@ -312,10 +312,10 @@ sections:
           | Chlore libre | **1 – 3 mg/l** |
           | Chlore combiné | **< 0.6 mg/l** |
           | TAC | **80 – 120 ppm** |
-          | CYA | **20 – 30 ppm** |
+          | CYA | **15 – 20 ppm** (max 40) |
           | Température | **24 – 28 °C** |
 
-          *CYA selon école SOS Piscine / TroubleFreePool — au-delà de 50 ppm, séquestration du chlore actif.*
+          *CYA — Source : Guide SOS Piscine V3. Au-delà de 40 ppm, l'eau devient « bloquée » : vidange partielle obligatoire (le CYA ne s'élimine que par dilution).*
         card_mod:
           style: |
             ha-card {

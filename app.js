@@ -164,11 +164,13 @@ function evaluateStatus(m){
     if(m.tac < 60 || m.tac > 150) issues.push({level:'warn', msg:'TAC'});
   }
   if(m.cya !== null){
-    // Plage SOS Piscine / TFP : CYA bas pour ne pas séquestrer le chlore actif.
-    // > 50 = danger (chlore lock), > 30 = warn (à surveiller).
-    if(m.cya > 50) issues.push({level:'danger', msg:'CYA trop élevé'});
-    else if(m.cya > 30) issues.push({level:'warn', msg:'CYA'});
-    else if(m.cya < 20) issues.push({level:'warn', msg:'CYA bas'});
+    // Source : Guide SOS Piscine V3 (groupe FB éponyme).
+    // Idéal 15-20 ppm. 20-30 pas dramatique. 30-40 haut mais tolérable.
+    // > 40 = compliqué de tenir l'eau, vidange partielle requise.
+    // CYA ne disparaît pas de l'eau sauf par dilution.
+    if(m.cya > 40) issues.push({level:'danger', msg:'CYA trop élevé — diluer'});
+    else if(m.cya > 30) issues.push({level:'warn', msg:'CYA haut'});
+    else if(m.cya < 15) issues.push({level:'warn', msg:'CYA bas'});
   }
   if(issues.some(i=>i.level==='danger')) return {level:'danger', text:'Action requise'};
   if(issues.length) return {level:'warn', text:'À surveiller'};
