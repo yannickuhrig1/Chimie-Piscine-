@@ -146,28 +146,37 @@ function calcTacPlus(volume, tacMesure, tacSouhaite){
 }
 
 // ============== Évaluation globale ==============
+// Tous les seuils proviennent du Guide SOS Piscine V3 (groupe FB éponyme).
 function evaluateStatus(m){
   const issues = [];
+  // pH : 6.8 - 7.4 (idéalement 7.2)
   if(m.ph !== null){
     if(m.ph < 6.8 || m.ph > 7.6) issues.push({level:'danger', msg:'pH'});
-    else if(m.ph < 7.0 || m.ph > 7.4) issues.push({level:'warn', msg:'pH'});
+    else if(m.ph < 6.8 || m.ph > 7.4) issues.push({level:'warn', msg:'pH'});
   }
+  // Chlore : ~10 % du CYA si dispo, sinon 1-3 ppm. Max 5 ppm (ARS France).
   if(m.fcl !== null){
-    if(m.fcl < 0.5) issues.push({level:'danger', msg:'Chlore bas'});
-    else if(m.fcl < 1) issues.push({level:'warn', msg:'Chlore'});
+    if(m.fcl > 5) issues.push({level:'danger', msg:'Chlore excessif'});
+    else if(m.cya !== null && m.cya > 0){
+      const clTarget = m.cya / 10;
+      if(m.fcl < clTarget * 0.5) issues.push({level:'danger', msg:'Chlore très bas'});
+      else if(m.fcl < clTarget * 0.85) issues.push({level:'warn', msg:'Chlore bas'});
+    } else {
+      if(m.fcl < 0.5) issues.push({level:'danger', msg:'Chlore bas'});
+      else if(m.fcl < 1) issues.push({level:'warn', msg:'Chlore'});
+    }
   }
   if(m.fcl !== null && m.tcl !== null){
     const ccl = m.tcl - m.fcl;
     if(ccl > 0.6) issues.push({level:'danger', msg:'Chloramines'});
   }
+  // TAC : le guide ne donne PAS de plage absolue ("chaque bassin est différent").
+  // Plage indicative très large pour signaler les valeurs aberrantes uniquement.
   if(m.tac !== null){
-    if(m.tac < 60 || m.tac > 150) issues.push({level:'warn', msg:'TAC'});
+    if(m.tac < 50 || m.tac > 200) issues.push({level:'warn', msg:'TAC inhabituel'});
   }
+  // CYA : idéal 15-20 ppm. 20-30 OK. 30-40 toléré. > 40 = vidange.
   if(m.cya !== null){
-    // Source : Guide SOS Piscine V3 (groupe FB éponyme).
-    // Idéal 15-20 ppm. 20-30 pas dramatique. 30-40 haut mais tolérable.
-    // > 40 = compliqué de tenir l'eau, vidange partielle requise.
-    // CYA ne disparaît pas de l'eau sauf par dilution.
     if(m.cya > 40) issues.push({level:'danger', msg:'CYA trop élevé — diluer'});
     else if(m.cya > 30) issues.push({level:'warn', msg:'CYA haut'});
     else if(m.cya < 15) issues.push({level:'warn', msg:'CYA bas'});

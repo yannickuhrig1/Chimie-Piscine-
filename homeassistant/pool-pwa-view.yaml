@@ -29,8 +29,8 @@ sections:
         icon_color: |-
           {% set v = states('sensor.piscine_sampling_point_pl_ph') | float(0) %}
           {% if v < 6.8 or v > 7.6 %}red
-          {% elif v < 7.0 or v > 7.4 %}amber
-          {% else %}green{% endif %}
+          {% elif v >= 6.8 and v <= 7.4 %}green
+          {% else %}amber{% endif %}
         fill_container: true
         tap_action:
           action: more-info
@@ -46,13 +46,29 @@ sections:
 
       - type: custom:mushroom-template-card
         primary: Chlore libre
-        secondary: "{{ states('sensor.piscine_sampling_point_pl_chlorine_free') }} mg/l"
+        secondary: >-
+          {% set v = states('sensor.piscine_sampling_point_pl_chlorine_free') | float(0) %}
+          {% set cya = states('sensor.piscine_sampling_point_pl_cyanuric_acid') | float(0) %}
+          {% if cya > 0 %}
+          {{ v }} mg/l (cible {{ (cya/10) | round(1) }})
+          {% else %}
+          {{ v }} mg/l
+          {% endif %}
         icon: mdi:water-percent
         icon_color: |-
           {% set v = states('sensor.piscine_sampling_point_pl_chlorine_free') | float(0) %}
-          {% if v < 0.5 %}red
-          {% elif v < 1.0 or v > 3.0 %}amber
-          {% else %}green{% endif %}
+          {% set cya = states('sensor.piscine_sampling_point_pl_cyanuric_acid') | float(0) %}
+          {% if v > 5 %}red
+          {% elif cya > 0 %}
+            {% set target = cya / 10 %}
+            {% if v < target * 0.5 %}red
+            {% elif v < target * 0.85 %}amber
+            {% else %}green{% endif %}
+          {% else %}
+            {% if v < 0.5 %}red
+            {% elif v < 1.0 or v > 3.0 %}amber
+            {% else %}green{% endif %}
+          {% endif %}
         fill_container: true
         tap_action:
           action: more-info
@@ -90,12 +106,11 @@ sections:
 
       - type: custom:mushroom-template-card
         primary: TAC
-        secondary: "{{ states('sensor.piscine_sampling_point_pl_alkalinity') }} ppm"
+        secondary: "{{ states('sensor.piscine_sampling_point_pl_alkalinity') }} ppm (réglé selon stabilité pH)"
         icon: mdi:gauge
         icon_color: |-
           {% set v = states('sensor.piscine_sampling_point_pl_alkalinity') | float(0) %}
-          {% if v < 60 or v > 150 %}amber
-          {% elif v >= 80 and v <= 120 %}green
+          {% if v < 50 or v > 200 %}amber
           {% else %}cyan{% endif %}
         fill_container: true
         tap_action:
@@ -306,16 +321,18 @@ sections:
 
       - type: markdown
         content: |
+          *Source : Guide SOS Piscine V3*
+
           | Paramètre | Plage |
           |---|---|
-          | pH | **7.0 – 7.4** |
-          | Chlore libre | **1 – 3 mg/l** |
+          | pH | **6.8 – 7.4** (idéal 7.2) |
+          | Chlore libre | **~10 % du CYA** (max 5 mg/l) |
           | Chlore combiné | **< 0.6 mg/l** |
-          | TAC | **80 – 120 ppm** |
+          | TAC | *variable selon bassin* (rôle tampon pH) |
           | CYA | **15 – 20 ppm** (max 40) |
           | Température | **24 – 28 °C** |
 
-          *CYA — Source : Guide SOS Piscine V3. Au-delà de 40 ppm, l'eau devient « bloquée » : vidange partielle obligatoire (le CYA ne s'élimine que par dilution).*
+          *Le TAC n'a pas de plage absolue : trop bas si le pH chute en permanence, trop haut s'il remonte rapidement. Le CYA ne s'élimine que par dilution — au-delà de 40 ppm, vidange partielle obligatoire.*
         card_mod:
           style: |
             ha-card {
