@@ -482,6 +482,88 @@
       </div>
     </div>
 
+    <!-- Mesures avancées : sel, calcium, phosphates, brome, température -->
+    <details class="card" id="advCard">
+      <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">
+        <div class="card-title"><span class="dot" style="background:var(--lemon);box-shadow:0 0 10px var(--lemon)"></span>Mesures avancées</div>
+        <span style="font-size:11px;color:var(--shallow);opacity:.7">Sel · TH · PO₄ · Brome · T°</span>
+      </summary>
+      <div style="margin-top:14px">
+        <div class="field-row">
+          <div class="field">
+            <label>Température eau</label>
+            <div class="input-wrap">
+              <input type="number" id="temp" step="0.5" placeholder="26" inputmode="decimal">
+              <span class="input-unit">°C</span>
+            </div>
+          </div>
+          <div class="field">
+            <label>Mode désinfection</label>
+            <select id="modeDesinf">
+              <option value="chlore" selected>Chlore</option>
+              <option value="brome">Brome</option>
+              <option value="sel">Électrolyse au sel</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Sel mesuré</label>
+            <div class="input-wrap">
+              <input type="number" id="selMesure" step="0.1" placeholder="3.5" inputmode="decimal">
+              <span class="input-unit">g/L</span>
+            </div>
+          </div>
+          <div class="field">
+            <label>Sel cible</label>
+            <div class="input-wrap">
+              <input type="number" id="selSouhaite" step="0.1" placeholder="4.0" inputmode="decimal">
+              <span class="input-unit">g/L</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>TH mesuré</label>
+            <div class="input-wrap">
+              <input type="number" id="thMesure" step="1" placeholder="15" inputmode="decimal">
+              <span class="input-unit">°f</span>
+            </div>
+          </div>
+          <div class="field">
+            <label>TH visé</label>
+            <div class="input-wrap">
+              <input type="number" id="thSouhaite" step="1" placeholder="25" inputmode="decimal">
+              <span class="input-unit">°f</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label>Phosphates</label>
+            <div class="input-wrap">
+              <input type="number" id="phosphate" step="10" placeholder="200" inputmode="decimal">
+              <span class="input-unit">ppb</span>
+            </div>
+          </div>
+          <div class="field">
+            <label>Brome mesuré</label>
+            <div class="input-wrap">
+              <input type="number" id="brome" step="0.1" placeholder="2.5" inputmode="decimal">
+              <span class="input-unit">ppm</span>
+            </div>
+          </div>
+        </div>
+
+        <p style="font-size:11px;color:var(--shallow);opacity:.7;line-height:1.5;margin-top:6px">
+          TH en °f (1 °f = 10 ppm CaCO₃) · Phosphates en ppb (µg/L) · Brome en ppm.
+        </p>
+      </div>
+    </details>
+
     <div class="btn-row">
       <button class="btn-ghost" onclick="resetForm()">Réinitialiser</button>
       <button class="btn-primary" onclick="saveAndCalc()">Calculer &amp; Sauver</button>
@@ -495,6 +577,11 @@
       <strong>Chlore combiné</strong> : &lt; 0.6 ppm<br>
       <strong>TAC</strong> : variable selon le bassin (rôle tampon du pH)<br>
       <strong>CYA</strong> : 15 – 20 ppm (max 40 — vidange partielle au-delà)<br>
+      <strong>Sel</strong> : 3.0 – 5.0 g/L (selon électrolyseur · typique 4 g/L)<br>
+      <strong>TH (dureté)</strong> : 20 – 40 °f (200 – 400 ppm CaCO₃)<br>
+      <strong>Phosphates</strong> : &lt; 100 ppb (idéal &lt; 50 ppb)<br>
+      <strong>Brome</strong> : 2 – 4 ppm (alternative au chlore)<br>
+      <strong>Indice Langelier</strong> : −0,3 à +0,3 (équilibre eau)<br>
       <span style="opacity:.7;font-size:11px">Le TAC n'a pas de plage absolue : si le pH baisse en permanence, TAC trop bas ; s'il remonte rapidement, TAC trop haut.</span>
     </div>
   </div>
@@ -535,6 +622,20 @@
         <div class="card-title"><span class="dot"></span>TAC &amp; CYA</div>
       </div>
       <div class="chart-wrap"><canvas id="chartTac"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="dot" style="background:var(--leaf);box-shadow:0 0 10px var(--leaf)"></span>Désinfection</div>
+        <span style="font-size:11px;color:var(--shallow);opacity:.8;font-family:'JetBrains Mono',monospace">HOCl actif</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chartDesinf"></canvas></div>
+      <p style="font-size:11px;color:var(--shallow);opacity:.75;margin-top:8px;line-height:1.5">
+        <span style="color:var(--coral)">Rouge</span> = Fcl insuffisant (&lt; CYA × 5 %) ·
+        <span style="color:var(--lemon)">jaune</span> = limite (CYA × 5 – 7,5 %) ·
+        <span style="color:var(--leaf)">vert</span> = sain (CYA × 7,5 – 40 %).
+        Le HOCl actif (pointillé) suit le modèle O'Brien/PoolLab : il chute fortement avec le CYA même si le Fcl monte.
+      </p>
     </div>
 
     <div class="divider">Dernières mesures</div>
@@ -583,6 +684,35 @@
           <span class="input-unit">ppm</span>
         </div>
       </div>
+      <details style="margin:6px 0 12px">
+        <summary style="cursor:pointer;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--shallow);opacity:.85">Cibles avancées (sel · TH · phosphates)</summary>
+        <div style="margin-top:10px">
+          <div class="field-row">
+            <div class="field">
+              <label>Sel cible</label>
+              <div class="input-wrap">
+                <input type="number" id="cfgSelSouhaite" step="0.1" placeholder="4.0" inputmode="decimal">
+                <span class="input-unit">g/L</span>
+              </div>
+            </div>
+            <div class="field">
+              <label>TH visé</label>
+              <div class="input-wrap">
+                <input type="number" id="cfgThSouhaite" step="1" placeholder="25" inputmode="decimal">
+                <span class="input-unit">°f</span>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label>Mode désinfection par défaut</label>
+            <select id="cfgModeDesinf">
+              <option value="chlore" selected>Chlore</option>
+              <option value="brome">Brome</option>
+              <option value="sel">Électrolyse au sel</option>
+            </select>
+          </div>
+        </div>
+      </details>
       <button class="btn-primary" onclick="saveBassinConfigFromRappels()">Configurer mon bassin</button>
     </div>
 
