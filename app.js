@@ -198,9 +198,8 @@ function calcBrome(volume, brome, cible=3){
 }
 
 /**
- * % de chlore actif (HOCl) en fonction du pH
+ * % de chlore actif (HOCl) en fonction du pH (sans CYA)
  * Équilibre HOCl / OCl⁻ à 25 °C : pKa = 7,54
- * %HOCl = 1 / (1 + 10^(pH − 7,54))
  */
 function calcHOClPct(pH){
   if(pH == null || isNaN(pH)) return null;
@@ -208,12 +207,49 @@ function calcHOClPct(pH){
 }
 
 /**
- * Chlore actif en ppm (HOCl) = Fcl × %HOCl
+ * HOCl actif (ppm) — modèle O'Brien/Wojtowicz utilisé par PoolLab/LABCONNECT.
+ * Tient compte de pH ET de l'effet stabilisant du CYA.
+ *
+ * Sans CYA significatif (< 5 ppm) :
+ *   HOCl = Fcl × 1 / (1 + 10^(pH − 7,54))
+ *
+ * Avec CYA : ajustement loi-puissance calibré sur Wojtowicz 2001 (25 °C, pH 7,5)
+ *   HOCl(ppm) ≈ Fcl × 0,5 × CYA^−0,89
+ *   correction pH atténuée (le CYA aplatit la courbe pH/HOCl)
+ *   facteur pH = 10^((7,5 − pH) × 0,25)
+ *
+ * Valeurs de référence (Fcl 1 ppm, pH 7,5) :
+ *   CYA 0   → 0,52 · CYA 30 → 0,025 · CYA 50 → 0,017 · CYA 100 → 0,009
+ */
+function calcHOClFromCYA(fcl, pH, cya){
+  if(fcl == null || pH == null) return null;
+  if(!cya || cya < 5) return fcl * calcHOClPct(pH);
+  const baseRatio = 0.5 * Math.pow(cya, -0.89);
+  const phCorr = Math.pow(10, (7.5 - pH) * 0.25);
+  return fcl * baseRatio * phCorr;
+}
+
+/**
+ * Seuils Fcl PoolLab / TFP en fonction du CYA :
+ * - min = max(0.5, CYA × 0.05) : plancher d'activité (TFP "minimum")
+ * - target = max(1.0, CYA × 0.075) : cible quotidienne ("FC target")
+ * - shock = CYA × 0.4 : niveau choc SLAM (élimination algues)
+ * Sans CYA : repères 1 / 2 / 5 ppm.
+ */
+function fcThresholds(cya){
+  if(!cya || cya < 5) return {min:1, target:2, shock:5};
+  return {
+    min: Math.max(0.5, cya * 0.05),
+    target: Math.max(1.0, cya * 0.075),
+    shock: cya * 0.4
+  };
+}
+
+/**
+ * Chlore actif simple (ancien — conservé pour rétrocompat)
  */
 function calcChloreActif(fcl, pH){
-  if(fcl == null || pH == null) return null;
-  const pct = calcHOClPct(pH);
-  return fcl * pct;
+  return calcHOClFromCYA(fcl, pH, 0);
 }
 
 /**
@@ -692,31 +728,31 @@ function renderCorrections(){
     }
   }
 
-  // ===== Chlore actif (HOCl) — indicateur d'efficacité =====
+  // ===== Désinfection (HOCl actif + seuils Fcl PoolLab) =====
   if(m.ph !== null && m.fcl !== null){
-    const pct = calcHOClPct(m.ph);
-    const hocl = m.fcl * pct;
-    let tone = 'ok', label = 'Efficacité optimale';
-    if(hocl < 0.03){ tone='danger'; label='Désinfection insuffisante'; }
-    else if(hocl < 0.05){ tone='warn'; label='Désinfection limite'; }
-    else if(hocl > 0.3){ tone='warn'; label='HOCl élevé'; }
+    const hocl = calcHOClFromCYA(m.fcl, m.ph, m.cya || 0);
+    const t = fcThresholds(m.cya || 0);
+    let tone = 'ok', label = 'Désinfection optimale';
+    if(m.fcl < t.min){ tone='danger'; label='Fcl insuffisant pour le CYA'; }
+    else if(m.fcl < t.target){ tone='warn'; label='Fcl sous la cible'; }
+    else if(m.fcl > t.shock){ tone='warn'; label='Fcl niveau choc'; }
     html += `<div class="card">
       <div class="card-header">
-        <div class="card-title"><span class="dot" style="background:var(--leaf);box-shadow:0 0 10px var(--leaf)"></span>Chlore actif (HOCl)</div>
-        <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">pKa 7.54</span>
+        <div class="card-title"><span class="dot" style="background:var(--leaf);box-shadow:0 0 10px var(--leaf)"></span>Désinfection</div>
+        <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">Modèle O'Brien</span>
       </div>
       <div class="result ${tone}">
         <div class="result-multi">
           <div class="item">
-            <div class="result-label">% HOCl</div>
-            <div class="result-value">${fmt(pct*100, 1)}<span class="unit">%</span></div>
-          </div>
-          <div class="item">
             <div class="result-label">HOCl actif</div>
             <div class="result-value">${fmt(hocl, 3)}<span class="unit">ppm</span></div>
           </div>
+          <div class="item">
+            <div class="result-label">Fcl cible (CYA × 7,5 %)</div>
+            <div class="result-value">${fmt(t.target, 2)}<span class="unit">ppm</span></div>
+          </div>
         </div>
-        <div class="result-note">${label} · Forme active du chlore selon le pH</div>
+        <div class="result-note">${label} · min ${fmt(t.min,2)} – cible ${fmt(t.target,2)} – choc ${fmt(t.shock,2)} ppm (CYA ${m.cya ? fmt(m.cya,0)+' ppm' : 'non saisi'})</div>
       </div>
     </div>`;
   }
@@ -1042,41 +1078,101 @@ function renderCharts(){
     options: baseConfig
   });
 
-  // Chart Désinfection : chlore actif (HOCl ppm) + %HOCl
+  // Chart Désinfection — style PoolLab : Fcl mesuré + zones CYA-dépendantes
   const ctxDesinf = $('chartDesinf');
   if(ctxDesinf){
     if(chartDesinf) chartDesinf.destroy();
-    const hoclPpm = list.map(m => (m.ph != null && m.fcl != null) ? +(m.fcl * calcHOClPct(m.ph)).toFixed(3) : null);
-    const hoclPct = list.map(m => (m.ph != null) ? +(calcHOClPct(m.ph) * 100).toFixed(1) : null);
+    // Pour chaque mesure, calcule les seuils Fcl à partir du CYA enregistré
+    const thr = list.map(m => fcThresholds(m.cya || 0));
+    const fcMin    = thr.map(t => +t.min.toFixed(2));
+    const fcTarget = thr.map(t => +t.target.toFixed(2));
+    const fcShock  = thr.map(t => +t.shock.toFixed(2));
+    const fcMeasured = list.map(m => m.fcl);
+    const hoclActif  = list.map(m => (m.ph != null && m.fcl != null) ? +calcHOClFromCYA(m.fcl, m.ph, m.cya || 0).toFixed(3) : null);
+    const yMax = Math.max(10, ...fcShock.map(v => v*1.1));
+
+    // Cap visuel : on montre confortablement min/cible/choc + Fcl mesuré
+    const fcMax = Math.max(...fcMeasured.filter(v => v != null), 0);
+    const tgtMax = Math.max(...fcTarget);
+    const shockMax = Math.max(...fcShock);
+    const yMaxCapped = Math.min(shockMax * 1.05, Math.max(fcMax * 1.6, tgtMax * 2.2, 4));
+
     chartDesinf = new Chart(ctxDesinf.getContext('2d'), {
       type: 'line',
       data: {
         labels,
         datasets: [
+          // Zone rouge (0 → min) : insuffisant
           {
-            label:'Chlore actif (ppm HOCl)',
-            data: hoclPpm,
-            borderColor:'#06d6a0',
-            backgroundColor:'rgba(6,214,160,.15)',
-            tension:.35, pointRadius:3, pointHoverRadius:5,
-            spanGaps:true, fill:true, yAxisID:'y'
+            label:'Insuffisant',
+            data: fcMin,
+            borderColor:'rgba(255,107,107,.55)',
+            backgroundColor:'rgba(255,107,107,.28)',
+            borderWidth:1.2, borderDash:[4,3], pointRadius:0,
+            fill:'origin', tension:.2, yAxisID:'y', order:5
           },
+          // Zone jaune (min → cible) : limite
           {
-            label:'% HOCl',
-            data: hoclPct,
-            borderColor:'#ffd166',
-            backgroundColor:'rgba(255,209,102,.08)',
-            tension:.35, pointRadius:3, pointHoverRadius:5,
-            spanGaps:true, borderDash:[4,3], yAxisID:'y1'
+            label:'Limite',
+            data: fcTarget,
+            borderColor:'rgba(255,209,102,.55)',
+            backgroundColor:'rgba(255,209,102,.26)',
+            borderWidth:1.2, borderDash:[5,3], pointRadius:0,
+            fill:'-1', tension:.2, yAxisID:'y', order:4
+          },
+          // Zone verte (cible → choc) : sain
+          {
+            label:'Sain',
+            data: fcShock,
+            borderColor:'rgba(6,214,160,.55)',
+            backgroundColor:'rgba(6,214,160,.22)',
+            borderWidth:1.2, borderDash:[6,4], pointRadius:0,
+            fill:'-1', tension:.2, yAxisID:'y', order:3
+          },
+          // Fcl mesuré (ligne principale)
+          {
+            label:'Fcl mesuré (ppm)',
+            data: fcMeasured,
+            borderColor:'#22b4d4',
+            backgroundColor:'#22b4d4',
+            borderWidth:2.8, pointRadius:3.5, pointHoverRadius:5,
+            tension:.35, spanGaps:true, fill:false, yAxisID:'y', order:1
+          },
+          // HOCl actif (axe secondaire — vraie désinfection après pénalité CYA)
+          {
+            label:'HOCl actif (ppm)',
+            data: hoclActif,
+            borderColor:'#e8f9f8',
+            backgroundColor:'rgba(232,249,248,.1)',
+            borderWidth:1.8, borderDash:[3,3], pointRadius:2, pointHoverRadius:4,
+            tension:.35, spanGaps:true, fill:false, yAxisID:'y1', order:2
           }
         ]
       },
       options: {
         ...baseConfig,
+        plugins:{
+          ...baseConfig.plugins,
+          legend:{
+            ...baseConfig.plugins.legend,
+            labels:{
+              ...baseConfig.plugins.legend.labels,
+              filter: (item) => !['Insuffisant','Limite','Sain'].includes(item.text)
+            }
+          }
+        },
         scales: {
           x: baseConfig.scales.x,
-          y: {...baseConfig.scales.y, position:'left', title:{display:true, text:'HOCl ppm', color:'#7fdbda', font:{family:'Manrope', size:10}}, suggestedMin:0},
-          y1: {...baseConfig.scales.y, position:'right', grid:{drawOnChartArea:false}, title:{display:true, text:'% HOCl', color:'#7fdbda', font:{family:'Manrope', size:10}}, suggestedMin:0, suggestedMax:100}
+          y: {
+            ...baseConfig.scales.y, position:'left',
+            title:{display:true, text:'Fcl ppm', color:'#7fdbda', font:{family:'Manrope', size:10}},
+            min:0, max:yMaxCapped
+          },
+          y1: {
+            ...baseConfig.scales.y, position:'right', grid:{drawOnChartArea:false},
+            title:{display:true, text:'HOCl actif', color:'#7fdbda', font:{family:'Manrope', size:10}},
+            min:0
+          }
         }
       }
     });
