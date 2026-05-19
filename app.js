@@ -145,6 +145,121 @@ function calcTacPlus(volume, tacMesure, tacSouhaite){
   return {delta, totalG: 1.7 * delta * volume};
 }
 
+/**
+ * Sel (NaCl) à ajouter pour électrolyse
+ * 1 g/L = 1 kg/m³ → kg = (cible − actuel) × volume
+ * Si > cible : pas d'ajout, signaler dilution.
+ */
+function calcSel(volume, selMesure, selSouhaite){
+  if(volume == null || selSouhaite == null) return null;
+  const actuel = selMesure ?? 0;
+  const delta = selSouhaite - actuel;
+  if(delta <= 0){
+    if(actuel - selSouhaite > 0.5) return {action:'dilution', delta: actuel - selSouhaite, kg:0};
+    return {action:'ok', delta:0, kg:0};
+  }
+  return {action:'ajout', delta, kg: delta * volume};
+}
+
+/**
+ * Calcium (CaCl₂ anhydre ~77 %) pour augmenter TH
+ * 1 °f = 10 ppm CaCO₃ ≈ 4 ppm Ca²⁺
+ * Pour +10 ppm CaCO₃ : ~11 g/m³ de CaCl₂ → ~11 g/m³ par °f
+ */
+function calcCalcium(volume, thMesure, thSouhaite){
+  if(volume == null || thSouhaite == null) return null;
+  const actuel = thMesure ?? 0;
+  const delta = thSouhaite - actuel;
+  if(delta <= 0) return {action: actuel > thSouhaite + 5 ? 'haut' : 'ok', delta:0, gCaCl2:0};
+  return {action:'ajout', delta, gCaCl2: 11 * delta * volume};
+}
+
+/**
+ * Anti-phosphate (produit type SeaKlear, ratio standard)
+ * 1 mL/m³ traite ~10 ppb. Plancher ramené à 50 ppb (cible idéale).
+ */
+function calcAntiPhosphate(volume, phosphate){
+  if(volume == null || phosphate == null) return null;
+  if(phosphate < 100) return {action: phosphate < 50 ? 'ok' : 'surveiller', mL:0, ppbExcedent:0};
+  const ppbExcedent = phosphate - 50;
+  return {action:'traiter', ppbExcedent, mL: (ppbExcedent/10) * volume};
+}
+
+/**
+ * Brome — chloration alternative
+ * Cible 2 – 4 ppm. Pastilles BCDMH : 1 g/m³ ≈ 0,5 ppm Br²
+ */
+function calcBrome(volume, brome, cible=3){
+  if(volume == null) return null;
+  const actuel = brome ?? 0;
+  const delta = cible - actuel;
+  if(delta <= 0) return {action: actuel > 5 ? 'haut' : 'ok', delta:0, grammes:0};
+  return {action:'ajout', delta, grammes: 2 * delta * volume};
+}
+
+/**
+ * % de chlore actif (HOCl) en fonction du pH
+ * Équilibre HOCl / OCl⁻ à 25 °C : pKa = 7,54
+ * %HOCl = 1 / (1 + 10^(pH − 7,54))
+ */
+function calcHOClPct(pH){
+  if(pH == null || isNaN(pH)) return null;
+  return 1 / (1 + Math.pow(10, pH - 7.54));
+}
+
+/**
+ * Chlore actif en ppm (HOCl) = Fcl × %HOCl
+ */
+function calcChloreActif(fcl, pH){
+  if(fcl == null || pH == null) return null;
+  const pct = calcHOClPct(pH);
+  return fcl * pct;
+}
+
+/**
+ * Indice de saturation de Langelier (LSI)
+ * LSI = pH + TF + CF + AF − C
+ *   TF = facteur température
+ *   CF = facteur calcium (log10(Ca CaCO₃) − 0,4)
+ *   AF = log10(alcalinité corrigée CYA : TAC − CYA/3)
+ *   C  = 12,1 (eau douce) ou 12,2 (sel)
+ * Lecture :
+ *   < −0,3  corrosif
+ *   −0,3 à +0,3  équilibré
+ *   > +0,3  entartrant
+ */
+function calcLSI(pH, temp, thF, tac, cya=0, isSalt=false){
+  if(pH == null || temp == null || thF == null || tac == null) return null;
+  const caCaCO3 = thF * 10; // °f → ppm CaCO₃
+  const carbAlk = Math.max(1, tac - (cya||0)/3);
+  // TF : interpolation issue des tables Taylor (°C)
+  const tfTable = [[0,0],[5,0.1],[10,0.3],[15,0.5],[20,0.6],[25,0.7],[30,0.8],[35,0.9]];
+  const TF = interp(tfTable, temp);
+  const CF = Math.max(0, Math.log10(Math.max(1, caCaCO3)) - 0.4);
+  const AF = Math.log10(carbAlk);
+  const C = isSalt ? 12.2 : 12.1;
+  return pH + TF + CF + AF - C;
+}
+
+function interp(table, x){
+  if(x <= table[0][0]) return table[0][1];
+  if(x >= table[table.length-1][0]) return table[table.length-1][1];
+  for(let i=0;i<table.length-1;i++){
+    const [x0,y0] = table[i], [x1,y1] = table[i+1];
+    if(x >= x0 && x <= x1) return y0 + (y1-y0) * (x-x0)/(x1-x0);
+  }
+  return table[table.length-1][1];
+}
+
+function lsiStatus(lsi){
+  if(lsi == null) return null;
+  if(lsi < -0.5) return {level:'danger', text:'Très corrosive', tone:'danger'};
+  if(lsi < -0.3) return {level:'warn', text:'Corrosive', tone:'warn'};
+  if(lsi > 0.5) return {level:'danger', text:'Très entartrante', tone:'danger'};
+  if(lsi > 0.3) return {level:'warn', text:'Entartrante', tone:'warn'};
+  return {level:'ok', text:'Eau équilibrée', tone:'ok'};
+}
+
 // ============== Évaluation globale ==============
 // Tous les seuils proviennent du Guide SOS Piscine V3 (groupe FB éponyme).
 function evaluateStatus(m){
@@ -181,6 +296,31 @@ function evaluateStatus(m){
     else if(m.cya > 30) issues.push({level:'warn', msg:'CYA haut'});
     else if(m.cya < 15) issues.push({level:'warn', msg:'CYA bas'});
   }
+  // Sel (électrolyse)
+  if(m.sel != null){
+    if(m.sel < 2.5 || m.sel > 6) issues.push({level:'danger', msg:'Sel hors plage'});
+    else if(m.sel < 3 || m.sel > 5) issues.push({level:'warn', msg:'Sel à ajuster'});
+  }
+  // TH (dureté)
+  if(m.th != null){
+    if(m.th < 10 || m.th > 60) issues.push({level:'warn', msg:'TH inhabituel'});
+  }
+  // Phosphates
+  if(m.phosphate != null){
+    if(m.phosphate > 500) issues.push({level:'danger', msg:'Phosphates élevés'});
+    else if(m.phosphate > 100) issues.push({level:'warn', msg:'Phosphates'});
+  }
+  // Brome (si utilisé)
+  if(m.modeDesinf === 'brome' && m.brome != null){
+    if(m.brome < 1 || m.brome > 6) issues.push({level:'danger', msg:'Brome hors plage'});
+    else if(m.brome < 2 || m.brome > 4) issues.push({level:'warn', msg:'Brome'});
+  }
+  // Indice de Langelier (si données suffisantes)
+  if(m.ph != null && m.temp != null && m.th != null && m.tac != null){
+    const lsi = calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel');
+    const st = lsiStatus(lsi);
+    if(st && st.level !== 'ok') issues.push({level:st.level, msg:`LSI ${st.text.toLowerCase()}`});
+  }
   if(issues.some(i=>i.level==='danger')) return {level:'danger', text:'Action requise'};
   if(issues.length) return {level:'warn', text:'À surveiller'};
   return {level:'ok', text:'Eau équilibrée'};
@@ -199,6 +339,7 @@ function switchTab(name){
 
 // ============== Saisie & Sauvegarde ==============
 function readInputs(){
+  const modeEl = $('modeDesinf');
   return {
     volume: num('volume'),
     ph: num('phMesure'),
@@ -208,6 +349,15 @@ function readInputs(){
     tac: num('tacMesure'),
     tacSouhaite: num('tacSouhaite'),
     cya: num('cya'),
+    // Mesures avancées
+    temp: num('temp'),
+    sel: num('selMesure'),
+    selSouhaite: num('selSouhaite'),
+    th: num('thMesure'),
+    thSouhaite: num('thSouhaite'),
+    phosphate: num('phosphate'),
+    brome: num('brome'),
+    modeDesinf: modeEl ? modeEl.value : 'chlore',
     date: new Date().toISOString()
   };
 }
@@ -215,17 +365,22 @@ function readInputs(){
 function loadLastInputs(){
   const last = loadJSON(STORAGE_KEYS.lastInputs, null);
   if(!last) return;
-  if(last.volume!==null) $('volume').value = last.volume;
-  if(last.phSouhaite!==null) $('phSouhaite').value = last.phSouhaite;
-  if(last.tacSouhaite!==null) $('tacSouhaite').value = last.tacSouhaite;
-  if(last.cya!==null) $('cya').value = last.cya;
-  // Synchronise aussi les champs miroir de la page Rappels (Configurer mon bassin)
-  ['cfgVolume','cfgPhSouhaite','cfgTacSouhaite','cfgCya'].forEach(id => {
+  const setVal = (id, key) => { const v=last[key]; if(v!=null && $(id)) $(id).value = v; };
+  setVal('volume','volume');
+  setVal('phSouhaite','phSouhaite');
+  setVal('tacSouhaite','tacSouhaite');
+  setVal('cya','cya');
+  setVal('selSouhaite','selSouhaite');
+  setVal('thSouhaite','thSouhaite');
+  if(last.modeDesinf && $('modeDesinf')) $('modeDesinf').value = last.modeDesinf;
+  // Synchronise aussi les champs miroir de la page Rappels
+  ['cfgVolume','cfgPhSouhaite','cfgTacSouhaite','cfgCya','cfgSelSouhaite','cfgThSouhaite'].forEach(id => {
     const el = $(id);
     if(!el) return;
     const key = id.replace('cfg','').replace(/^[A-Z]/, c=>c.toLowerCase());
     if(last[key] !== null && last[key] !== undefined) el.value = last[key];
   });
+  if(last.modeDesinf && $('cfgModeDesinf')) $('cfgModeDesinf').value = last.modeDesinf;
 }
 
 // ============== Auto-save bassin (volume + cibles) ==============
@@ -244,17 +399,21 @@ function autoSaveBassinParams(){
     volume: num('volume'),
     phSouhaite: num('phSouhaite'),
     tacSouhaite: num('tacSouhaite'),
-    cya: num('cya')
+    cya: num('cya'),
+    selSouhaite: num('selSouhaite'),
+    thSouhaite: num('thSouhaite'),
+    modeDesinf: $('modeDesinf') ? $('modeDesinf').value : null
   };
   // Ne sauve que les champs renseignés sans écraser les anciens
   const merged = {...current};
-  Object.entries(next).forEach(([k,v]) => { if(v !== null) merged[k] = v; });
+  Object.entries(next).forEach(([k,v]) => { if(v !== null && v !== '') merged[k] = v; });
   saveJSON(STORAGE_KEYS.lastInputs, merged);
   // Synchronise les champs miroir de la page Rappels
-  if(next.volume !== null && $('cfgVolume')) $('cfgVolume').value = next.volume;
-  if(next.phSouhaite !== null && $('cfgPhSouhaite')) $('cfgPhSouhaite').value = next.phSouhaite;
-  if(next.tacSouhaite !== null && $('cfgTacSouhaite')) $('cfgTacSouhaite').value = next.tacSouhaite;
-  if(next.cya !== null && $('cfgCya')) $('cfgCya').value = next.cya;
+  const mirror = {volume:'cfgVolume', phSouhaite:'cfgPhSouhaite', tacSouhaite:'cfgTacSouhaite', cya:'cfgCya', selSouhaite:'cfgSelSouhaite', thSouhaite:'cfgThSouhaite'};
+  Object.entries(mirror).forEach(([k, id]) => {
+    if(next[k] !== null && $(id)) $(id).value = next[k];
+  });
+  if(next.modeDesinf && $('cfgModeDesinf')) $('cfgModeDesinf').value = next.modeDesinf;
   showSavedPill();
 }
 
@@ -263,7 +422,10 @@ function saveBassinConfigFromRappels(){
     volume: parseFloat($('cfgVolume').value) || null,
     phSouhaite: parseFloat($('cfgPhSouhaite').value) || null,
     tacSouhaite: parseFloat($('cfgTacSouhaite').value) || null,
-    cya: parseFloat($('cfgCya').value) || null
+    cya: parseFloat($('cfgCya').value) || null,
+    selSouhaite: parseFloat($('cfgSelSouhaite').value) || null,
+    thSouhaite: parseFloat($('cfgThSouhaite').value) || null,
+    modeDesinf: $('cfgModeDesinf') ? $('cfgModeDesinf').value : null
   };
   if(cfg.volume === null){
     toast('Renseigne au moins le volume', 'warn');
@@ -271,13 +433,14 @@ function saveBassinConfigFromRappels(){
   }
   const current = loadJSON(STORAGE_KEYS.lastInputs, {}) || {};
   const merged = {...current};
-  Object.entries(cfg).forEach(([k,v]) => { if(v !== null) merged[k] = v; });
+  Object.entries(cfg).forEach(([k,v]) => { if(v !== null && v !== '') merged[k] = v; });
   saveJSON(STORAGE_KEYS.lastInputs, merged);
   // Reflète sur la page Mesures
-  if(cfg.volume !== null) $('volume').value = cfg.volume;
-  if(cfg.phSouhaite !== null) $('phSouhaite').value = cfg.phSouhaite;
-  if(cfg.tacSouhaite !== null) $('tacSouhaite').value = cfg.tacSouhaite;
-  if(cfg.cya !== null) $('cya').value = cfg.cya;
+  const mirror = {volume:'volume', phSouhaite:'phSouhaite', tacSouhaite:'tacSouhaite', cya:'cya', selSouhaite:'selSouhaite', thSouhaite:'thSouhaite'};
+  Object.entries(mirror).forEach(([k, id]) => {
+    if(cfg[k] !== null && $(id)) $(id).value = cfg[k];
+  });
+  if(cfg.modeDesinf && $('modeDesinf')) $('modeDesinf').value = cfg.modeDesinf;
   toast('Bassin configuré ✓');
   showSavedPill();
 }
@@ -529,6 +692,192 @@ function renderCorrections(){
     }
   }
 
+  // ===== Chlore actif (HOCl) — indicateur d'efficacité =====
+  if(m.ph !== null && m.fcl !== null){
+    const pct = calcHOClPct(m.ph);
+    const hocl = m.fcl * pct;
+    let tone = 'ok', label = 'Efficacité optimale';
+    if(hocl < 0.03){ tone='danger'; label='Désinfection insuffisante'; }
+    else if(hocl < 0.05){ tone='warn'; label='Désinfection limite'; }
+    else if(hocl > 0.3){ tone='warn'; label='HOCl élevé'; }
+    html += `<div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="dot" style="background:var(--leaf);box-shadow:0 0 10px var(--leaf)"></span>Chlore actif (HOCl)</div>
+        <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">pKa 7.54</span>
+      </div>
+      <div class="result ${tone}">
+        <div class="result-multi">
+          <div class="item">
+            <div class="result-label">% HOCl</div>
+            <div class="result-value">${fmt(pct*100, 1)}<span class="unit">%</span></div>
+          </div>
+          <div class="item">
+            <div class="result-label">HOCl actif</div>
+            <div class="result-value">${fmt(hocl, 3)}<span class="unit">ppm</span></div>
+          </div>
+        </div>
+        <div class="result-note">${label} · Forme active du chlore selon le pH</div>
+      </div>
+    </div>`;
+  }
+
+  // ===== Sel (électrolyse) =====
+  if(m.selSouhaite !== null || m.sel !== null){
+    const cible = m.selSouhaite ?? 4.0;
+    const s = calcSel(m.volume, m.sel, cible);
+    if(s){
+      if(s.action === 'ajout'){
+        html += `<div class="card">
+          <div class="card-header">
+            <div class="card-title"><span class="dot"></span>Apport sel</div>
+            <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">Cible ${fmt(cible,1)} g/L</span>
+          </div>
+          <div class="result">
+            <div class="result-label">Sel à ajouter</div>
+            <div class="result-value">${fmt(s.kg, 1)}<span class="unit">kg</span></div>
+            <div class="result-note">Δ +${fmt(s.delta,1)} g/L · Verser sel piscine non iodé, filtration en marche.</div>
+          </div>
+        </div>`;
+      } else if(s.action === 'dilution'){
+        html += `<div class="card">
+          <div class="card-header"><div class="card-title" style="color:var(--coral)"><span class="dot" style="background:var(--coral);box-shadow:0 0 10px var(--coral)"></span>Sel trop élevé</div></div>
+          <div class="result warn">
+            <div class="result-label">Vidange partielle conseillée</div>
+            <div class="result-note">Sel mesuré ${fmt(m.sel,1)} g/L > cible (Δ +${fmt(s.delta,1)} g/L). Diluer avec eau du réseau pour préserver la cellule.</div>
+          </div>
+        </div>`;
+      } else if(m.sel !== null){
+        html += `<div class="card">
+          <div class="card-header"><div class="card-title"><span class="dot"></span>Sel</div></div>
+          <div class="result ok">
+            <div class="result-label">Salinité correcte</div>
+            <div class="result-note">${fmt(m.sel,1)} g/L ≈ cible. Pas d'ajout.</div>
+          </div>
+        </div>`;
+      }
+    }
+  }
+
+  // ===== Calcium / TH =====
+  if(m.thSouhaite !== null || m.th !== null){
+    const cible = m.thSouhaite ?? 25;
+    const ca = calcCalcium(m.volume, m.th, cible);
+    if(ca && ca.action === 'ajout'){
+      html += `<div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="dot"></span>Dureté (TH)</div>
+          <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">+${fmt(ca.delta,0)} °f</span>
+        </div>
+        <div class="result">
+          <div class="result-label">Chlorure de calcium (CaCl₂)</div>
+          <div class="result-value">${fmt(ca.gCaCl2, 0)}<span class="unit">g</span></div>
+          <div class="result-note">Augmenter progressivement (max +10 °f / semaine) · diluer dans seau avant ajout.</div>
+        </div>
+      </div>`;
+    } else if(ca && ca.action === 'haut'){
+      html += `<div class="card">
+        <div class="card-header"><div class="card-title" style="color:var(--coral)"><span class="dot" style="background:var(--coral);box-shadow:0 0 10px var(--coral)"></span>TH trop élevé</div></div>
+        <div class="result warn">
+          <div class="result-label">Risque d'entartrage</div>
+          <div class="result-note">TH ${fmt(m.th,0)} °f &gt; cible (${fmt(cible,0)} °f). Diluer (vidange partielle) ou séquestrer (anti-calcaire).</div>
+        </div>
+      </div>`;
+    } else if(m.th !== null){
+      html += `<div class="card">
+        <div class="card-header"><div class="card-title"><span class="dot"></span>TH</div></div>
+        <div class="result ok">
+          <div class="result-label">Dureté correcte</div>
+          <div class="result-note">TH ${fmt(m.th,0)} °f conforme à la cible (${fmt(cible,0)} °f).</div>
+        </div>
+      </div>`;
+    }
+  }
+
+  // ===== Phosphates =====
+  if(m.phosphate !== null){
+    const p = calcAntiPhosphate(m.volume, m.phosphate);
+    if(p && p.action === 'traiter'){
+      html += `<div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="dot"></span>Anti-phosphate</div>
+          <span class="status-pill warn"><span class="pulse"></span>${fmt(m.phosphate,0)} ppb</span>
+        </div>
+        <div class="result warn">
+          <div class="result-label">Produit anti-phosphate</div>
+          <div class="result-value">${fmt(p.mL, 0)}<span class="unit">mL</span></div>
+          <div class="result-note">Excès ${fmt(p.ppbExcedent,0)} ppb · Filtrer 24 h puis nettoyer le filtre (les phosphates se fixent dessus).</div>
+        </div>
+      </div>`;
+    } else if(p && p.action === 'surveiller'){
+      html += `<div class="card">
+        <div class="card-header"><div class="card-title"><span class="dot"></span>Phosphates</div></div>
+        <div class="result warn">
+          <div class="result-label">À surveiller</div>
+          <div class="result-note">${fmt(m.phosphate,0)} ppb · Sous le seuil de traitement (100 ppb), mais à garder à l'œil.</div>
+        </div>
+      </div>`;
+    } else if(p){
+      html += `<div class="card">
+        <div class="card-header"><div class="card-title"><span class="dot"></span>Phosphates</div></div>
+        <div class="result ok">
+          <div class="result-label">Niveau bas</div>
+          <div class="result-note">${fmt(m.phosphate,0)} ppb &lt; 50 ppb. Pas de risque algues lié au PO₄.</div>
+        </div>
+      </div>`;
+    }
+  }
+
+  // ===== Brome (si mode brome) =====
+  if(m.modeDesinf === 'brome'){
+    const br = calcBrome(m.volume, m.brome, 3);
+    if(br && br.action === 'ajout'){
+      html += `<div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="dot"></span>Brome</div>
+          <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">Cible 3 ppm</span>
+        </div>
+        <div class="result">
+          <div class="result-label">Pastilles BCDMH</div>
+          <div class="result-value">${fmt(br.grammes, 0)}<span class="unit">g</span></div>
+          <div class="result-note">Δ +${fmt(br.delta,1)} ppm · Insérer dans brominateur ou skimmer.</div>
+        </div>
+      </div>`;
+    } else if(br && br.action === 'haut'){
+      html += `<div class="card">
+        <div class="card-header"><div class="card-title" style="color:var(--coral)"><span class="dot" style="background:var(--coral);box-shadow:0 0 10px var(--coral)"></span>Brome élevé</div></div>
+        <div class="result warn">
+          <div class="result-label">Pause brominateur</div>
+          <div class="result-note">${fmt(m.brome,1)} ppm &gt; 5 ppm. Couper l'alimentation jusqu'à retour ≤ 4 ppm.</div>
+        </div>
+      </div>`;
+    } else if(br){
+      html += `<div class="card">
+        <div class="card-header"><div class="card-title"><span class="dot"></span>Brome</div></div>
+        <div class="result ok">
+          <div class="result-label">Niveau correct</div>
+          <div class="result-note">${fmt(m.brome,1)} ppm dans la plage 2 – 4 ppm.</div>
+        </div>
+      </div>`;
+    }
+  }
+
+  // ===== Indice de Langelier (LSI) =====
+  if(m.ph !== null && m.temp !== null && m.th !== null && m.tac !== null){
+    const lsi = calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel');
+    const st = lsiStatus(lsi);
+    html += `<div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="dot"></span>Indice de Langelier</div>
+        <span class="status-pill ${st.level}"><span class="pulse"></span>${st.text}</span>
+      </div>
+      <div class="result ${st.tone}">
+        <div class="result-label">LSI</div>
+        <div class="result-value">${lsi >= 0 ? '+' : ''}${fmt(lsi, 2)}</div>
+        <div class="result-note">Plage saine : −0,3 à +0,3 · &lt; corrosif (attaque métal/joints) · &gt; entartrant (dépôts calcaire).</div>
+      </div>
+    </div>`;
+  }
+
   if(html === ''){
     html = `<div class="card">
       <div class="result ok">
@@ -584,7 +933,7 @@ function deleteMeasurement(idx){
 }
 
 // ============== Graphiques ==============
-let chartPh = null, chartTac = null;
+let chartPh = null, chartTac = null, chartDesinf = null;
 
 function renderCharts(){
   renderHistory();
@@ -692,6 +1041,46 @@ function renderCharts(){
     },
     options: baseConfig
   });
+
+  // Chart Désinfection : chlore actif (HOCl ppm) + %HOCl
+  const ctxDesinf = $('chartDesinf');
+  if(ctxDesinf){
+    if(chartDesinf) chartDesinf.destroy();
+    const hoclPpm = list.map(m => (m.ph != null && m.fcl != null) ? +(m.fcl * calcHOClPct(m.ph)).toFixed(3) : null);
+    const hoclPct = list.map(m => (m.ph != null) ? +(calcHOClPct(m.ph) * 100).toFixed(1) : null);
+    chartDesinf = new Chart(ctxDesinf.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label:'Chlore actif (ppm HOCl)',
+            data: hoclPpm,
+            borderColor:'#06d6a0',
+            backgroundColor:'rgba(6,214,160,.15)',
+            tension:.35, pointRadius:3, pointHoverRadius:5,
+            spanGaps:true, fill:true, yAxisID:'y'
+          },
+          {
+            label:'% HOCl',
+            data: hoclPct,
+            borderColor:'#ffd166',
+            backgroundColor:'rgba(255,209,102,.08)',
+            tension:.35, pointRadius:3, pointHoverRadius:5,
+            spanGaps:true, borderDash:[4,3], yAxisID:'y1'
+          }
+        ]
+      },
+      options: {
+        ...baseConfig,
+        scales: {
+          x: baseConfig.scales.x,
+          y: {...baseConfig.scales.y, position:'left', title:{display:true, text:'HOCl ppm', color:'#7fdbda', font:{family:'Manrope', size:10}}, suggestedMin:0},
+          y1: {...baseConfig.scales.y, position:'right', grid:{drawOnChartArea:false}, title:{display:true, text:'% HOCl', color:'#7fdbda', font:{family:'Manrope', size:10}}, suggestedMin:0, suggestedMax:100}
+        }
+      }
+    });
+  }
 }
 
 // ============== Rappels & Notifications ==============
@@ -883,19 +1272,23 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if(m.fcl!==null && m.tcl!==null) updateCclBadge(m);
 
   // Auto-save sur les paramètres bassin (debounced via input event)
-  ['volume','phSouhaite','tacSouhaite','cya'].forEach(id => {
+  ['volume','phSouhaite','tacSouhaite','cya','selSouhaite','thSouhaite'].forEach(id => {
     const el = $(id);
     if(el) el.addEventListener('input', autoSaveBassinParams);
   });
-  ['cfgVolume','cfgPhSouhaite','cfgTacSouhaite','cfgCya'].forEach(id => {
+  if($('modeDesinf')) $('modeDesinf').addEventListener('change', autoSaveBassinParams);
+  const cfgMap = {cfgVolume:'volume',cfgPhSouhaite:'phSouhaite',cfgTacSouhaite:'tacSouhaite',cfgCya:'cya',cfgSelSouhaite:'selSouhaite',cfgThSouhaite:'thSouhaite'};
+  Object.entries(cfgMap).forEach(([id, mainId]) => {
     const el = $(id);
     if(el) el.addEventListener('input', () => {
-      // Mirror config fields to main fields, then save
-      const map = {cfgVolume:'volume',cfgPhSouhaite:'phSouhaite',cfgTacSouhaite:'tacSouhaite',cfgCya:'cya'};
-      const target = $(map[id]);
+      const target = $(mainId);
       if(target) target.value = el.value;
       autoSaveBassinParams();
     });
+  });
+  if($('cfgModeDesinf')) $('cfgModeDesinf').addEventListener('change', () => {
+    if($('modeDesinf')) $('modeDesinf').value = $('cfgModeDesinf').value;
+    autoSaveBassinParams();
   });
 
   // Vérifier permission notifications
