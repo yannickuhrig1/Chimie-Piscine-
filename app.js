@@ -230,18 +230,19 @@ function calcHOClFromCYA(fcl, pH, cya){
 }
 
 /**
- * Seuils Fcl PoolLab / TFP en fonction du CYA :
- * - min = max(0.5, CYA × 0.05) : plancher d'activité (TFP "minimum")
- * - target = max(1.0, CYA × 0.075) : cible quotidienne ("FC target")
- * - shock = CYA × 0.4 : niveau choc SLAM (élimination algues)
- * Sans CYA : repères 1 / 2 / 5 ppm.
+ * Seuils Fcl alignés sur les formules Excel d'origine :
+ * - min    = CYA / 20  (5 %, plancher de désinfection)
+ * - cible  = CYA / 10  (formule Excel calcFclVise — chloration journalière)
+ * - choc   = CYA / 2   (formule Excel calcChlorationChoc facteur ×5)
+ *
+ * Sans CYA : repères 0,5 / 1 / 5 ppm.
  */
 function fcThresholds(cya){
-  if(!cya || cya < 5) return {min:1, target:2, shock:5};
+  if(!cya || cya < 5) return {min:0.5, target:1, shock:5};
   return {
-    min: Math.max(0.5, cya * 0.05),
-    target: Math.max(1.0, cya * 0.075),
-    shock: cya * 0.4
+    min:    cya / 20,
+    target: cya / 10,
+    shock:  cya / 2
   };
 }
 
@@ -748,7 +749,7 @@ function renderCorrections(){
             <div class="result-value">${fmt(hocl, 3)}<span class="unit">ppm</span></div>
           </div>
           <div class="item">
-            <div class="result-label">Fcl cible (CYA × 7,5 %)</div>
+            <div class="result-label">Fcl cible (CYA / 10)</div>
             <div class="result-value">${fmt(t.target, 2)}<span class="unit">ppm</span></div>
           </div>
         </div>
