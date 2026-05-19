@@ -655,17 +655,18 @@ function renderCorrections(){
         </div>
         <div class="result danger">
           <div class="result-label">Élimination des chloramines</div>
-          <div class="result-multi">
+          <div class="result-multi-or">
             <div class="item">
               <div class="result-label">Hypochlorite Ca</div>
               <div class="result-value">${fmt(sc.hypocalciumG, 0)}<span class="unit">g</span></div>
             </div>
+            <div class="or-sep">OU</div>
             <div class="item">
               <div class="result-label">Javel 9.6°</div>
               <div class="result-value">${fmt(sc.javelL, 2)}<span class="unit">L</span></div>
             </div>
           </div>
-          <div class="result-note">Ccl &gt; 0.6 ppm — superchloration nécessaire</div>
+          <div class="result-note">⚠️ Choisir <strong>l'un OU l'autre</strong> · Ccl &gt; 0.6 ppm — superchloration nécessaire</div>
         </div>
       </div>`;
     } else {
@@ -688,17 +689,18 @@ function renderCorrections(){
           <div class="card-title"><span class="dot"></span>Chloration choc</div>
           <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">×${choc.facteur} · ${fmt(choc.tauxChlore,1)} ppm</span>
         </div>
-        <div class="result-multi">
+        <div class="result-multi-or">
           <div class="item">
             <div class="result-label">Javel 9.6°</div>
             <div class="result-value">${fmt(choc.javel, 2)}<span class="unit">L</span></div>
           </div>
+          <div class="or-sep">OU</div>
           <div class="item">
             <div class="result-label">Hypochlorite Ca</div>
             <div class="result-value">${fmt(choc.hypocalcium, 0)}<span class="unit">g</span></div>
           </div>
         </div>
-        <div class="result-note">Facteur 5 à 10 × 10% du CYA · Choc préventif</div>
+        <div class="result-note">⚠️ Choisir <strong>l'un OU l'autre</strong>, jamais les deux · Facteur 5 à 10 × 10% du CYA · Choc préventif</div>
       </div>`;
     }
   }

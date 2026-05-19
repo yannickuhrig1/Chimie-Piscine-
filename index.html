@@ -171,6 +171,16 @@
   .result-multi{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
   .result-multi .item{padding:10px;background:rgba(4,29,46,.3);border-radius:12px}
   .result-multi .item .result-value{font-size:22px}
+  /* Variante "OU" : sépare deux options exclusives */
+  .result-multi-or{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;margin-top:10px;align-items:stretch}
+  .result-multi-or .item{padding:10px;background:rgba(4,29,46,.3);border-radius:12px}
+  .result-multi-or .item .result-value{font-size:22px}
+  .or-sep{
+    align-self:center;font-family:'Fraunces',serif;font-size:13px;font-weight:600;
+    letter-spacing:.18em;color:var(--shallow);opacity:.85;
+    padding:6px 8px;border-radius:99px;
+    background:rgba(127,219,218,.08);border:1px solid var(--border);
+  }
 
   /* Buttons */
   button,.btn{
