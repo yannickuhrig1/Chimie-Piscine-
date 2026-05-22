@@ -5,6 +5,19 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.4.0] — 2026-05-23
+
+### Ajouté
+- **Notifications push serveur** : rappels (quotidien, hebdomadaire, lavage filtre) envoyés même app fermée via un cron Supabase. Edge Functions `push-subscribe` et `push-send`, journal `push_log` (rétention 30 j).
+- **Bouton « Tester »** dans Rappels pour vérifier que les notifs arrivent sans attendre l'heure du rappel.
+- Détection de la révocation de permission au démarrage : nettoyage automatique des abonnements orphelins côté serveur.
+- Toast « Nouvelle version dispo · Recharger » dès qu'un service worker met à jour pendant la session.
+- **Carte Tendances** dans Historique : régression linéaire du pH sur 14 jours, consommation Cl excessive, chute de TAC, alerte si pas de mesure depuis 3+ jours, alerte CYA > 40.
+- **Wizard de premier lancement** : volume du bassin, mode de désinfection, marque de bandelette. Skippable à chaque étape, ne réapparaît pas après.
+- **Aides contextuelles** (« ? » à côté de chaque champ) avec explications courtes, désactivables dans Rappels.
+- **Partage du contrôle en image** : bouton dans Tendances qui génère un PNG 1080×1080 stylé (Web Share natif sur mobile, sinon téléchargement).
+- ESLint en CI (workflow `lint.yml`) pour catcher les refs orphelines avant production.
+
 ## [1.3.0] — 2026-05-22
 
 ### Ajouté

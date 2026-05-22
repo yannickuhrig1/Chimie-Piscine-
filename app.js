@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.3.0';
+const APP_VERSION = '1.4.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
