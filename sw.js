@@ -1,4 +1,4 @@
-const CACHE = 'chimie-piscine-v24';
+const CACHE = 'chimie-piscine-v25';
 const ASSETS = [
   './',
   './app.js',
@@ -13,7 +13,6 @@ self.addEventListener('install', e => {
   e.waitUntil(
     caches.open(CACHE).then(c => c.addAll(ASSETS).catch(err => console.warn('Cache partial', err)))
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('message', e => {
