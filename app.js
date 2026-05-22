@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.4.0';
+const APP_VERSION = '1.4.1';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -573,9 +573,9 @@ function updateStatus(m){
 }
 
 // ============== Rendu Corrections ==============
-function renderCorrections(){
-  const m = readInputs();
-  const container = $('correctionContent');
+function renderCorrections(measurement, targetContainer){
+  const m = measurement || readInputs();
+  const container = targetContainer || $('correctionContent');
 
   if(m.volume === null){
     container.innerHTML = `<div class="empty">
@@ -949,7 +949,7 @@ function renderHistory(){
   wrap.innerHTML = list.slice().reverse().slice(0, 50).map((m, idx) => {
     const realIdx = list.length - 1 - idx;
     const d = new Date(m.date);
-    return `<div class="history-item">
+    return `<div class="history-item" onclick="openHistDetail(${realIdx})" style="cursor:pointer">
       <div class="history-date">
         <div class="day">${d.getDate()}</div>
         <div class="month">${months[d.getMonth()]}</div>
@@ -959,7 +959,7 @@ function renderHistory(){
         <div class="h-item"><div class="h-label">Fcl</div><div class="h-value">${m.fcl!==null?fmt(m.fcl,2):'—'}</div></div>
         <div class="h-item"><div class="h-label">TAC</div><div class="h-value">${m.tac!==null?fmt(m.tac,0):'—'}</div></div>
       </div>
-      <button class="history-delete" onclick="deleteMeasurement(${realIdx})" aria-label="Supprimer">×</button>
+      <button class="history-delete" onclick="event.stopPropagation();deleteMeasurement(${realIdx})" aria-label="Supprimer">×</button>
     </div>`;
   }).join('');
 }
@@ -1937,10 +1937,10 @@ function toggleHints(e){
 }
 
 // ============== Partage en image ==============
-function shareControl(){
+function shareControl(measurement){
   const list = loadJSON(STORAGE_KEYS.measurements, []);
-  if(list.length === 0){ toast('Aucune mesure à partager','warn'); return; }
-  const m = list[list.length-1];
+  if(list.length === 0 && !measurement){ toast('Aucune mesure à partager','warn'); return; }
+  const m = measurement || list[list.length-1];
   const st = evaluateStatus(m);
 
   const size = 1080;
@@ -1987,7 +1987,7 @@ function shareControl(){
   const items = [
     {label:'pH', value: m.ph!==null?fmt(m.ph,1):'—'},
     {label:'Chlore libre', value: m.fcl!==null?fmt(m.fcl,2)+' ppm':'—'},
-    {label:'Chlore combiné', value: ccl!==null?fmt(ccl,2)+' ppm':'—'},
+    {label:'Chloramines (Ccl)', value: ccl!==null?fmt(ccl,2)+' ppm':'—'},
     {label:'TAC', value: m.tac!==null?fmt(m.tac,0)+' ppm':'—'},
     {label:'CYA', value: m.cya!==null?fmt(m.cya,0)+' ppm':'—'},
     {label:'Température', value: m.temp!==null?fmt(m.temp,1)+' °C':'—'}
@@ -2029,6 +2029,99 @@ function shareControl(){
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     toast('Image téléchargée');
   }, 'image/png');
+}
+
+// ============== Détail d'une mesure historique ==============
+let __histDetailIdx = null;
+
+function renderHistEntryMeasurements(m){
+  const ccl = (m.fcl !== null && m.tcl !== null) ? (m.tcl - m.fcl) : null;
+  const modeLabel = {chlore:'Chlore', sel:'Sel (électrolyse)', brome:'Brome'}[m.modeDesinf] || m.modeDesinf;
+  const rows = [
+    {label:'pH mesuré', value: m.ph !== null ? fmt(m.ph,1) : null},
+    {label:'pH souhaité', value: m.phSouhaite !== null && m.phSouhaite !== undefined ? fmt(m.phSouhaite,1) : null},
+    {label:'Chlore libre (Fcl)', value: m.fcl !== null ? fmt(m.fcl,2)+' ppm' : null},
+    {label:'Chlore total (Tcl)', value: m.tcl !== null ? fmt(m.tcl,2)+' ppm' : null},
+    {label:'Chloramines (Ccl)', value: ccl !== null ? fmt(ccl,2)+' ppm' : null},
+    {label:'TAC mesuré', value: m.tac !== null ? fmt(m.tac,0)+' ppm' : null},
+    {label:'TAC visé', value: m.tacSouhaite !== null && m.tacSouhaite !== undefined ? fmt(m.tacSouhaite,0)+' ppm' : null},
+    {label:'CYA (stabilisant)', value: m.cya !== null ? fmt(m.cya,0)+' ppm' : null},
+    {label:'Volume du bassin', value: m.volume !== null ? fmt(m.volume,1)+' m³' : null},
+    {label:'Température', value: m.temp !== null && m.temp !== undefined ? fmt(m.temp,1)+' °C' : null},
+    {label:'Sel', value: m.sel !== null && m.sel !== undefined ? fmt(m.sel,2)+' g/L' : null},
+    {label:'TH (dureté)', value: m.th !== null && m.th !== undefined ? fmt(m.th,0)+' °f' : null},
+    {label:'Phosphates', value: m.phosphate !== null && m.phosphate !== undefined ? fmt(m.phosphate,0)+' ppb' : null},
+    {label:'Brome', value: m.brome !== null && m.brome !== undefined ? fmt(m.brome,1)+' ppm' : null},
+    {label:'Mode de désinfection', value: modeLabel || null}
+  ].filter(r => r.value !== null && r.value !== undefined && r.value !== 'null');
+  return rows.map(r => `<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07);font-size:13px;gap:10px">
+    <span style="color:var(--shallow);opacity:.85">${r.label}</span>
+    <span style="color:#fff;font-family:'JetBrains Mono',monospace;font-weight:500;text-align:right">${r.value}</span>
+  </div>`).join('');
+}
+
+function openHistDetail(idx){
+  const list = loadJSON(STORAGE_KEYS.measurements, []);
+  const m = list[idx];
+  if(!m) return;
+  __histDetailIdx = idx;
+  const d = new Date(m.date);
+  const dateStr = d.toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  const timeStr = d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+  if($('histDetailTitle')) $('histDetailTitle').textContent = `${dateStr} · ${timeStr}`;
+  if($('histDetailMeasure')) $('histDetailMeasure').innerHTML = renderHistEntryMeasurements(m);
+  renderCorrections(m, $('histDetailActions'));
+  switchHistTab('measure');
+  $('histDetailOverlay').style.display = 'flex';
+}
+
+function closeHistDetail(){
+  if($('histDetailOverlay')) $('histDetailOverlay').style.display = 'none';
+  __histDetailIdx = null;
+}
+
+function switchHistTab(tab){
+  const isM = tab === 'measure';
+  if($('histDetailMeasure')) $('histDetailMeasure').style.display = isM ? 'block' : 'none';
+  if($('histDetailActions')) $('histDetailActions').style.display = isM ? 'none' : 'block';
+  const btnM = $('histTabMeasure'), btnA = $('histTabActions');
+  if(btnM) btnM.style.background = isM ? 'var(--glass-strong)' : 'var(--glass)';
+  if(btnA) btnA.style.background = isM ? 'var(--glass)' : 'var(--glass-strong)';
+}
+
+function shareHistEntry(){
+  if(__histDetailIdx === null) return;
+  const list = loadJSON(STORAGE_KEYS.measurements, []);
+  const m = list[__histDetailIdx];
+  if(m) shareControl(m);
+}
+
+function reloadHistEntry(){
+  if(__histDetailIdx === null) return;
+  const list = loadJSON(STORAGE_KEYS.measurements, []);
+  const m = list[__histDetailIdx];
+  if(!m) return;
+  const fieldMap = {
+    volume:'volume', phMesure:'ph', phSouhaite:'phSouhaite',
+    fcl:'fcl', tcl:'tcl', tacMesure:'tac', tacSouhaite:'tacSouhaite',
+    cya:'cya', temp:'temp', selMesure:'sel', selSouhaite:'selSouhaite',
+    thMesure:'th', thSouhaite:'thSouhaite', phosphate:'phosphate', brome:'brome'
+  };
+  Object.entries(fieldMap).forEach(([fieldId, key]) => {
+    const el = $(fieldId);
+    if(!el) return;
+    const v = m[key];
+    el.value = (v !== null && v !== undefined) ? v : '';
+  });
+  if($('modeDesinf') && m.modeDesinf) $('modeDesinf').value = m.modeDesinf;
+  if($('cfgVolume')) $('cfgVolume').value = m.volume ?? '';
+  if($('cfgPhSouhaite')) $('cfgPhSouhaite').value = m.phSouhaite ?? '';
+  if($('cfgTacSouhaite')) $('cfgTacSouhaite').value = m.tacSouhaite ?? '';
+  if($('cfgCya')) $('cfgCya').value = m.cya ?? '';
+  updateCclBadge(m);
+  closeHistDetail();
+  switchTab('mesure');
+  toast('Valeurs chargées — vérifie et saisis tes nouvelles mesures');
 }
 
 // ============== Init ==============

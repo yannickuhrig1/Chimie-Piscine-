@@ -457,6 +457,26 @@
     <span id="lastControlText">Dernier contrôle : —</span>
   </div>
 
+  <!-- =================== DÉTAIL D'UNE MESURE HISTORIQUE =================== -->
+  <div id="histDetailOverlay" style="display:none;position:fixed;inset:0;background:rgba(2,12,26,.85);backdrop-filter:blur(8px);z-index:9998;padding:20px;overflow-y:auto" onclick="if(event.target===this)closeHistDetail()">
+    <div style="background:linear-gradient(135deg,rgba(20,60,90,.95),rgba(10,40,70,.95));border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:22px;max-width:540px;width:100%;color:#fff;margin:auto;display:flex;flex-direction:column;min-height:min-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px">
+        <h2 id="histDetailTitle" style="font-family:'Fraunces',serif;font-size:18px;font-weight:600;margin:0;line-height:1.3"></h2>
+        <button onclick="closeHistDetail()" class="btn-ghost" style="padding:4px 10px;font-size:18px;width:auto;line-height:1" aria-label="Fermer">×</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:14px">
+        <button id="histTabMeasure" onclick="switchHistTab('measure')" class="btn-ghost" style="flex:1;font-size:13px;padding:8px">Mesures</button>
+        <button id="histTabActions" onclick="switchHistTab('actions')" class="btn-ghost" style="flex:1;font-size:13px;padding:8px">Actions à suivre</button>
+      </div>
+      <div id="histDetailMeasure" style="margin-bottom:18px"></div>
+      <div id="histDetailActions" style="display:none;margin-bottom:18px"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:auto">
+        <button onclick="shareHistEntry()" class="btn-ghost" style="flex:1;min-width:130px;font-size:13px">Partager en image</button>
+        <button onclick="reloadHistEntry()" class="btn-primary" style="flex:1;min-width:130px;font-size:13px">Recharger dans l'app</button>
+      </div>
+    </div>
+  </div>
+
   <!-- =================== WIZARD (premier lancement) =================== -->
   <div id="wizardOverlay" style="display:none;position:fixed;inset:0;background:rgba(2,12,26,.85);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:20px">
     <div style="background:linear-gradient(135deg,rgba(20,60,90,.95),rgba(10,40,70,.95));border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:28px;max-width:440px;width:100%;color:#fff">

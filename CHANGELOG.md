@@ -5,6 +5,18 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.4.1] — 2026-05-23
+
+### Ajouté
+- **Modale détail d'une mesure historique** : clic sur une ligne de l'Historique → vue complète avec 2 onglets *Mesures* (toutes les valeurs sauvegardées) et *Actions à suivre* (corrections recalculées à partir de cette mesure).
+- Bouton **Partager en image** dans la modale détail : possibilité d'exporter n'importe quelle mesure passée, pas seulement la dernière.
+- Bouton **Recharger dans l'app** : remplit le formulaire Mesure avec les valeurs de l'entrée choisie comme point de départ.
+- Mention explicite **« Chloramines (Ccl) »** dans l'image partagée à la place de « Chlore combiné ».
+
+### Modifié
+- `renderCorrections` accepte maintenant une mesure et un container cibles (utilisé par la modale détail).
+- Les lignes d'historique deviennent cliquables (le bouton × de suppression reste isolé).
+
 ## [1.4.0] — 2026-05-23
 
 ### Ajouté
