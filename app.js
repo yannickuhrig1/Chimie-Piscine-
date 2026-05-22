@@ -480,6 +480,7 @@ function saveBassinConfigFromRappels(){
     if(cfg[k] !== null && $(id)) $(id).value = cfg[k];
   });
   if(cfg.modeDesinf && $('modeDesinf')) $('modeDesinf').value = cfg.modeDesinf;
+  cloudBackupSync();
   toast('Bassin configuré ✓');
   showSavedPill();
 }
@@ -547,6 +548,7 @@ function saveAndCalc(){
   updateCclBadge(m);
   updateLastControlInfo();
   renderCorrections();
+  cloudBackupSync();
   toast('Mesure enregistrée');
   setTimeout(()=>switchTab('correction'), 600);
 }
@@ -970,6 +972,7 @@ function deleteMeasurement(idx){
   renderHistory();
   renderCharts();
   updateLastControlInfo();
+  cloudBackupSync();
   toast('Mesure supprimée');
 }
 
@@ -1211,6 +1214,7 @@ function saveReminders(){
   $('dailyMeta').textContent = `Tous les jours à ${r.dailyTime}`;
   $('weeklyMeta').textContent = `Tous les samedis à ${r.weeklyTime}`;
   scheduleNotifications();
+  cloudBackupSync();
   toast('Rappels enregistrés');
 }
 
@@ -1318,8 +1322,156 @@ function confirmReset(){
   if(!confirm('Supprimer toutes les données (mesures, rappels, paramètres) ? Cette action est irréversible.')) return;
   Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
   localStorage.removeItem('cp_last_notif');
+  localStorage.removeItem(BACKUP_CODE_KEY); // déconnecte la sauvegarde cloud (la sauvegarde distante est conservée)
   toast('Données effacées');
   setTimeout(()=>location.reload(), 800);
+}
+
+// ============== Sauvegarde cloud ==============
+const BACKUP_CODE_KEY = 'cp_backup_code';
+
+function getBackupCode(){ return localStorage.getItem(BACKUP_CODE_KEY); }
+
+// Code lisible, alphabet sans caractères ambigus (pas de I L O 0 1)
+function generateBackupCode(){
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  let s = 'PISC';
+  for(let i=0;i<16;i++){
+    if(i%4===0) s += '-';
+    s += alphabet[bytes[i] % alphabet.length];
+  }
+  return s;
+}
+
+function collectBackupData(){
+  return {
+    measurements: loadJSON(STORAGE_KEYS.measurements, []),
+    reminders: loadJSON(STORAGE_KEYS.reminders, {}),
+    lastInputs: loadJSON(STORAGE_KEYS.lastInputs, {}),
+    version: APP_VERSION,
+    savedAt: new Date().toISOString()
+  };
+}
+
+async function backupCall(payload){
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/backup`, {
+    method:'POST',
+    headers:{'apikey':SUPABASE_KEY,'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const data = await resp.json().catch(()=>({}));
+  if(!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+  return data;
+}
+
+// Synchro automatique (debounced) — best-effort, ne bloque jamais l'app
+let backupSyncTimer = null;
+function cloudBackupSync(){
+  const code = getBackupCode();
+  if(!code) return;
+  clearTimeout(backupSyncTimer);
+  backupSyncTimer = setTimeout(async ()=>{
+    updateBackupStatus('Synchronisation…');
+    try{
+      await backupCall({action:'save', code, data: collectBackupData()});
+      updateBackupStatus('Synchronisé ' + new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
+    }catch(e){
+      console.warn('cloud sync failed', e);
+      updateBackupStatus('Échec de synchro — réessai au prochain enregistrement', true);
+    }
+  }, 1500);
+}
+
+function updateBackupStatus(msg, isErr){
+  const el = $('backupStatus');
+  if(el){ el.textContent = msg; el.className = 'backup-status' + (isErr ? ' err' : ''); }
+}
+
+async function enableCloudBackup(){
+  let code = getBackupCode();
+  if(!code) code = generateBackupCode();
+  try{
+    await backupCall({action:'save', code, data: collectBackupData()});
+    localStorage.setItem(BACKUP_CODE_KEY, code);
+    renderBackupUI();
+    toast('Sauvegarde cloud activée');
+  }catch(e){
+    toast('Activation impossible — vérifie ta connexion','warn');
+  }
+}
+
+function disableCloudBackup(){
+  if(!confirm('Désactiver la sauvegarde cloud ?\n\nTes données restent sur cet appareil. La sauvegarde en ligne est conservée et reste récupérable avec ton code.')) return;
+  localStorage.removeItem(BACKUP_CODE_KEY);
+  renderBackupUI();
+  toast('Sauvegarde cloud désactivée');
+}
+
+function copyBackupCode(){
+  const code = getBackupCode();
+  if(!code) return;
+  navigator.clipboard.writeText(code)
+    .then(()=>toast('Code copié'))
+    .catch(()=>toast('Copie impossible','warn'));
+}
+
+async function restoreFromCode(){
+  const input = $('restoreCode');
+  const code = input.value.trim().toUpperCase();
+  if(code.length < 12){ toast('Code invalide','warn'); return; }
+  if(!confirm('Restaurer cette sauvegarde ?\n\nTes mesures et réglages actuels sur cet appareil seront remplacés.')) return;
+  try{
+    const res = await backupCall({action:'restore', code});
+    const d = res.data || {};
+    if(d.measurements) saveJSON(STORAGE_KEYS.measurements, d.measurements);
+    if(d.reminders) saveJSON(STORAGE_KEYS.reminders, d.reminders);
+    if(d.lastInputs) saveJSON(STORAGE_KEYS.lastInputs, d.lastInputs);
+    localStorage.setItem(BACKUP_CODE_KEY, code); // adopte ce code pour les synchros futures
+    toast('Sauvegarde restaurée');
+    setTimeout(()=>location.reload(), 900);
+  }catch(e){
+    toast(e.message || 'Restauration impossible','warn');
+  }
+}
+
+function renderBackupUI(){
+  const el = $('backupContent');
+  if(!el) return;
+  const code = getBackupCode();
+  if(code){
+    el.innerHTML = `
+      <div class="card-header">
+        <div class="card-title"><span class="dot" style="background:var(--leaf);box-shadow:0 0 10px var(--leaf)"></span>Sauvegarde cloud</div>
+        <span class="status-pill ok"><span class="pulse"></span>Active</span>
+      </div>
+      <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6;margin-bottom:6px">
+        Ton code de sauvegarde — note-le précieusement. Il permet de récupérer tes données sur un autre appareil. Sans lui, la sauvegarde est irrécupérable.
+      </p>
+      <div class="backup-code" onclick="copyBackupCode()">
+        <span>${code}</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2v-2M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m2 0h2a2 2 0 012 2v3"/></svg>
+      </div>
+      <div id="backupStatus" class="backup-status">Synchro automatique après chaque mesure</div>
+      <button class="btn-ghost" style="width:100%" onclick="disableCloudBackup()">Désactiver la sauvegarde cloud</button>`;
+  } else {
+    el.innerHTML = `
+      <div class="card-header">
+        <div class="card-title"><span class="dot"></span>Sauvegarde cloud</div>
+      </div>
+      <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6;margin-bottom:14px">
+        Tes mesures sont stockées sur cet appareil uniquement. Active la sauvegarde cloud pour les retrouver en cas de perte ou de changement de téléphone — un code secret est généré, <strong>sans compte ni email</strong>.
+      </p>
+      <button class="btn-primary" style="width:100%" onclick="enableCloudBackup()">Activer la sauvegarde cloud</button>
+      <details style="margin-top:12px">
+        <summary style="cursor:pointer;font-size:12px;color:var(--shallow);opacity:.85">J'ai déjà un code de sauvegarde</summary>
+        <div class="field" style="margin-top:10px">
+          <label for="restoreCode">Code de sauvegarde</label>
+          <input type="text" id="restoreCode" class="contact-input" placeholder="PISC-XXXX-XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters">
+        </div>
+        <button class="btn-ghost" style="width:100%" onclick="restoreFromCode()">Restaurer mes données</button>
+      </details>`;
+  }
 }
 
 // ============== Contact / Tickets (Supabase) ==============
@@ -1572,6 +1724,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   loadLastInputs();
   loadReminders();
   renderHistory();
+  renderBackupUI();
   updateLastControlInfo();
 
   // Accès admin discret via #admin dans l'URL

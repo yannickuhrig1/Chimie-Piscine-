@@ -375,6 +375,23 @@
   }
   .last-control-info svg{width:14px;height:14px;flex-shrink:0;color:var(--shallow);opacity:.85}
 
+  /* Sauvegarde cloud */
+  .backup-code{
+    font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600;
+    letter-spacing:.06em;color:var(--shallow);
+    background:rgba(4,29,46,.5);border:1px dashed var(--border);
+    border-radius:12px;padding:14px;text-align:center;cursor:pointer;
+    margin:10px 0;word-break:break-all;transition:border-color .2s;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .backup-code:active{border-color:var(--water)}
+  .backup-code svg{width:14px;height:14px;flex-shrink:0;opacity:.7}
+  .backup-status{
+    font-size:11px;color:var(--shallow);opacity:.8;
+    display:flex;align-items:center;gap:6px;margin:8px 0 12px;
+  }
+  .backup-status.err{color:var(--coral);opacity:1}
+
   /* Lien d'accès admin discret */
   .admin-link{
     background:none;border:none;cursor:pointer;
@@ -820,6 +837,11 @@
         <input type="time" id="weeklyTime" value="10:00">
       </div>
       <button class="btn-primary" onclick="saveReminders()">Enregistrer les rappels</button>
+    </div>
+
+    <div class="divider">Sauvegarde cloud</div>
+    <div class="card">
+      <div id="backupContent"></div>
     </div>
 
     <div class="divider">Données</div>
