@@ -72,20 +72,36 @@ Ou via interface web : https://www.pwabuilder.com → entre l'URL → "Package f
 
 ## ✨ Fonctionnalités
 
-- Calculs identiques au fichier Excel : pH (HCl + poudre), chloration, choc ×5-10, superchloration, TAC+
+### Calculs & corrections
+- pH : acide chlorhydrique + poudre pH-
+- Chlore : chloration quotidienne, choc ×5-10, superchloration (chloramines)
+- TAC+ (alcalinité)
+- Calculateurs avancés : sel (électrolyse), TH/dureté (chlorure de calcium), phosphates, brome
+- Indice de Langelier (LSI) : équilibre corrosif / entartrant
 - Détection auto du chlore combiné (Ccl > 0.6 ppm → superchloration)
+
+### Suivi
 - Historique des mesures (localStorage, persistant)
-- Graphiques d'évolution pH/Cl/TAC/CYA (7/30/90j)
+- Graphiques d'évolution pH/Cl, TAC/CYA et désinfection (zones de chlore selon le CYA, chlore actif HOCl — modèle O'Brien)
 - Rappels quotidien, hebdo, lavage filtre via notifications
-- Fonctionne hors ligne (service worker)
+
+### Contact & admin
+- Rubrique Contact : envoi de messages transformés en tickets (Supabase)
+- Notifications automatiques email (Resend) + Discord (Notifiarr) à chaque ticket
+- Page admin protégée par mot de passe (`/#admin` ou lien in-app dans la page Contact) : consulter, clôturer, supprimer les tickets
+
+### Technique
+- PWA installable + APK Android, fonctionne hors ligne (service worker)
 - Import/Export JSON
+
+Voir [`CHANGELOG.md`](CHANGELOG.md) pour le détail des versions.
 
 ## 📂 Structure
 
 ```
 chimie-piscine/
 ├── index.html              # UI principale
-├── app.js                  # Logique + calculs
+├── app.js                  # Logique + calculs (APP_VERSION en tête)
 ├── sw.js                   # Service worker
 ├── manifest.json           # Manifest PWA
 ├── vercel.json             # Config Vercel (headers PWA)
@@ -94,8 +110,11 @@ chimie-piscine/
 ├── deploy.sh               # Script déploiement + APK tout-en-un
 ├── .github/workflows/
 │   └── build-apk.yml       # CI/CD GitHub Actions (APK auto)
+├── CHANGELOG.md            # Historique des versions
 └── README.md
 ```
+
+Le backend Contact (table `messages` + Edge Functions de notification) est hébergé sur Supabase, hors de ce dépôt.
 
 ## 🔧 Configuration TWA (APK)
 
@@ -109,7 +128,9 @@ Le package Android utilise :
 
 ## 🔐 Données
 
-Tout est stocké en `localStorage` du navigateur intégré (TWA) — aucune donnée n'est envoyée sur Internet. L'APK et la PWA web partagent automatiquement les mêmes données via le même domaine.
+Les **mesures et l'historique du bassin** sont stockés en `localStorage` du navigateur intégré (TWA) — ils ne quittent jamais l'appareil. L'APK et la PWA web partagent automatiquement les mêmes données via le même domaine.
+
+Seuls les **messages du formulaire Contact** sont transmis (vers Supabase) afin de créer les tickets de support et déclencher les notifications.
 
 ## 🚀 Pour publier sur Play Store
 

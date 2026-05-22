@@ -3,6 +3,8 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
+const APP_VERSION = '1.3.0';
+
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
   reminders: 'cp_reminders_v1',
@@ -1566,6 +1568,7 @@ if('serviceWorker' in navigator){
 
 // ============== Init ==============
 document.addEventListener('DOMContentLoaded', ()=>{
+  if($('appVersion')) $('appVersion').textContent = 'v' + APP_VERSION;
   loadLastInputs();
   loadReminders();
   renderHistory();

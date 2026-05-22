@@ -93,6 +93,13 @@
   .logo svg{width:22px;height:22px}
   .brand-text{flex:1}
   .brand-title{font-family:'Fraunces',serif;font-weight:600;font-size:22px;letter-spacing:-.02em;line-height:1}
+  .ver-pill{
+    display:inline-block;margin-left:8px;vertical-align:middle;
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;
+    color:var(--shallow);background:rgba(127,219,218,.12);
+    border:1px solid var(--border);border-radius:99px;
+    padding:2px 7px;letter-spacing:.02em;
+  }
   .brand-sub{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--shallow);opacity:.7;margin-top:3px}
 
   /* Page titles */
@@ -368,6 +375,17 @@
   }
   .last-control-info svg{width:14px;height:14px;flex-shrink:0;color:var(--shallow);opacity:.85}
 
+  /* Lien d'accès admin discret */
+  .admin-link{
+    background:none;border:none;cursor:pointer;
+    font-family:'Manrope',sans-serif;font-size:11px;font-weight:500;
+    color:var(--shallow);opacity:.45;letter-spacing:.06em;
+    padding:8px 12px;display:inline-flex;align-items:center;gap:5px;
+    transition:opacity .2s;
+  }
+  .admin-link:active{opacity:.85}
+  .admin-link svg{width:12px;height:12px}
+
   /* Admin tickets */
   .ticket-meta{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px}
   .ticket-from{font-size:13px;font-weight:700;color:var(--foam)}
@@ -404,7 +422,7 @@
         </svg>
       </div>
       <div class="brand-text">
-        <div class="brand-title">Chimie Piscine</div>
+        <div class="brand-title">Chimie Piscine<span class="ver-pill" id="appVersion"></span></div>
         <div class="brand-sub">Calculateur · Suivi</div>
       </div>
       <div id="globalStatus" class="status-pill ok"><span class="pulse"></span><span id="statusText">OK</span></div>
@@ -852,6 +870,13 @@
       Ton message crée un ticket et déclenche une notification.
       La réponse arrive directement à l'adresse email que tu renseignes.<br>
       <span style="opacity:.7;font-size:11px">Aucune donnée de ton bassin n'est transmise — seul le formulaire ci-dessus est envoyé.</span>
+    </div>
+
+    <div style="text-align:center;padding:4px 0 8px">
+      <button type="button" class="admin-link" onclick="openAdmin()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+        Espace admin
+      </button>
     </div>
   </div>
 
