@@ -1358,6 +1358,9 @@ async function sendContactMessage(){
   btn.textContent = 'Envoi…';
   result.innerHTML = '';
 
+  // UUID généré côté client : le rôle anon ne peut pas relire la ligne (RLS insert-only)
+  const ticketId = (crypto.randomUUID && crypto.randomUUID()) || null;
+
   try{
     const resp = await fetch(`${SUPABASE_URL}/rest/v1/messages`, {
       method: 'POST',
@@ -1367,11 +1370,21 @@ async function sendContactMessage(){
         'Content-Type': 'application/json',
         'Prefer': 'return=minimal'
       },
-      body: JSON.stringify({nom, email, sujet, message})
+      body: JSON.stringify(ticketId ? {id: ticketId, nom, email, sujet, message} : {nom, email, sujet, message})
     });
     if(!resp.ok){
       throw new Error(`HTTP ${resp.status} ${await resp.text()}`);
     }
+
+    // Déclenche la notification (best-effort : n'échoue pas le formulaire)
+    if(ticketId){
+      fetch(`${SUPABASE_URL}/functions/v1/notify-ticket`, {
+        method: 'POST',
+        headers: {'apikey': SUPABASE_KEY, 'Content-Type': 'application/json'},
+        body: JSON.stringify({id: ticketId})
+      }).catch(e => console.warn('notify-ticket failed', e));
+    }
+
     result.innerHTML = `<div class="result ok">
       <div class="result-label">Message envoyé ✓</div>
       <div class="result-note">Merci ${nom} ! Ton ticket est enregistré, réponse à venir sur ${email}.</div>
@@ -1389,6 +1402,127 @@ async function sendContactMessage(){
     btn.disabled = false;
     btn.textContent = 'Envoyer le message';
   }
+}
+
+// ============== Admin — gestion des tickets ==============
+let adminPassword = null;
+
+function escapeHtml(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function openAdmin(){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  const pg = $('page-admin');
+  if(pg){ pg.classList.add('active'); window.scrollTo({top:0}); }
+}
+
+async function adminCall(payload){
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/admin-tickets`, {
+    method:'POST',
+    headers:{'apikey':SUPABASE_KEY, 'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const data = await resp.json().catch(()=>({}));
+  if(!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+  return data;
+}
+
+async function adminLogin(){
+  const pwd = $('adminPwd').value;
+  const msg = $('adminGateMsg');
+  const btn = $('adminLoginBtn');
+  if(!pwd){
+    msg.innerHTML = `<div class="result warn"><div class="result-label">Mot de passe requis</div></div>`;
+    return;
+  }
+  btn.disabled = true; btn.textContent = 'Vérification…';
+  try{
+    const data = await adminCall({password: pwd, action:'list'});
+    adminPassword = pwd;
+    $('adminGate').style.display = 'none';
+    $('adminPanel').style.display = 'block';
+    $('adminPwd').value = '';
+    msg.innerHTML = '';
+    renderAdminTickets(data.tickets || []);
+  }catch(e){
+    msg.innerHTML = `<div class="result danger">
+      <div class="result-label">Accès refusé</div>
+      <div class="result-note">${escapeHtml(e.message)}</div>
+    </div>`;
+  }finally{
+    btn.disabled = false; btn.textContent = 'Déverrouiller';
+  }
+}
+
+function adminLogout(){
+  adminPassword = null;
+  $('adminPanel').style.display = 'none';
+  $('adminGate').style.display = 'block';
+  $('adminTicketList').innerHTML = '';
+}
+
+async function adminLoadTickets(){
+  if(!adminPassword){ adminLogout(); return; }
+  try{
+    const data = await adminCall({password: adminPassword, action:'list'});
+    renderAdminTickets(data.tickets || []);
+    toast('Tickets à jour');
+  }catch(e){
+    toast('Erreur de chargement','warn');
+  }
+}
+
+function renderAdminTickets(tickets){
+  $('adminCount').textContent = `${tickets.length} ticket${tickets.length>1?'s':''}`;
+  const list = $('adminTicketList');
+  if(!tickets.length){
+    list.innerHTML = `<div class="empty"><p>Aucun ticket pour le moment</p></div>`;
+    return;
+  }
+  list.innerHTML = tickets.map(t => {
+    const ferme = t.statut === 'ferme';
+    const d = new Date(t.created_at);
+    const dateStr = d.toLocaleString('fr-FR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    return `<div class="card ${ferme?'ferme':''}">
+      <div class="ticket-meta">
+        <div>
+          <div class="ticket-from">${escapeHtml(t.nom)}</div>
+          <div class="ticket-email">${escapeHtml(t.email)}</div>
+        </div>
+        <span class="status-pill ${ferme?'ok':'warn'}"><span class="pulse"></span>${ferme?'Fermé':'Ouvert'}</span>
+      </div>
+      <div class="ticket-sujet">${escapeHtml(t.sujet)}</div>
+      <div class="ticket-body">${escapeHtml(t.message)}</div>
+      <div class="ticket-date">${dateStr}</div>
+      <div class="ticket-actions">
+        ${ferme
+          ? `<button class="btn-ghost" onclick="adminUpdateTicket('${t.id}','ouvert')">Rouvrir</button>`
+          : `<button class="btn-primary" onclick="adminUpdateTicket('${t.id}','ferme')">Clôturer</button>`}
+        <button class="btn-ghost" style="color:var(--coral)" onclick="adminDeleteTicket('${t.id}')">Supprimer</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function adminUpdateTicket(id, statut){
+  if(!adminPassword) return;
+  try{
+    await adminCall({password: adminPassword, action:'update', id, statut});
+    adminLoadTickets();
+  }catch(e){ toast('Erreur de mise à jour','warn'); }
+}
+
+async function adminDeleteTicket(id){
+  if(!adminPassword) return;
+  if(!confirm('Supprimer définitivement ce ticket ?')) return;
+  try{
+    await adminCall({password: adminPassword, action:'delete', id});
+    adminLoadTickets();
+  }catch(e){ toast('Erreur de suppression','warn'); }
 }
 
 // ============== Live update Ccl pendant la saisie ==============
@@ -1436,6 +1570,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
   loadReminders();
   renderHistory();
   updateLastControlInfo();
+
+  // Accès admin discret via #admin dans l'URL
+  if(location.hash === '#admin') openAdmin();
+  window.addEventListener('hashchange', ()=>{
+    if(location.hash === '#admin') openAdmin();
+  });
 
   // Met à jour le badge si données pré-saisies
   const m = readInputs();
