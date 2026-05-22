@@ -3,8 +3,10 @@ name: Build APK
 on:
   push:
     branches: [main]
+    tags: ['v*']
     paths-ignore:
       - 'README.md'
+      - 'CHANGELOG.md'
       - '.gitignore'
   workflow_dispatch:
     inputs:
@@ -42,6 +44,16 @@ jobs:
             echo "url=${{ vars.PWA_URL || 'https://chimie-piscine.vercel.app' }}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Determine version
+        id: ver
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "name=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          else
+            echo "name=1.3.0" >> $GITHUB_OUTPUT
+          fi
+          echo "code=${{ github.run_number }}" >> $GITHUB_OUTPUT
+
       - name: Generate signing keystore
         run: |
           mkdir -p android-build
@@ -71,8 +83,8 @@ jobs:
             "startUrl": "/index.html",
             "iconUrl": "${{ steps.url.outputs.url }}/icon-512.png",
             "maskableIconUrl": "${{ steps.url.outputs.url }}/icon-512.png",
-            "appVersionName": "1.0.0",
-            "appVersionCode": 1,
+            "appVersionName": "${{ steps.ver.outputs.name }}",
+            "appVersionCode": ${{ steps.ver.outputs.code }},
             "shortcuts": [],
             "generatorApp": "bubblewrap-cli",
             "webManifestUrl": "${{ steps.url.outputs.url }}/manifest.json",
@@ -95,9 +107,9 @@ jobs:
           }
           EOF
           
-          # Init avec auto-accept des prompts
-          echo "Y" | bubblewrap init --manifest="${{ steps.url.outputs.url }}/manifest.json" --directory=. || true
-          
+          # Init non-interactif : `yes` répond à tous les prompts (install SDK, licences...)
+          yes | bubblewrap init --manifest="${{ steps.url.outputs.url }}/manifest.json" --directory=. || true
+
           # Override avec notre manifest custom
           mv twa-manifest.json twa-manifest.json.tmp
           cp twa-manifest.json.tmp twa-manifest.json
@@ -108,8 +120,9 @@ jobs:
           BUBBLEWRAP_KEYSTORE_PASSWORD: chimiepiscine
           BUBBLEWRAP_KEY_PASSWORD: chimiepiscine
         run: |
-          bubblewrap build --skipPwaValidation || \
-            (echo "Build failed, trying update..." && bubblewrap update && bubblewrap build --skipPwaValidation)
+          # `yes |` auto-accepte l'installation du SDK Android et les licences (CI non-interactif)
+          yes | bubblewrap build --skipPwaValidation || \
+            (echo "Build échoué, tentative via update..." && yes | bubblewrap update && yes | bubblewrap build --skipPwaValidation)
 
       - name: Find APK
         id: find_apk
