@@ -1,4 +1,4 @@
-const CACHE = 'chimie-piscine-v22';
+const CACHE = 'chimie-piscine-v23';
 const ASSETS = [
   './',
   './app.js',
@@ -14,6 +14,10 @@ self.addEventListener('install', e => {
     caches.open(CACHE).then(c => c.addAll(ASSETS).catch(err => console.warn('Cache partial', err)))
   );
   self.skipWaiting();
+});
+
+self.addEventListener('message', e => {
+  if(e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', e => {

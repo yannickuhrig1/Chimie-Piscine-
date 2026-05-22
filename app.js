@@ -2102,19 +2102,31 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
   // Toast "nouvelle version" si un SW met à jour pendant la session
   if('serviceWorker' in navigator){
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if(reloading) return;
+      reloading = true;
+      location.reload();
+    });
+    const showUpdateToast = (waitingWorker) => {
+      const t = $('toast');
+      if(!t) return;
+      t.innerHTML = 'Nouvelle version dispo · <button type="button" style="background:rgba(255,255,255,.15);color:#fff;border:0;padding:4px 10px;border-radius:8px;font:inherit;cursor:pointer">Recharger</button>';
+      t.className = 'toast show';
+      t.style.pointerEvents = 'auto';
+      t.querySelector('button').addEventListener('click', () => {
+        if(waitingWorker) waitingWorker.postMessage({type:'SKIP_WAITING'});
+        else location.reload();
+      });
+    };
     navigator.serviceWorker.getRegistration().then(reg => {
       if(!reg) return;
+      if(reg.waiting && navigator.serviceWorker.controller) showUpdateToast(reg.waiting);
       reg.addEventListener('updatefound', () => {
         const nw = reg.installing;
         if(!nw) return;
         nw.addEventListener('statechange', () => {
-          if(nw.state === 'installed' && navigator.serviceWorker.controller){
-            const t = $('toast');
-            if(!t) return;
-            t.innerHTML = 'Nouvelle version dispo · <a href="#" style="color:#fff;text-decoration:underline">Recharger</a>';
-            t.className = 'toast show';
-            t.querySelector('a').addEventListener('click', e => { e.preventDefault(); location.reload(); });
-          }
+          if(nw.state === 'installed' && navigator.serviceWorker.controller) showUpdateToast(nw);
         });
       });
     });
