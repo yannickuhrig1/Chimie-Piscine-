@@ -2134,7 +2134,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   renderBackupUI();
   updateLastControlInfo();
 
-  if($('shareBtn')) $('shareBtn').addEventListener('click', shareControl);
+  if($('shareBtn')) $('shareBtn').addEventListener('click', () => shareControl());
 
   const hintsEnabled = localStorage.getItem('cp_hints_enabled') !== '0';
   if($('hintsToggle')){
