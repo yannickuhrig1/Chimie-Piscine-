@@ -1320,6 +1320,77 @@ function confirmReset(){
   setTimeout(()=>location.reload(), 800);
 }
 
+// ============== Contact / Tickets (Supabase) ==============
+const SUPABASE_URL = 'https://tfitkyuvkdogiatglxzr.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_BYHvWjbjIXYdt3OkSQtXXQ_luaxs3PI';
+
+async function sendContactMessage(){
+  const nom = $('contactNom').value.trim();
+  const email = $('contactEmail').value.trim();
+  const sujet = $('contactSujet').value.trim();
+  const message = $('contactMessage').value.trim();
+  const hp = $('contactHp').value;
+  const result = $('contactResult');
+  const btn = $('contactSubmit');
+
+  // Honeypot rempli => bot : succès silencieux, rien n'est envoyé
+  if(hp){
+    result.innerHTML = `<div class="result ok"><div class="result-label">Message envoyé ✓</div></div>`;
+    return;
+  }
+
+  if(!nom || !email || !sujet || !message){
+    result.innerHTML = `<div class="result warn">
+      <div class="result-label">Champs manquants</div>
+      <div class="result-note">Merci de remplir le nom, l'email, le sujet et le message.</div>
+    </div>`;
+    return;
+  }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    result.innerHTML = `<div class="result warn">
+      <div class="result-label">Email invalide</div>
+      <div class="result-note">Vérifie l'adresse email saisie.</div>
+    </div>`;
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Envoi…';
+  result.innerHTML = '';
+
+  try{
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/messages`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({nom, email, sujet, message})
+    });
+    if(!resp.ok){
+      throw new Error(`HTTP ${resp.status} ${await resp.text()}`);
+    }
+    result.innerHTML = `<div class="result ok">
+      <div class="result-label">Message envoyé ✓</div>
+      <div class="result-note">Merci ${nom} ! Ton ticket est enregistré, réponse à venir sur ${email}.</div>
+    </div>`;
+    ['contactNom','contactEmail','contactSujet','contactMessage'].forEach(id => $(id).value = '');
+    toast('Message envoyé');
+  }catch(err){
+    console.warn('Contact send failed', err);
+    result.innerHTML = `<div class="result danger">
+      <div class="result-label">Échec de l'envoi</div>
+      <div class="result-note">Message non envoyé. Vérifie ta connexion internet et réessaie.</div>
+    </div>`;
+    toast('Échec de l\'envoi', 'warn');
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Envoyer le message';
+  }
+}
+
 // ============== Live update Ccl pendant la saisie ==============
 ['fcl','tcl'].forEach(id => {
   document.addEventListener('DOMContentLoaded', ()=>{
