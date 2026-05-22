@@ -1227,12 +1227,38 @@ async function enableNotifications(){
   if(perm === 'granted'){
     $('enableNotifBtn').textContent = 'Activées';
     $('enableNotifBtn').style.color = 'var(--leaf)';
+    if($('testNotifBtn')) $('testNotifBtn').style.display = '';
     new Notification('Chimie Piscine', {body:'Notifications activées 🌊', icon:'icon-192.png'});
     syncPushSubscription();
     return true;
   }
   toast('Permission refusée','warn');
   return false;
+}
+
+async function testPushNotification(){
+  const btn = $('testNotifBtn');
+  if(!btn) return;
+  btn.disabled = true;
+  const original = btn.textContent;
+  btn.textContent = 'Envoi...';
+  try{
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if(!sub){ toast('Pas d\'abonnement actif','warn'); return; }
+    const r = await fetch(`${SUPABASE_URL}/functions/v1/push-send`, {
+      method:'POST',
+      headers:{'apikey':SUPABASE_KEY,'Content-Type':'application/json'},
+      body: JSON.stringify({test:true, endpoint: sub.endpoint})
+    });
+    if(r.ok) toast('Notification de test envoyée');
+    else toast('Echec du test ('+r.status+')','warn');
+  }catch(e){
+    toast('Erreur: '+e.message,'warn');
+  }finally{
+    btn.disabled = false;
+    btn.textContent = original;
+  }
 }
 
 // ============== Push notifications (rappels serveur) ==============
@@ -1768,12 +1794,37 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if('Notification' in window && Notification.permission === 'granted'){
     $('enableNotifBtn').textContent = 'Activées';
     $('enableNotifBtn').style.color = 'var(--leaf)';
+    if($('testNotifBtn')) $('testNotifBtn').style.display = '';
   }
+  if($('testNotifBtn')) $('testNotifBtn').addEventListener('click', testPushNotification);
 
   // Rafraîchit le "il y a X jours" toutes les minutes
   setInterval(updateLastControlInfo, 60000);
 
-  // Re-synchronise l'abonnement push au démarrage (capture les changements
-  // de TZ / horaires faits sur un autre appareil)
-  syncPushSubscription();
+  // Si la permission a été révoquée côté navigateur, nettoyer le serveur
+  if('Notification' in window && Notification.permission !== 'granted'){
+    unsyncPushSubscription();
+  } else {
+    syncPushSubscription();
+  }
+
+  // Toast "nouvelle version" si un SW met à jour pendant la session
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.getRegistration().then(reg => {
+      if(!reg) return;
+      reg.addEventListener('updatefound', () => {
+        const nw = reg.installing;
+        if(!nw) return;
+        nw.addEventListener('statechange', () => {
+          if(nw.state === 'installed' && navigator.serviceWorker.controller){
+            const t = $('toast');
+            if(!t) return;
+            t.innerHTML = 'Nouvelle version dispo · <a href="#" style="color:#fff;text-decoration:underline">Recharger</a>';
+            t.className = 'toast show';
+            t.querySelector('a').addEventListener('click', e => { e.preventDefault(); location.reload(); });
+          }
+        });
+      });
+    });
+  }
 });

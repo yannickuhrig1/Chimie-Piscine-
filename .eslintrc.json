@@ -1,0 +1,22 @@
+{
+  "root": true,
+  "parserOptions": { "ecmaVersion": 2022, "sourceType": "script" },
+  "env": { "browser": true, "es2022": true },
+  "globals": { "Chart": "readonly" },
+  "rules": {
+    "no-undef": "error",
+    "no-unused-vars": "off",
+    "no-redeclare": "error",
+    "no-dupe-keys": "error",
+    "no-dupe-args": "error",
+    "no-unreachable": "error",
+    "no-const-assign": "error"
+  },
+  "overrides": [
+    {
+      "files": ["sw.js"],
+      "env": { "browser": false, "serviceworker": true, "es2022": true },
+      "globals": { "clients": "readonly" }
+    }
+  ]
+}
