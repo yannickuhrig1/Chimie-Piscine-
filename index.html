@@ -457,6 +457,47 @@
     <span id="lastControlText">Dernier contrôle : —</span>
   </div>
 
+  <!-- =================== WIZARD (premier lancement) =================== -->
+  <div id="wizardOverlay" style="display:none;position:fixed;inset:0;background:rgba(2,12,26,.85);backdrop-filter:blur(8px);z-index:9999;align-items:center;justify-content:center;padding:20px">
+    <div style="background:linear-gradient(135deg,rgba(20,60,90,.95),rgba(10,40,70,.95));border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:28px;max-width:440px;width:100%;color:#fff">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+        <h2 style="font-family:'Fraunces',serif;font-size:22px;font-weight:600;margin:0">Bienvenue 👋</h2>
+        <span id="wizardProgress" style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--shallow);opacity:.7">1/3</span>
+      </div>
+
+      <div id="wizardStep1">
+        <p style="font-size:13px;color:var(--shallow);opacity:.9;line-height:1.6;margin-bottom:18px">Pour démarrer, j'ai besoin de connaître ton bassin.</p>
+        <label style="font-size:11px;color:var(--shallow);opacity:.7;text-transform:uppercase;letter-spacing:.5px">Volume du bassin</label>
+        <div class="input-wrap" style="margin-top:6px"><input type="number" id="wizVolume" step="0.5" placeholder="ex : 43" inputmode="decimal" style="font-size:18px"><span class="input-unit">m³</span></div>
+        <p style="font-size:11px;color:var(--shallow);opacity:.6;margin-top:8px;line-height:1.5">Indicatif : un bassin 8×4×1,5 m ≈ 48 m³. Tu retrouves la valeur sur la facture du pisciniste.</p>
+        <div style="display:flex;gap:10px;margin-top:22px">
+          <button onclick="closeWizard()" class="btn-ghost" style="flex:1">Passer</button>
+          <button onclick="wizardStep1Next()" class="btn-primary" style="flex:2">Continuer</button>
+        </div>
+      </div>
+
+      <div id="wizardStep2" style="display:none">
+        <p style="font-size:13px;color:var(--shallow);opacity:.9;line-height:1.6;margin-bottom:18px">Comment désinfectes-tu ton eau ?</p>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button onclick="wizardSetMode('chlore')" class="btn-ghost" style="text-align:left;padding:14px 16px"><strong>Chlore</strong><br><span style="font-size:11px;opacity:.7">Galets, granulés, Javel</span></button>
+          <button onclick="wizardSetMode('sel')" class="btn-ghost" style="text-align:left;padding:14px 16px"><strong>Sel (électrolyse)</strong><br><span style="font-size:11px;opacity:.7">Cellule d'électrolyse qui produit du chlore</span></button>
+          <button onclick="wizardSetMode('brome')" class="btn-ghost" style="text-align:left;padding:14px 16px"><strong>Brome</strong><br><span style="font-size:11px;opacity:.7">Alternative au chlore (spas, eaux chauffées)</span></button>
+        </div>
+      </div>
+
+      <div id="wizardStep3" style="display:none">
+        <p style="font-size:13px;color:var(--shallow);opacity:.9;line-height:1.6;margin-bottom:18px">Avec quoi mesures-tu ?</p>
+        <label style="font-size:11px;color:var(--shallow);opacity:.7;text-transform:uppercase;letter-spacing:.5px">Marque de tes bandelettes ou photomètre</label>
+        <div class="input-wrap" style="margin-top:6px"><input type="text" id="wizBrand" placeholder="AquaChek, Bayrol, PoolLab…" style="font-size:16px"></div>
+        <p style="font-size:11px;color:var(--shallow);opacity:.6;margin-top:8px;line-height:1.5">Optionnel — utile pour les futures versions qui liront tes bandelettes par photo.</p>
+        <div style="display:flex;gap:10px;margin-top:22px">
+          <button onclick="closeWizard()" class="btn-ghost" style="flex:1">Passer</button>
+          <button onclick="wizardFinish()" class="btn-primary" style="flex:2">Terminer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- =================== MESURE =================== -->
   <div class="page active" id="page-mesure">
     <h1 class="page-title">Mesures <em>du jour</em></h1>
@@ -671,6 +712,14 @@
 
     <div class="card">
       <div class="card-header">
+        <div class="card-title"><span class="dot" style="background:var(--leaf);box-shadow:0 0 10px var(--leaf)"></span>Tendances</div>
+        <button id="shareBtn" class="btn-ghost" style="padding:6px 12px;font-size:11px;width:auto">Partager</button>
+      </div>
+      <div id="trendsContent"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
         <div class="card-title"><span class="dot"></span>pH &amp; Chlore</div>
         <select id="chartRange" onchange="renderCharts()" style="padding:6px 30px 6px 10px;font-size:11px;width:auto">
           <option value="7">7 jours</option>
@@ -792,6 +841,16 @@
       </div>
       <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6">
         Active les notifications du navigateur pour recevoir tes rappels de contrôle directement sur ton appareil.
+      </p>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="card-header">
+        <div class="card-title"><span class="dot"></span>Aides contextuelles</div>
+        <label class="switch"><input type="checkbox" id="hintsToggle"><span class="switch-slider"></span></label>
+      </div>
+      <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6">
+        Petit « ? » à côté des champs de mesure avec une explication. Pratique au début, désactivable une fois rodé.
       </p>
     </div>
 

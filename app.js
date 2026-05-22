@@ -14,9 +14,9 @@ const STORAGE_KEYS = {
 // ============== Utilitaires ==============
 function $(id){return document.getElementById(id)}
 function num(id){const v=parseFloat($(id).value);return isNaN(v)?null:v}
-function toast(msg,kind='ok'){
+function toast(msg,kind='ok',duration=2400){
   const t=$('toast');t.textContent=msg;t.className='toast show '+kind;
-  setTimeout(()=>t.classList.remove('show'),2400);
+  setTimeout(()=>t.classList.remove('show'),duration);
 }
 function fmt(v,d=2){
   if(v===null||v===undefined||isNaN(v))return '—';
@@ -981,6 +981,7 @@ let chartPh = null, chartTac = null, chartDesinf = null;
 
 function renderCharts(){
   renderHistory();
+  renderTrends();
   const days = parseInt($('chartRange').value);
   const cutoff = Date.now() - days*86400000;
   const list = loadJSON(STORAGE_KEYS.measurements, [])
@@ -1751,14 +1752,305 @@ if('serviceWorker' in navigator){
   });
 }
 
+// ============== Tendances ==============
+function linearTrend(points){
+  const n = points.length;
+  if(n < 2) return null;
+  const sx = points.reduce((s,p) => s + p.x, 0);
+  const sy = points.reduce((s,p) => s + p.y, 0);
+  const sxy = points.reduce((s,p) => s + p.x*p.y, 0);
+  const sxx = points.reduce((s,p) => s + p.x*p.x, 0);
+  const denom = n*sxx - sx*sx;
+  if(denom === 0) return null;
+  return (n*sxy - sx*sy) / denom;
+}
+
+function renderTrends(){
+  const wrap = $('trendsContent');
+  if(!wrap) return;
+  const list = loadJSON(STORAGE_KEYS.measurements, []);
+  const insights = [];
+  const now = Date.now();
+
+  if(list.length === 0){
+    wrap.innerHTML = '<p style="color:var(--shallow);opacity:.7;font-size:13px;padding:4px 0">Pas encore de mesures à analyser.</p>';
+    return;
+  }
+
+  const last = list[list.length-1];
+  const daysSinceLast = Math.round((now - new Date(last.date).getTime()) / 86400000);
+  if(daysSinceLast >= 3){
+    insights.push({level:'warn', icon:'⏱', text:`${daysSinceLast} jours sans contrôle — pense à mesurer pH et chlore.`});
+  }
+
+  const recent = list.filter(m => (now - new Date(m.date).getTime()) <= 14*86400000);
+  if(recent.length >= 3){
+    const firstTs = new Date(recent[0].date).getTime();
+    const toPoints = (key) => recent.filter(m => m[key] !== null && m[key] !== undefined)
+      .map(m => ({x: (new Date(m.date).getTime() - firstTs)/86400000, y: m[key]}));
+
+    const phPts = toPoints('ph');
+    if(phPts.length >= 3){
+      const slope = linearTrend(phPts);
+      if(slope !== null && Math.abs(slope) >= 0.05){
+        const dir = slope > 0 ? 'monte' : 'descend';
+        const why = slope > 0
+          ? 'souvent le signe d\'un TAC trop bas ou d\'une eau dure'
+          : 'le TAC est probablement insuffisant pour stabiliser le pH';
+        insights.push({level:'warn', icon:'📈', text:`pH ${dir} de ${Math.abs(slope).toFixed(2)} par jour — ${why}.`});
+      }
+    }
+
+    const fclPts = toPoints('fcl');
+    if(fclPts.length >= 3){
+      let drop = 0, days = 0;
+      for(let i=1;i<fclPts.length;i++){
+        const dt = fclPts[i].x - fclPts[i-1].x;
+        if(dt > 0 && dt < 3 && fclPts[i].y < fclPts[i-1].y){
+          drop += fclPts[i-1].y - fclPts[i].y;
+          days += dt;
+        }
+      }
+      if(days >= 1 && drop/days >= 1.5){
+        insights.push({level:'warn', icon:'⚗', text:`Chlore consommé vite (~${(drop/days).toFixed(1)} ppm/jour) — matière organique ou fort ensoleillement, pense au choc.`});
+      }
+    }
+
+    const tacPts = toPoints('tac');
+    if(tacPts.length >= 2){
+      const delta = tacPts[tacPts.length-1].y - tacPts[0].y;
+      if(delta <= -20){
+        insights.push({level:'warn', icon:'⬇', text:`TAC en chute de ${Math.abs(delta)} ppm — une remontée au bicarbonate évite que le pH parte en vrille.`});
+      }
+    }
+  }
+
+  if(last.cya !== null && last.cya > 40){
+    insights.push({level:'danger', icon:'⚠', text:'CYA > 40 ppm — vidange partielle nécessaire, il ne s\'élimine que par dilution.'});
+  }
+
+  if(insights.length === 0){
+    insights.push({level:'ok', icon:'✓', text:'Aucune dérive notable. Tout est sous contrôle.'});
+  }
+
+  wrap.innerHTML = insights.map(ins => {
+    const color = ins.level === 'danger' ? 'var(--coral)' : ins.level === 'warn' ? 'var(--lemon)' : 'var(--leaf)';
+    return `<div style="display:flex;gap:10px;padding:8px 0;align-items:flex-start;font-size:13px;line-height:1.5">
+      <span style="color:${color};font-size:16px;flex:0 0 auto;width:20px;text-align:center">${ins.icon}</span>
+      <span style="color:var(--foam);opacity:.95">${ins.text}</span>
+    </div>`;
+  }).join('');
+}
+
+// ============== Wizard premier lancement ==============
+function maybeOpenWizard(){
+  const measurements = loadJSON(STORAGE_KEYS.measurements, []);
+  if(measurements.length === 0 && !localStorage.getItem('cp_wizard_done')){
+    setTimeout(openWizard, 400);
+  }
+}
+
+function openWizard(){
+  if(!$('wizardOverlay')) return;
+  $('wizardOverlay').style.display = 'flex';
+  showWizardStep(1);
+}
+
+function closeWizard(){
+  $('wizardOverlay').style.display = 'none';
+  localStorage.setItem('cp_wizard_done', '1');
+}
+
+function showWizardStep(n){
+  [1,2,3].forEach(i => {
+    const el = $('wizardStep'+i);
+    if(el) el.style.display = i===n ? 'block' : 'none';
+  });
+  if($('wizardProgress')) $('wizardProgress').textContent = `${n}/3`;
+}
+
+function wizardStep1Next(){
+  const v = num('wizVolume');
+  if(v === null || v <= 0){ toast('Saisis un volume valide','warn'); return; }
+  if($('volume')) $('volume').value = v;
+  if($('cfgVolume')) $('cfgVolume').value = v;
+  autoSaveBassinParams();
+  showWizardStep(2);
+}
+
+function wizardSetMode(mode){
+  if($('modeDesinf')) $('modeDesinf').value = mode;
+  if($('cfgModeDesinf')) $('cfgModeDesinf').value = mode;
+  autoSaveBassinParams();
+  showWizardStep(3);
+}
+
+function wizardFinish(){
+  const brand = $('wizBrand').value.trim();
+  if(brand) localStorage.setItem('cp_test_brand', brand);
+  closeWizard();
+  toast('Configuration enregistrée — à toi de mesurer !');
+}
+
+// ============== Aides « ? » inline ==============
+const HINTS = {
+  volume: 'Volume d\'eau du bassin en m³. Calcule par L × l × profondeur moyenne, ou regarde la facture du pisciniste.',
+  phMesure: 'pH = acidité de l\'eau. Cible 6.8–7.4 (idéal 7.2). Hors plage, le chlore devient inefficace ou irritant.',
+  phSouhaite: 'pH que tu veux atteindre. 7.2 est le standard.',
+  fcl: 'Chlore libre — la fraction active qui désinfecte. Cible ≈ 10 % du CYA (max 5 ppm en France).',
+  tcl: 'Chlore total. Soustraction Tcl − Fcl = chloramines (chlore consommé). Si > 0,6, superchloration.',
+  tacMesure: 'TAC = alcalinité totale, sert de tampon pour le pH. Le guide ne fixe pas de plage absolue : surveille la dérive du pH plutôt qu\'un nombre.',
+  tacSouhaite: 'TAC visé. Démarre vers 80–100 ppm et ajuste selon la stabilité du pH dans le temps.',
+  cya: 'Stabilisant (acide cyanurique). Protège le chlore du soleil. Idéal 15–20 ppm. Au-delà de 40, vidange partielle obligatoire — il ne s\'élimine que par dilution.',
+  temp: 'Température de l\'eau. Sous 12 °C : plus de prolifération d\'algues. Coupe l\'électrolyseur sous 16 °C.',
+  selMesure: 'Salinité en g/L. Cible 3–5 g/L selon ton électrolyseur (voir notice).',
+  thMesure: 'Dureté de l\'eau (titre hydrotimétrique). > 22 °f → séquestrant calcaire conseillé.',
+  phosphate: 'Phosphates en ppb. > 100 = source de nourriture pour les algues, ajoute de l\'anti-phosphate.',
+  brome: 'Brome (alternative au chlore, spas). Cible 2–4 ppm.'
+};
+
+function setupHints(){
+  document.querySelectorAll('.hint-trigger').forEach(el => el.remove());
+  if(localStorage.getItem('cp_hints_enabled') === '0') return;
+  Object.entries(HINTS).forEach(([id, text]) => {
+    const el = $(id);
+    if(!el) return;
+    const field = el.closest('.field');
+    const label = field ? field.querySelector('label') : null;
+    if(!label) return;
+    const btn = document.createElement('button');
+    btn.className = 'hint-trigger';
+    btn.type = 'button';
+    btn.textContent = '?';
+    btn.setAttribute('aria-label', 'Aide pour ' + label.textContent);
+    btn.style.cssText = 'margin-left:6px;width:18px;height:18px;border:0;border-radius:50%;background:rgba(255,255,255,.12);color:var(--shallow);font-size:11px;font-weight:600;cursor:pointer;line-height:1;vertical-align:middle;padding:0';
+    btn.onclick = (e) => { e.preventDefault(); toast(text, 'ok', 6500); };
+    label.appendChild(btn);
+  });
+}
+
+function toggleHints(e){
+  const enabled = e.target.checked;
+  localStorage.setItem('cp_hints_enabled', enabled ? '1' : '0');
+  setupHints();
+  toast(enabled ? 'Aides affichées' : 'Aides masquées');
+}
+
+// ============== Partage en image ==============
+function shareControl(){
+  const list = loadJSON(STORAGE_KEYS.measurements, []);
+  if(list.length === 0){ toast('Aucune mesure à partager','warn'); return; }
+  const m = list[list.length-1];
+  const st = evaluateStatus(m);
+
+  const size = 1080;
+  const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if(!ctx.roundRect){
+    ctx.roundRect = function(x,y,w,h,r){
+      this.moveTo(x+r,y); this.arcTo(x+w,y,x+w,y+h,r);
+      this.arcTo(x+w,y+h,x,y+h,r); this.arcTo(x,y+h,x,y,r);
+      this.arcTo(x,y,x+w,y,r); this.closePath();
+    };
+  }
+
+  const grad = ctx.createLinearGradient(0,0,size,size);
+  grad.addColorStop(0, '#0a3a5e');
+  grad.addColorStop(1, '#062842');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,size,size);
+
+  ctx.fillStyle = 'rgba(255,255,255,.06)';
+  ctx.beginPath(); ctx.arc(size*0.85, size*0.15, 220, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(size*0.1, size*0.92, 180, 0, Math.PI*2); ctx.fill();
+
+  ctx.fillStyle = '#fff';
+  ctx.font = '600 56px "Fraunces", serif';
+  ctx.fillText('Mon contrôle', 80, 130);
+  ctx.fillStyle = '#7fd4d2';
+  ctx.font = 'italic 600 56px "Fraunces", serif';
+  ctx.fillText('du jour', 80, 200);
+
+  const d = new Date(m.date);
+  const dateStr = d.toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});
+  ctx.fillStyle = 'rgba(255,255,255,.6)';
+  ctx.font = '400 26px "JetBrains Mono", monospace';
+  ctx.fillText(dateStr, 80, 250);
+
+  const statusColor = st.level === 'danger' ? '#ff7a7a' : st.level === 'warn' ? '#ffd76e' : '#7fd4a8';
+  ctx.fillStyle = statusColor;
+  ctx.font = '600 28px "Manrope", sans-serif';
+  ctx.fillText('● ' + st.text, 80, 305);
+
+  const ccl = (m.fcl !== null && m.tcl !== null) ? (m.tcl - m.fcl) : null;
+  const items = [
+    {label:'pH', value: m.ph!==null?fmt(m.ph,1):'—'},
+    {label:'Chlore libre', value: m.fcl!==null?fmt(m.fcl,2)+' ppm':'—'},
+    {label:'Chlore combiné', value: ccl!==null?fmt(ccl,2)+' ppm':'—'},
+    {label:'TAC', value: m.tac!==null?fmt(m.tac,0)+' ppm':'—'},
+    {label:'CYA', value: m.cya!==null?fmt(m.cya,0)+' ppm':'—'},
+    {label:'Température', value: m.temp!==null?fmt(m.temp,1)+' °C':'—'}
+  ];
+
+  const startY = 400, rowH = 95;
+  items.forEach((it, i) => {
+    const y = startY + i*rowH;
+    ctx.fillStyle = 'rgba(255,255,255,.05)';
+    ctx.beginPath(); ctx.roundRect(80, y, size - 160, rowH - 15, 16); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.6)';
+    ctx.font = '500 22px "Manrope", sans-serif';
+    ctx.fillText(it.label.toUpperCase(), 110, y + 32);
+    ctx.fillStyle = '#fff';
+    ctx.font = '600 38px "JetBrains Mono", monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(it.value, size - 110, y + 50);
+    ctx.textAlign = 'left';
+  });
+
+  ctx.fillStyle = 'rgba(255,255,255,.5)';
+  ctx.font = '500 22px "Manrope", sans-serif';
+  ctx.fillText('chimie-piscine.vercel.app', 80, size - 60);
+
+  canvas.toBlob(async (blob) => {
+    if(!blob){ toast('Erreur génération image','warn'); return; }
+    const file = new File([blob], `controle-piscine-${d.toISOString().slice(0,10)}.png`, {type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      try {
+        await navigator.share({files:[file], title:'Mon contrôle piscine'});
+        return;
+      } catch(e) { if(e.name === 'AbortError') return; }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = file.name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast('Image téléchargée');
+  }, 'image/png');
+}
+
 // ============== Init ==============
 document.addEventListener('DOMContentLoaded', ()=>{
   if($('appVersion')) $('appVersion').textContent = 'v' + APP_VERSION;
   loadLastInputs();
   loadReminders();
   renderHistory();
+  renderTrends();
   renderBackupUI();
   updateLastControlInfo();
+
+  if($('shareBtn')) $('shareBtn').addEventListener('click', shareControl);
+
+  const hintsEnabled = localStorage.getItem('cp_hints_enabled') !== '0';
+  if($('hintsToggle')){
+    $('hintsToggle').checked = hintsEnabled;
+    $('hintsToggle').addEventListener('change', toggleHints);
+  }
+  setupHints();
+
+  maybeOpenWizard();
 
   // Accès admin discret via #admin dans l'URL
   if(location.hash === '#admin') openAdmin();
