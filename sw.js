@@ -1,4 +1,4 @@
-const CACHE = 'chimie-piscine-v18';
+const CACHE = 'chimie-piscine-v19';
 const ASSETS = [
   './',
   './app.js',
@@ -37,6 +37,21 @@ self.addEventListener('fetch', e => {
         return resp;
       }).catch(() => cached);
       return cached || fetchPromise;
+    })
+  );
+});
+
+// Réception d'une push (rappels serveur)
+self.addEventListener('push', e => {
+  let data = {title:'Chimie Piscine', body:'Rappel de contrôle'};
+  try{ if(e.data) data = e.data.json(); }catch(err){ /* payload non-JSON */ }
+  e.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: 'icon-192.png',
+      badge: 'icon-192.png',
+      tag: data.tag || 'reminder',
+      renotify: true
     })
   );
 });

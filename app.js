@@ -1213,7 +1213,7 @@ function saveReminders(){
   saveJSON(STORAGE_KEYS.reminders, r);
   $('dailyMeta').textContent = `Tous les jours à ${r.dailyTime}`;
   $('weeklyMeta').textContent = `Tous les samedis à ${r.weeklyTime}`;
-  scheduleNotifications();
+  syncPushSubscription();
   cloudBackupSync();
   toast('Rappels enregistrés');
 }
@@ -1228,56 +1228,63 @@ async function enableNotifications(){
     $('enableNotifBtn').textContent = 'Activées';
     $('enableNotifBtn').style.color = 'var(--leaf)';
     new Notification('Chimie Piscine', {body:'Notifications activées 🌊', icon:'icon-192.png'});
+    syncPushSubscription();
     return true;
   }
   toast('Permission refusée','warn');
   return false;
 }
 
-function scheduleNotifications(){
-  // Stocker les rappels prévus dans le service worker via localStorage
-  // L'app vérifie les rappels au démarrage et toutes les 60 secondes si elle est ouverte
+// ============== Push notifications (rappels serveur) ==============
+// Les rappels sont envoyés par un cron Supabase même quand l'app est fermée.
+const VAPID_PUBLIC_KEY = 'BCKLQkgUPvLaSv1m83LJK8Xyqn9-nsJmCKjcheaRtxO_18gbAc7Z7Xj6N5mPBEFY_dhmatnsBsZN5RNnaYMH59c';
+
+function urlBase64ToUint8Array(base64String){
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw = atob(base64);
+  const arr = new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++) arr[i] = raw.charCodeAt(i);
+  return arr;
 }
 
-function checkRemindersDue(){
-  const r = loadJSON(STORAGE_KEYS.reminders, null);
-  if(!r) return;
+// Enregistre/actualise l'abonnement push serveur avec la config de rappels courante.
+async function syncPushSubscription(){
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)) return;
   if(Notification.permission !== 'granted') return;
-
-  const now = new Date();
-  const today = now.toDateString();
-  const lastShown = loadJSON('cp_last_notif', {});
-
-  // Quotidien
-  if(r.daily){
-    const [h,m] = r.dailyTime.split(':').map(Number);
-    if(now.getHours() === h && now.getMinutes() === m && lastShown.daily !== today){
-      new Notification('Contrôle piscine quotidien', {body:'C\'est l\'heure de mesurer pH et chlore 🏊', icon:'icon-192.png', tag:'daily'});
-      lastShown.daily = today;
-      saveJSON('cp_last_notif', lastShown);
+  try{
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub){
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
     }
-  }
+    const reminders = loadJSON(STORAGE_KEYS.reminders, {});
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris';
+    await fetch(`${SUPABASE_URL}/functions/v1/push-subscribe`, {
+      method:'POST',
+      headers:{'apikey':SUPABASE_KEY,'Content-Type':'application/json'},
+      body: JSON.stringify({action:'subscribe', subscription: sub.toJSON(), tz, reminders})
+    });
+  }catch(e){ console.warn('push subscribe failed', e); }
+}
 
-  // Hebdomadaire (samedi)
-  if(r.weekly && now.getDay() === 6){
-    const [h,m] = r.weeklyTime.split(':').map(Number);
-    if(now.getHours() === h && now.getMinutes() === m && lastShown.weekly !== today){
-      new Notification('Contrôle hebdomadaire', {body:'Mesure complète : pH, Cl, TAC, CYA 🧪', icon:'icon-192.png', tag:'weekly'});
-      lastShown.weekly = today;
-      saveJSON('cp_last_notif', lastShown);
-    }
-  }
-
-  // Filtre tous les 15 jours
-  if(r.filter){
-    const lastFilter = lastShown.filter ? new Date(lastShown.filter) : null;
-    const days = lastFilter ? (now - lastFilter) / 86400000 : 999;
-    if(days >= 15 && now.getHours() === 10 && now.getMinutes() === 0){
-      new Notification('Lavage du filtre', {body:'Il est temps de laver le filtre de la piscine', icon:'icon-192.png', tag:'filter'});
-      lastShown.filter = now.toISOString();
-      saveJSON('cp_last_notif', lastShown);
-    }
-  }
+// Désabonne cet appareil des rappels push.
+async function unsyncPushSubscription(){
+  if(!('serviceWorker' in navigator)) return;
+  try{
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if(!sub) return;
+    await fetch(`${SUPABASE_URL}/functions/v1/push-subscribe`, {
+      method:'POST',
+      headers:{'apikey':SUPABASE_KEY,'Content-Type':'application/json'},
+      body: JSON.stringify({action:'unsubscribe', endpoint: sub.endpoint})
+    });
+    await sub.unsubscribe();
+  }catch(e){ console.warn('push unsubscribe failed', e); }
 }
 
 // ============== Import / Export ==============
@@ -1766,7 +1773,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   // Rafraîchit le "il y a X jours" toutes les minutes
   setInterval(updateLastControlInfo, 60000);
 
-  // Vérifier les rappels périodiquement
-  setInterval(checkRemindersDue, 60000);
-  checkRemindersDue();
+  // Re-synchronise l'abonnement push au démarrage (capture les changements
+  // de TZ / horaires faits sur un autre appareil)
+  syncPushSubscription();
 });
