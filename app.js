@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.6.1';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -2689,6 +2689,25 @@ function shareControl(measurement){
   ctx.fillStyle = '#7fd4d2';
   ctx.font = 'italic 600 56px "Fraunces", serif';
   ctx.fillText('du jour', 80, 200);
+
+  // Badge bassin en haut à droite (emoji + nom + couleur d'accent)
+  const bassin = m.bassinId ? getBassinById(m.bassinId) : getActiveBassin();
+  if(bassin){
+    const badgeText = `${bassin.emoji || '🏊'}  ${bassin.nom}`;
+    ctx.font = '600 28px "Manrope", sans-serif';
+    const tw = ctx.measureText(badgeText).width;
+    const padX = 22, padY = 14;
+    const bw = tw + padX*2, bh = 50;
+    const bx = W - 80 - bw, by = 110;
+    ctx.fillStyle = (bassin.couleur || '#7fd4d2') + '22';
+    ctx.strokeStyle = (bassin.couleur || '#7fd4d2') + '66';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 25); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(badgeText, bx + padX, by + bh/2 + 1);
+    ctx.textBaseline = 'alphabetic';
+  }
 
   const d = new Date(m.date);
   const dateStr = d.toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'});

@@ -5,6 +5,11 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.6.1] — 2026-05-23
+
+### Ajouté
+- **Badge bassin sur l'image partagée** : la pastille emoji + nom du bassin (avec sa couleur d'accent) s'affiche en haut à droite du PNG généré, pour qu'on sache de quelle piscine on parle quand on partage. La couleur du badge reprend celle choisie dans la modale d'édition du bassin.
+
 ## [1.6.0] — 2026-05-23
 
 ### Ajouté
