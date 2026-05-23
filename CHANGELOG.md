@@ -5,6 +5,17 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.5.0] — 2026-05-23
+
+### Ajouté
+- **Diagramme Taylor (pH × TAC)** sous la carte Langelier : graphique 2D avec 3 zones colorées (corrosive / équilibrée / entartrante) calculées dynamiquement selon TH, température et CYA. Point blanc = ta mesure actuelle, tooltip affiche le LSI exact en survolant n'importe quel point.
+- **Suggestion pH cible LSI = 0** sous la carte Langelier dès que le LSI sort de la plage saine : « pH cible : 7,35 » (formule pH − LSI, valide car LSI est linéaire en pH).
+- **Aperçu LSI avant/après correction** sous la carte « Correction pH » : montre comment ta dose d'acide va déplacer le LSI (ex. « +0,42 → +0,08 (équilibrée) »), couleurs vives selon le statut résultant.
+- **Boost choc curatif via pH 6,8** : sur la carte « Choc curatif », nouvelle astuce optionnelle qui calcule le gain de chlore actif (HOCl) si on pré-baisse le pH à 6,8 avant la javel, avec la dose d'HCl correspondante. Apparaît uniquement si le gain est significatif (>10 %). Repose sur le modèle Wojtowicz 2001 déjà en place dans l'app.
+
+### Modifié
+- **Détection pH-creep raffinée** dans Tendances : seuil 0,04/jour (au lieu de 0,05), persistance minimale de 4 jours pour éviter les fausses alertes sur du bruit, **cause inversée corrigée** — pH qui monte = TAC trop élevé (CO₂ qui dégaze), pas trop bas comme indiqué précédemment. Suggestion d'action chiffrée (baisser le TAC à 80-100 ppm).
+
 ## [1.4.4] — 2026-05-23
 
 ### Sécurité
