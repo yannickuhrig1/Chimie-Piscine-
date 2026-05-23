@@ -81,18 +81,24 @@ Ou via interface web : https://www.pwabuilder.com → entre l'URL → "Package f
 - Détection auto du chlore combiné (Ccl > 0.6 ppm → superchloration)
 
 ### Suivi
-- Historique des mesures (localStorage, persistant)
+- Historique des mesures (localStorage, persistant) + **modale détail** par mesure (onglets *Mesures* / *Actions à suivre*)
 - Graphiques d'évolution pH/Cl, TAC/CYA et désinfection (zones de chlore selon le CYA, chlore actif HOCl — modèle O'Brien)
-- Rappels quotidien, hebdo, lavage filtre via notifications
+- **Carte Tendances** : régression linéaire pH 14 j, alertes consommation Cl excessive, chute TAC, CYA > 40, absence de mesure depuis 3+ j
+- Rappels quotidien, hebdo, lavage filtre via **notifications push serveur** (Supabase Edge Function + pg_cron — arrivent même app fermée)
+- **Partage du contrôle en image** : génère un PNG stylé (Web Share natif sur mobile, sinon téléchargement) avec mesures + actions à suivre
+- **Wizard de premier lancement** (volume, désinfection, marque de bandelette) et **aides contextuelles** désactivables
 
 ### Contact & admin
 - Rubrique Contact : envoi de messages transformés en tickets (Supabase)
 - Notifications automatiques email (Resend) + Discord (Notifiarr) à chaque ticket
 - Page admin protégée par mot de passe (`/#admin` ou lien in-app dans la page Contact) : consulter, clôturer, supprimer les tickets
+- **Rate limit serveur** : 5 tentatives échouées / 15 min par IP → blocage 15 min, IP hashée SHA-256+pepper (jamais stockée en clair), purge auto à 30 j
 
 ### Technique
 - PWA installable + APK Android, fonctionne hors ligne (service worker)
 - Import/Export JSON
+- ESLint en CI (GitHub Actions) pour catcher les refs orphelines avant production
+- Toast « Nouvelle version dispo · Recharger » à chaque mise à jour du service worker
 
 Voir [`CHANGELOG.md`](CHANGELOG.md) pour le détail des versions.
 
@@ -109,7 +115,9 @@ chimie-piscine/
 ├── icon-512.png            # Icône splash
 ├── deploy.sh               # Script déploiement + APK tout-en-un
 ├── .github/workflows/
-│   └── build-apk.yml       # CI/CD GitHub Actions (APK auto)
+│   ├── build-apk.yml       # CI/CD GitHub Actions (APK auto)
+│   └── lint.yml            # ESLint sur chaque push
+├── .eslintrc.json          # Config ESLint (browser + serviceworker)
 ├── CHANGELOG.md            # Historique des versions
 └── README.md
 ```
@@ -130,7 +138,10 @@ Le package Android utilise :
 
 Les **mesures et l'historique du bassin** sont stockés en `localStorage` du navigateur intégré (TWA) — ils ne quittent jamais l'appareil. L'APK et la PWA web partagent automatiquement les mêmes données via le même domaine.
 
-Seuls les **messages du formulaire Contact** sont transmis (vers Supabase) afin de créer les tickets de support et déclencher les notifications.
+Sont transmis vers Supabase :
+- Les **messages du formulaire Contact** (tickets de support + notifications email/Discord)
+- Les **abonnements push** (endpoint web-push uniquement, pas de données de bassin) pour permettre l'envoi des rappels serveur même app fermée
+- Les **tentatives de connexion admin** (uniquement IP **hashée** SHA-256 + pepper + success/fail) pour le rate limit — l'IP réelle n'est jamais stockée, purge automatique à 30 j
 
 ## 🚀 Pour publier sur Play Store
 
