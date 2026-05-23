@@ -5,7 +5,7 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
-## [1.6.0-beta] — 2026-05-23 — branche `feature/multi-bassins`
+## [1.6.0] — 2026-05-23
 
 ### Ajouté
 - **Gestion multi-bassins** : l'app suit plusieurs piscines (la tienne, celle d'un proche, etc.) sans mélanger les données. Chaque bassin a son nom, son emoji, sa couleur d'accent, sa config (volume, mode désinfection, cibles pH/TAC/CYA/sel/TH) et son propre historique de mesures.
