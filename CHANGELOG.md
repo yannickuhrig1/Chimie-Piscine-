@@ -5,6 +5,14 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.4.3] — 2026-05-23
+
+### Ajouté
+- **Chlore total (Tcl)** ajouté à l'image partagée, à côté de Chlore libre et Chloramines.
+
+### Corrigé
+- Bug Doses : la carte « Chloration choc » s'affichait toujours à cause d'un `|| true` resté dans la condition. Conséquence : sur une mesure avec Fcl légèrement bas, l'app proposait *à la fois* 0,36 L de Javel (quotidien) ET 1,78 L de Javel (choc), ce qui est trompeur — le choc n'est PAS un dosage en plus, c'est une **alternative** à la chloration quotidienne. La carte ne s'affiche désormais que si Fcl < 50 % de la cible (signal réel de prolifération), et le wording précise que la dose remplace celle du quotidien.
+
 ## [1.4.2] — 2026-05-23
 
 ### Ajouté

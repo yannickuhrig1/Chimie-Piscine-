@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.4.2';
+const APP_VERSION = '1.4.3';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -684,27 +684,32 @@ function renderCorrections(measurement, targetContainer){
     }
   }
 
-  // ===== Chloration choc (préventive) =====
-  if(m.fcl !== null && m.cya !== null && (m.fcl < calcFclVise(m.cya) || true)){
+  // ===== Chloration choc (curative, alternative à la chloration quotidienne) =====
+  // Ne s'affiche QUE si Fcl très bas (< 50 % de la cible) — signal de prolifération.
+  // Ne s'ajoute PAS à la chloration quotidienne : c'est SOIT l'un SOIT l'autre.
+  if(m.fcl !== null && m.cya !== null && m.fcl < calcFclVise(m.cya) * 0.5){
     const choc = calcChlorationChoc(m.volume, m.fcl, m.cya, 5);
     if(choc.javel > 0 || choc.hypocalcium > 0){
       html += `<div class="card">
         <div class="card-header">
-          <div class="card-title"><span class="dot"></span>Chloration choc</div>
-          <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">×${choc.facteur} · ${fmt(choc.tauxChlore,1)} ppm</span>
+          <div class="card-title" style="color:var(--lemon)"><span class="dot" style="background:var(--lemon);box-shadow:0 0 10px var(--lemon)"></span>Choc curatif</div>
+          <span class="status-pill warn"><span class="pulse"></span>Fcl très bas</span>
         </div>
-        <div class="result-multi-or">
-          <div class="item">
-            <div class="result-label">Javel 9.6°</div>
-            <div class="result-value">${fmt(choc.javel, 2)}<span class="unit">L</span></div>
+        <div class="result warn">
+          <div class="result-label">Alternative à la chloration quotidienne — pas en plus</div>
+          <div class="result-multi-or" style="margin-top:8px">
+            <div class="item">
+              <div class="result-label">Javel 9.6°</div>
+              <div class="result-value">${fmt(choc.javel, 2)}<span class="unit">L</span></div>
+            </div>
+            <div class="or-sep">OU</div>
+            <div class="item">
+              <div class="result-label">Hypochlorite Ca</div>
+              <div class="result-value">${fmt(choc.hypocalcium, 0)}<span class="unit">g</span></div>
+            </div>
           </div>
-          <div class="or-sep">OU</div>
-          <div class="item">
-            <div class="result-label">Hypochlorite Ca</div>
-            <div class="result-value">${fmt(choc.hypocalcium, 0)}<span class="unit">g</span></div>
-          </div>
+          <div class="result-note">Fcl ${fmt(m.fcl,2)} ppm &lt; 50 % de la cible (${fmt(calcFclVise(m.cya),2)} ppm). Si tu fais le choc, ne fais PAS la chloration quotidienne ci-dessus — la dose ci-dessus est déjà incluse dans le choc.</div>
         </div>
-        <div class="result-note">⚠️ Choisir <strong>l'un OU l'autre</strong>, jamais les deux · Facteur 5 à 10 × 10% du CYA · Choc préventif</div>
       </div>`;
     }
   }
@@ -2008,7 +2013,8 @@ function shareControl(measurement){
   const ccl = (m.fcl !== null && m.tcl !== null) ? (m.tcl - m.fcl) : null;
   const items = [
     {label:'pH', value: m.ph!==null?fmt(m.ph,1):'—'},
-    {label:'Chlore libre', value: m.fcl!==null?fmt(m.fcl,2)+' ppm':'—'},
+    {label:'Chlore libre (Fcl)', value: m.fcl!==null?fmt(m.fcl,2)+' ppm':'—'},
+    {label:'Chlore total (Tcl)', value: m.tcl!==null?fmt(m.tcl,2)+' ppm':'—'},
     {label:'Chloramines (Ccl)', value: ccl!==null?fmt(ccl,2)+' ppm':'—'},
     {label:'TAC', value: m.tac!==null?fmt(m.tac,0)+' ppm':'—'},
     {label:'CYA', value: m.cya!==null?fmt(m.cya,0)+' ppm':'—'},
