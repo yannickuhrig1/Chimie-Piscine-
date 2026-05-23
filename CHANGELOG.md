@@ -5,6 +5,12 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.6.2] — 2026-05-23
+
+### Corrigé
+- **Double affichage de chloration éliminé** : quand Fcl était très bas (< 50 % de la cible), la carte « Chloration » (dose quotidienne pour rattraper la cible) ET la carte « Choc curatif » (dose pour atteindre CYA/2) s'affichaient toutes les deux. Le wording précisait « pas en plus », mais voir deux dosages côte à côte restait visuellement trompeur. Désormais : si on est en zone choc, la carte « Chloration » est masquée et seul le choc s'affiche.
+- Wording du choc affiné : titre « Choc curatif — remplace la chloration quotidienne » + note qui explique qu'on cible CYA/2 (pas une dose en plus).
+
 ## [1.6.1] — 2026-05-23
 
 ### Ajouté

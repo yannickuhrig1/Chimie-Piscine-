@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.6.1';
+const APP_VERSION = '1.6.2';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -823,7 +823,9 @@ function renderCorrections(measurement, targetContainer){
   }
 
   // ===== Chlore - Chloration normale =====
-  if(m.fcl !== null && m.cya !== null){
+  // Si Fcl < 50 % de la cible, on saute cette carte : le choc curatif (plus bas)
+  // prend le relais — afficher les deux dosages simultanément serait trompeur.
+  if(m.fcl !== null && m.cya !== null && m.fcl >= calcFclVise(m.cya) * 0.5){
     const chl = calcJavelChloration(m.volume, m.fcl, m.cya);
     if(chl.litres > 0){
       html += `<div class="card">
@@ -913,7 +915,7 @@ function renderCorrections(measurement, targetContainer){
           <span class="status-pill warn"><span class="pulse"></span>Fcl très bas</span>
         </div>
         <div class="result warn">
-          <div class="result-label">Alternative à la chloration quotidienne — pas en plus</div>
+          <div class="result-label">Choc curatif — remplace la chloration quotidienne</div>
           <div class="result-multi-or" style="margin-top:8px">
             <div class="item">
               <div class="result-label">Javel 9.6°</div>
@@ -925,7 +927,7 @@ function renderCorrections(measurement, targetContainer){
               <div class="result-value">${fmt(choc.hypocalcium, 0)}<span class="unit">g</span></div>
             </div>
           </div>
-          <div class="result-note">Fcl ${fmt(m.fcl,2)} ppm &lt; 50 % de la cible (${fmt(calcFclVise(m.cya),2)} ppm). Si tu fais le choc, ne fais PAS la chloration quotidienne ci-dessus — la dose ci-dessus est déjà incluse dans le choc.</div>
+          <div class="result-note">Fcl ${fmt(m.fcl,2)} ppm &lt; 50 % de la cible (${fmt(calcFclVise(m.cya),2)} ppm). Trop bas pour rattraper avec une dose quotidienne : on passe directement au choc, qui ramène Fcl à <strong>CYA/2 ≈ ${fmt(m.cya/2,0)} ppm</strong>.</div>
           ${boostHtml}
         </div>
       </div>`;
