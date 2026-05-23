@@ -47,7 +47,6 @@ function createBassin(patch){
     config: {
       volume: patch.volume ?? null,
       modeDesinf: patch.modeDesinf || 'chlore',
-      marqueBandelette: patch.marqueBandelette || null,
       phSouhaite: patch.phSouhaite ?? 7.4,
       tacSouhaite: patch.tacSouhaite ?? 100,
       cya: patch.cya ?? null,
@@ -87,24 +86,27 @@ function deleteBassinAndData(id){
 }
 
 /**
- * Migration automatique au démarrage : si aucun bassin n'existe encore,
- * crée un bassin "Principal" depuis la config actuelle (cp_last_inputs_v1)
- * et tagge toutes les mesures existantes avec son id.
+ * Migration automatique au démarrage : pour les utilisateurs existants qui ont
+ * déjà des mesures sans bassinId, on crée un bassin "Mon bassin" depuis leur
+ * config actuelle (cp_last_inputs_v1) et on tagge leurs mesures avec son id.
+ *
+ * Pour les nouveaux utilisateurs (zéro mesure), on ne crée rien — c'est le
+ * wizard qui gère ça (maybeOpenWizard).
  */
 function migrateToMultiBassinsIfNeeded(){
   const existing = getBassins();
   if(existing.length > 0) return;
 
-  const lastInputs = loadJSON(STORAGE_KEYS.lastInputs, {}) || {};
   const measurements = loadJSON(STORAGE_KEYS.measurements, []);
+  if(measurements.length === 0) return; // Pas de mesures → pas besoin de migrer, le wizard prendra le relais
 
+  const lastInputs = loadJSON(STORAGE_KEYS.lastInputs, {}) || {};
   const principal = createBassin({
     nom: 'Mon bassin',
     emoji: '🏡',
     couleur: BASSIN_COLORS[0],
     volume: lastInputs.volume ?? null,
     modeDesinf: lastInputs.modeDesinf || 'chlore',
-    marqueBandelette: lastInputs.marqueBandelette || null,
     phSouhaite: lastInputs.phSouhaite ?? 7.4,
     tacSouhaite: lastInputs.tacSouhaite ?? 100,
     cya: lastInputs.cya ?? null,
@@ -113,12 +115,9 @@ function migrateToMultiBassinsIfNeeded(){
   });
   setActiveBassinId(principal.id);
 
-  // Tagger les mesures existantes sans bassinId
-  if(measurements.length){
-    let dirty = false;
-    measurements.forEach(m => { if(!m.bassinId){ m.bassinId = principal.id; dirty = true; } });
-    if(dirty) saveJSON(STORAGE_KEYS.measurements, measurements);
-  }
+  let dirty = false;
+  measurements.forEach(m => { if(!m.bassinId){ m.bassinId = principal.id; dirty = true; } });
+  if(dirty) saveJSON(STORAGE_KEYS.measurements, measurements);
 }
 
 /**
@@ -2507,11 +2506,11 @@ function closeWizard(){
 }
 
 function showWizardStep(n){
-  [1,2,3].forEach(i => {
+  [1,2].forEach(i => {
     const el = $('wizardStep'+i);
     if(el) el.style.display = i===n ? 'block' : 'none';
   });
-  if($('wizardProgress')) $('wizardProgress').textContent = `${n}/3`;
+  if($('wizardProgress')) $('wizardProgress').textContent = `${n}/2`;
 }
 
 function wizardStep1Next(){
@@ -2527,17 +2526,6 @@ function wizardSetMode(mode){
   if($('modeDesinf')) $('modeDesinf').value = mode;
   if($('cfgModeDesinf')) $('cfgModeDesinf').value = mode;
   autoSaveBassinParams();
-  showWizardStep(3);
-}
-
-function wizardFinish(){
-  const brand = $('wizBrand').value.trim();
-  if(brand) localStorage.setItem('cp_test_brand', brand);
-  // S'assure que la config du bassin actif est à jour côté multi-bassins
-  const activeId = getActiveBassinId();
-  if(activeId){
-    updateBassin(activeId, {config: {marqueBandelette: brand || null}});
-  }
   renderBassinSwitcher();
   closeWizard();
   toast('Configuration enregistrée — à toi de mesurer !');

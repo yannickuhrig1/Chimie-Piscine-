@@ -21,6 +21,9 @@ versionnage selon [SemVer](https://semver.org/lang/fr/).
 - `autoSaveBassinParams` et `saveBassinConfigFromRappels` persistent en plus la config dans le bassin actif (source de vérité multi-bassins). `lastInputs` reste pour rétro-compatibilité.
 - Export / Import JSON inclut maintenant la liste des bassins et l'id du bassin actif. Version du format passée à 2.
 
+### Retiré
+- **Étape 3 du wizard (marque de bandelette)** : le champ n'était utilisé nulle part dans l'app, c'était un faux ami qui suggérait une personnalisation inexistante. Le wizard passe de 3 à 2 étapes (volume → mode de désinfection → c'est fini).
+
 ## [1.5.0] — 2026-05-23
 
 ### Ajouté
