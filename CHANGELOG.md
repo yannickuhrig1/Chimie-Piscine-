@@ -5,6 +5,15 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.4.2] — 2026-05-23
+
+### Ajouté
+- L'image partagée inclut désormais une section **« Actions à suivre »** sous les mesures : liste des doses recommandées (HCl, Javel, TAC+, sel, CaCl₂, anti-phosphate, brome…) ou « ✓ Aucune action requise » si rien à faire. Hauteur du canvas dynamique selon le nombre d'actions.
+
+### Corrigé
+- Modale détail d'une mesure historique : les boutons *Partager / Recharger* étaient masqués par la barre de navigation quand le contenu était long. Modale capée à `100vh - 40px`, contenu interne scrollable, header et boutons toujours visibles.
+- Bouton **Partager** du panneau Tendances ne fonctionnait plus : `addEventListener('click', shareControl)` passait l'objet Event comme paramètre `measurement` depuis le refactor. Corrigé avec wrapper `() => shareControl()`.
+
 ## [1.4.1] — 2026-05-23
 
 ### Ajouté

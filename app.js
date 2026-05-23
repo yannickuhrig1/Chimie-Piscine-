@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.4.1';
+const APP_VERSION = '1.4.2';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -1937,15 +1937,93 @@ function toggleHints(e){
 }
 
 // ============== Partage en image ==============
+function getActionsTextList(m){
+  const out = [];
+  if(m.volume === null || m.volume === undefined) return out;
+
+  if(m.ph !== null && m.phSouhaite !== null && m.phSouhaite !== undefined && m.ph > m.phSouhaite){
+    const hcl = calcHcl(m.volume, m.ph, m.phSouhaite);
+    out.push(`pH ${fmt(m.ph,1)} → ${fmt(m.phSouhaite,1)} · ${fmt(hcl,2)} L acide HCl`);
+  }
+
+  if(m.fcl !== null && m.cya !== null){
+    const chl = calcJavelChloration(m.volume, m.fcl, m.cya);
+    if(chl.litres > 0){
+      out.push(`Chloration · ${fmt(chl.litres,2)} L Javel 9.6° (cible ${fmt(chl.fclVise,2)} ppm)`);
+    }
+  }
+
+  if(m.fcl !== null && m.tcl !== null){
+    const ccl = m.tcl - m.fcl;
+    const sc = calcSuperchloration(m.volume, ccl);
+    if(sc){
+      out.push(`Superchloration · ${fmt(sc.javelL,2)} L Javel OU ${fmt(sc.hypocalciumG,0)} g hypocalcium`);
+    }
+  }
+
+  if(m.tac !== null && m.tacSouhaite !== null && m.tacSouhaite !== undefined){
+    const tp = calcTacPlus(m.volume, m.tac, m.tacSouhaite);
+    if(tp){
+      out.push(`TAC + · ${fmt(tp.totalG,0)} g (+${fmt(tp.delta,0)} ppm)`);
+    }
+  }
+
+  if(m.sel !== null && m.sel !== undefined){
+    const s = calcSel(m.volume, m.sel, m.selSouhaite ?? 4);
+    if(s && s.action === 'ajout') out.push(`Sel · +${fmt(s.kg,1)} kg`);
+    else if(s && s.action === 'dilution') out.push(`Sel trop élevé · vidange partielle`);
+  }
+
+  if(m.th !== null && m.th !== undefined){
+    const ca = calcCalcium(m.volume, m.th, m.thSouhaite ?? 25);
+    if(ca && ca.action === 'ajout') out.push(`Dureté · +${fmt(ca.gCaCl2,0)} g CaCl₂`);
+    else if(ca && ca.action === 'haut') out.push(`TH trop élevé · diluer ou séquestrer`);
+  }
+
+  if(m.cya !== null && m.cya > 40){
+    out.push(`CYA ${fmt(m.cya,0)} ppm > 40 · vidange partielle obligatoire`);
+  }
+
+  if(m.phosphate !== null && m.phosphate !== undefined && m.phosphate > 100){
+    const p = calcAntiPhosphate(m.volume, m.phosphate);
+    if(p && p.action === 'traiter') out.push(`Anti-phosphate · ${fmt(p.mL,0)} mL`);
+  }
+
+  if(m.modeDesinf === 'brome' && m.brome !== null && m.brome !== undefined){
+    const br = calcBrome(m.volume, m.brome, 3);
+    if(br && br.action === 'ajout') out.push(`Brome · +${fmt(br.grammes,0)} g BCDMH`);
+    else if(br && br.action === 'haut') out.push(`Brome élevé · couper le brominateur`);
+  }
+
+  return out;
+}
+
 function shareControl(measurement){
   const list = loadJSON(STORAGE_KEYS.measurements, []);
   if(list.length === 0 && !measurement){ toast('Aucune mesure à partager','warn'); return; }
   const m = measurement || list[list.length-1];
   const st = evaluateStatus(m);
 
-  const size = 1080;
+  const W = 1080;
+  const ccl = (m.fcl !== null && m.tcl !== null) ? (m.tcl - m.fcl) : null;
+  const items = [
+    {label:'pH', value: m.ph!==null?fmt(m.ph,1):'—'},
+    {label:'Chlore libre', value: m.fcl!==null?fmt(m.fcl,2)+' ppm':'—'},
+    {label:'Chloramines (Ccl)', value: ccl!==null?fmt(ccl,2)+' ppm':'—'},
+    {label:'TAC', value: m.tac!==null?fmt(m.tac,0)+' ppm':'—'},
+    {label:'CYA', value: m.cya!==null?fmt(m.cya,0)+' ppm':'—'},
+    {label:'Température', value: m.temp!==null?fmt(m.temp,1)+' °C':'—'}
+  ];
+  const actions = getActionsTextList(m).slice(0, 6);
+  const measuresStart = 400, measuresRowH = 95;
+  const measuresEnd = measuresStart + items.length * measuresRowH;
+  const actionsHeaderY = measuresEnd + 30;
+  const actionsItemH = 70;
+  const actionsCount = Math.max(actions.length, 1);
+  const H = actionsHeaderY + 60 + actionsCount * actionsItemH + 100;
+
   const canvas = document.createElement('canvas');
-  canvas.width = size; canvas.height = size;
+  canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
   if(!ctx.roundRect){
     ctx.roundRect = function(x,y,w,h,r){
@@ -1955,15 +2033,15 @@ function shareControl(measurement){
     };
   }
 
-  const grad = ctx.createLinearGradient(0,0,size,size);
+  const grad = ctx.createLinearGradient(0,0,W,H);
   grad.addColorStop(0, '#0a3a5e');
   grad.addColorStop(1, '#062842');
   ctx.fillStyle = grad;
-  ctx.fillRect(0,0,size,size);
+  ctx.fillRect(0,0,W,H);
 
   ctx.fillStyle = 'rgba(255,255,255,.06)';
-  ctx.beginPath(); ctx.arc(size*0.85, size*0.15, 220, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(size*0.1, size*0.92, 180, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(W*0.85, 150, 220, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(W*0.1, H - 100, 180, 0, Math.PI*2); ctx.fill();
 
   ctx.fillStyle = '#fff';
   ctx.font = '600 56px "Fraunces", serif';
@@ -1983,34 +2061,48 @@ function shareControl(measurement){
   ctx.font = '600 28px "Manrope", sans-serif';
   ctx.fillText('● ' + st.text, 80, 305);
 
-  const ccl = (m.fcl !== null && m.tcl !== null) ? (m.tcl - m.fcl) : null;
-  const items = [
-    {label:'pH', value: m.ph!==null?fmt(m.ph,1):'—'},
-    {label:'Chlore libre', value: m.fcl!==null?fmt(m.fcl,2)+' ppm':'—'},
-    {label:'Chloramines (Ccl)', value: ccl!==null?fmt(ccl,2)+' ppm':'—'},
-    {label:'TAC', value: m.tac!==null?fmt(m.tac,0)+' ppm':'—'},
-    {label:'CYA', value: m.cya!==null?fmt(m.cya,0)+' ppm':'—'},
-    {label:'Température', value: m.temp!==null?fmt(m.temp,1)+' °C':'—'}
-  ];
-
-  const startY = 400, rowH = 95;
   items.forEach((it, i) => {
-    const y = startY + i*rowH;
+    const y = measuresStart + i*measuresRowH;
     ctx.fillStyle = 'rgba(255,255,255,.05)';
-    ctx.beginPath(); ctx.roundRect(80, y, size - 160, rowH - 15, 16); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(80, y, W - 160, measuresRowH - 15, 16); ctx.fill();
     ctx.fillStyle = 'rgba(255,255,255,.6)';
     ctx.font = '500 22px "Manrope", sans-serif';
     ctx.fillText(it.label.toUpperCase(), 110, y + 32);
     ctx.fillStyle = '#fff';
     ctx.font = '600 38px "JetBrains Mono", monospace';
     ctx.textAlign = 'right';
-    ctx.fillText(it.value, size - 110, y + 50);
+    ctx.fillText(it.value, W - 110, y + 50);
     ctx.textAlign = 'left';
   });
 
+  ctx.fillStyle = '#7fd4d2';
+  ctx.font = 'italic 600 40px "Fraunces", serif';
+  ctx.fillText('Actions à suivre', 80, actionsHeaderY + 20);
+
+  const actionsStart = actionsHeaderY + 50;
+  if(actions.length === 0){
+    ctx.fillStyle = 'rgba(127, 212, 168, .12)';
+    ctx.beginPath(); ctx.roundRect(80, actionsStart, W - 160, actionsItemH - 10, 14); ctx.fill();
+    ctx.fillStyle = '#7fd4a8';
+    ctx.font = '600 26px "Manrope", sans-serif';
+    ctx.fillText('✓  Aucune action requise', 110, actionsStart + 40);
+  } else {
+    actions.forEach((txt, i) => {
+      const y = actionsStart + i * actionsItemH;
+      ctx.fillStyle = 'rgba(255,255,255,.05)';
+      ctx.beginPath(); ctx.roundRect(80, y, W - 160, actionsItemH - 10, 14); ctx.fill();
+      ctx.fillStyle = '#ffd76e';
+      ctx.font = '600 28px "Manrope", sans-serif';
+      ctx.fillText('•', 110, y + 40);
+      ctx.fillStyle = '#fff';
+      ctx.font = '500 24px "Manrope", sans-serif';
+      ctx.fillText(txt, 140, y + 40);
+    });
+  }
+
   ctx.fillStyle = 'rgba(255,255,255,.5)';
   ctx.font = '500 22px "Manrope", sans-serif';
-  ctx.fillText('chimie-piscine.vercel.app', 80, size - 60);
+  ctx.fillText('chimie-piscine.vercel.app', 80, H - 50);
 
   canvas.toBlob(async (blob) => {
     if(!blob){ toast('Erreur génération image','warn'); return; }
