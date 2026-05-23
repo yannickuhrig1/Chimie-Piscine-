@@ -5,6 +5,14 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.4.4] — 2026-05-23
+
+### Sécurité
+- **Rate limit sur la page admin** : 5 tentatives de mot de passe échouées par IP en 15 min déclenchent un blocage de 15 min, validé côté serveur (Edge Function `admin-tickets`). Le client ne peut plus brute-forcer en boucle.
+- Journalisation des tentatives dans la table `admin_login_attempts` (IP hashée SHA-256 + pepper, jamais en clair), purge automatique au-delà de 30 jours via `pg_cron`.
+- Comparaison du mot de passe en temps constant (déjà en place) + message UX précisant le nombre de tentatives restantes avant blocage.
+- Délai UX progressif (2 s) entre deux essais infructueux pour casser le spam local du formulaire.
+
 ## [1.4.3] — 2026-05-23
 
 ### Ajouté

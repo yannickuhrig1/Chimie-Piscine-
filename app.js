@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.4.3';
+const APP_VERSION = '1.4.4';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -1620,11 +1620,43 @@ async function adminCall(payload){
     body: JSON.stringify(payload)
   });
   const data = await resp.json().catch(()=>({}));
-  if(!resp.ok) throw new Error(data.error || `HTTP ${resp.status}`);
+  if(!resp.ok){
+    const err = new Error(data.message || data.error || `HTTP ${resp.status}`);
+    err.status = resp.status;
+    err.data = data;
+    throw err;
+  }
   return data;
 }
 
+let adminLoginCooldownUntil = 0; // ms, blocage UX local
+let adminLoginCooldownTimer = null;
+
+function adminCooldownTick(){
+  const btn = $('adminLoginBtn');
+  if(!btn) return;
+  const remain = Math.max(0, adminLoginCooldownUntil - Date.now());
+  if(remain <= 0){
+    btn.disabled = false;
+    btn.textContent = 'Déverrouiller';
+    clearInterval(adminLoginCooldownTimer);
+    adminLoginCooldownTimer = null;
+    return;
+  }
+  const s = Math.ceil(remain/1000);
+  btn.disabled = true;
+  btn.textContent = s >= 60 ? `Bloqué (${Math.ceil(s/60)} min)` : `Patiente ${s} s…`;
+}
+
+function adminStartCooldown(sec){
+  adminLoginCooldownUntil = Date.now() + sec * 1000;
+  if(adminLoginCooldownTimer) clearInterval(adminLoginCooldownTimer);
+  adminCooldownTick();
+  adminLoginCooldownTimer = setInterval(adminCooldownTick, 1000);
+}
+
 async function adminLogin(){
+  if(Date.now() < adminLoginCooldownUntil) return; // bouton bloqué
   const pwd = $('adminPwd').value;
   const msg = $('adminGateMsg');
   const btn = $('adminLoginBtn');
@@ -1642,12 +1674,36 @@ async function adminLogin(){
     msg.innerHTML = '';
     renderAdminTickets(data.tickets || []);
   }catch(e){
+    const d = e.data || {};
+    if(e.status === 429){
+      // Trop de tentatives — blocage côté serveur, on synchronise l'UX
+      const sec = Math.max(1, parseInt(d.retry_after_sec || 60, 10));
+      msg.innerHTML = `<div class="result danger">
+        <div class="result-label">Trop de tentatives</div>
+        <div class="result-note">${escapeHtml(d.message || `Réessaie dans ${Math.ceil(sec/60)} min.`)}</div>
+      </div>`;
+      adminStartCooldown(sec);
+      return;
+    }
+    if(e.status === 401 && Number.isFinite(d.attempts_remaining)){
+      const left = d.attempts_remaining;
+      msg.innerHTML = `<div class="result danger">
+        <div class="result-label">Mot de passe incorrect</div>
+        <div class="result-note">${left} tentative${left>1?'s':''} restante${left>1?'s':''} avant blocage 15 min.</div>
+      </div>`;
+      // petit délai UX progressif (2s à chaque échec) pour casser le spam
+      adminStartCooldown(2);
+      return;
+    }
     msg.innerHTML = `<div class="result danger">
       <div class="result-label">Accès refusé</div>
       <div class="result-note">${escapeHtml(e.message)}</div>
     </div>`;
   }finally{
-    btn.disabled = false; btn.textContent = 'Déverrouiller';
+    // Si pas de cooldown actif, on réactive le bouton
+    if(Date.now() >= adminLoginCooldownUntil){
+      btn.disabled = false; btn.textContent = 'Déverrouiller';
+    }
   }
 }
 
