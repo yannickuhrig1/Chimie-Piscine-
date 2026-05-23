@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.4.4';
+const APP_VERSION = '1.5.0-beta';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -297,6 +297,25 @@ function lsiStatus(lsi){
   if(lsi > 0.5) return {level:'danger', text:'Très entartrante', tone:'danger'};
   if(lsi > 0.3) return {level:'warn', text:'Entartrante', tone:'warn'};
   return {level:'ok', text:'Eau équilibrée', tone:'ok'};
+}
+
+/**
+ * pH qui ramène le LSI à 0 (équilibre parfait).
+ * LSI = pH + TF + CF + AF − C → dépendance linéaire en pH, donc pH_cible = pH − LSI.
+ * On borne dans [6.8, 8.0] : au-delà on suggère d'agir sur TH/TAC plutôt.
+ */
+function calcPhCibleLSI(pHActuel, lsi){
+  if(pHActuel == null || lsi == null) return null;
+  return pHActuel - lsi;
+}
+
+/**
+ * % de HOCl (chlore actif) pour un Fcl/pH/CYA donnés — réutilise calcHOClFromCYA mais en %.
+ */
+function calcHOClPctFromCYA(fcl, pH, cya){
+  if(!fcl) return null;
+  const ppmHOCl = calcHOClFromCYA(fcl, pH, cya);
+  return (ppmHOCl / fcl) * 100;
 }
 
 // ============== Évaluation globale ==============
@@ -609,8 +628,21 @@ function renderCorrections(measurement, targetContainer){
       </div>`;
     }
     html += `</div>
-      <div class="result-note">⚠️ Appliquer 1/3 à 1/2 de la dose et remesurer le lendemain pour ajuster.</div>
-    </div>`;
+      <div class="result-note">⚠️ Appliquer 1/3 à 1/2 de la dose et remesurer le lendemain pour ajuster.</div>`;
+    // Aperçu LSI après correction (si on a TH + TAC + temp)
+    if(m.th !== null && m.tac !== null && m.temp !== null){
+      const lsiAvant = calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel');
+      const lsiApres = calcLSI(m.phSouhaite, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel');
+      if(lsiAvant != null && lsiApres != null){
+        const stAvant = lsiStatus(lsiAvant), stApres = lsiStatus(lsiApres);
+        html += `<div class="result-note" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--depth-line)">
+          📊 LSI passera de <strong style="color:${stAvant.tone==='ok'?'var(--leaf)':stAvant.tone==='warn'?'var(--lemon)':'var(--coral)'}">${lsiAvant>=0?'+':''}${fmt(lsiAvant,2)}</strong>
+          → <strong style="color:${stApres.tone==='ok'?'var(--leaf)':stApres.tone==='warn'?'var(--lemon)':'var(--coral)'}">${lsiApres>=0?'+':''}${fmt(lsiApres,2)}</strong>
+          <span style="opacity:.7">(${stApres.text.toLowerCase()})</span>
+        </div>`;
+      }
+    }
+    html += `</div>`;
   } else if(m.ph !== null && m.phSouhaite !== null){
     html += `<div class="card">
       <div class="card-header"><div class="card-title"><span class="dot"></span>pH</div></div>
@@ -690,6 +722,22 @@ function renderCorrections(measurement, targetContainer){
   if(m.fcl !== null && m.cya !== null && m.fcl < calcFclVise(m.cya) * 0.5){
     const choc = calcChlorationChoc(m.volume, m.fcl, m.cya, 5);
     if(choc.javel > 0 || choc.hypocalcium > 0){
+      // Boost pH : si pH actuel > 6.9, calculer le gain HOCl en pré-baissant à 6.8
+      let boostHtml = '';
+      if(m.ph !== null && m.ph > 6.9){
+        // Fcl post-choc (on raisonne sur la cible "post-choc" pour estimer % HOCl)
+        const fclPost = calcFclVise(m.cya) * 5; // cible choc ≈ CYA/2
+        const pctActuel = calcHOClPctFromCYA(fclPost, m.ph, m.cya);
+        const pct68 = calcHOClPctFromCYA(fclPost, 6.8, m.cya);
+        if(pctActuel && pct68 && pct68 > pctActuel * 1.10){
+          const gain = ((pct68 / pctActuel) - 1) * 100;
+          const hclTo68 = calcHcl(m.volume, m.ph, 6.8);
+          boostHtml = `<div class="result-note" style="margin-top:10px;padding:10px;background:rgba(110,231,183,.08);border-left:3px solid var(--leaf);border-radius:6px;color:var(--foam)">
+            💡 <strong>Boost efficacité (optionnel)</strong> — Avant le choc, baisser le pH à <strong>6,8</strong> rend le chlore actif (HOCl) <strong>+${fmt(gain, 0)}&nbsp;%</strong> plus efficace (${fmt(pctActuel,1)}&nbsp;% → ${fmt(pct68,1)}&nbsp;% de HOCl).
+            <br><span style="opacity:.85">Verser ≈ <strong>${fmt(hclTo68, 2)} L d'HCl</strong>, attendre 30 min, puis injecter la javel. Le pH remontera naturellement avec le chlore. Eau légèrement corrosive pendant 6-12 h — sans risque sur cette durée.</span>
+          </div>`;
+        }
+      }
       html += `<div class="card">
         <div class="card-header">
           <div class="card-title" style="color:var(--lemon)"><span class="dot" style="background:var(--lemon);box-shadow:0 0 10px var(--lemon)"></span>Choc curatif</div>
@@ -709,6 +757,7 @@ function renderCorrections(measurement, targetContainer){
             </div>
           </div>
           <div class="result-note">Fcl ${fmt(m.fcl,2)} ppm &lt; 50 % de la cible (${fmt(calcFclVise(m.cya),2)} ppm). Si tu fais le choc, ne fais PAS la chloration quotidienne ci-dessus — la dose ci-dessus est déjà incluse dans le choc.</div>
+          ${boostHtml}
         </div>
       </div>`;
     }
@@ -913,6 +962,11 @@ function renderCorrections(measurement, targetContainer){
   if(m.ph !== null && m.temp !== null && m.th !== null && m.tac !== null){
     const lsi = calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel');
     const st = lsiStatus(lsi);
+    const phCible = calcPhCibleLSI(m.ph, lsi);
+    // Suggestion pH cible uniquement si correction utile (LSI hors plage saine) et pH cible réaliste
+    const showSuggest = Math.abs(lsi) > 0.15 && phCible >= 6.9 && phCible <= 7.9;
+    // ID unique pour le canvas Taylor (timestamp + random pour éviter collisions historique/modal)
+    const taylorId = 'taylor_' + (m.date || Date.now()) + '_' + Math.random().toString(36).slice(2,7);
     html += `<div class="card">
       <div class="card-header">
         <div class="card-title"><span class="dot"></span>Indice de Langelier</div>
@@ -922,8 +976,18 @@ function renderCorrections(measurement, targetContainer){
         <div class="result-label">LSI</div>
         <div class="result-value">${lsi >= 0 ? '+' : ''}${fmt(lsi, 2)}</div>
         <div class="result-note">Plage saine : −0,3 à +0,3 · &lt; corrosif (attaque métal/joints) · &gt; entartrant (dépôts calcaire).</div>
+        ${showSuggest ? `<div class="result-note" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--depth-line);color:var(--foam)">
+          🎯 <strong>pH cible pour LSI = 0 :</strong> <span style="font-family:'JetBrains Mono',monospace;color:var(--leaf)">${fmt(phCible, 2)}</span>
+          <span style="opacity:.7;font-size:11px"> · à TH/TAC/temp constants</span>
+        </div>` : ''}
+      </div>
+      <div style="margin-top:12px;padding:8px;background:rgba(0,0,0,.15);border-radius:8px">
+        <div style="font-size:11px;color:var(--shallow);opacity:.85;margin-bottom:4px;letter-spacing:.5px;text-transform:uppercase">Diagramme Taylor — pH × TAC</div>
+        <canvas id="${taylorId}" height="180" style="max-height:200px"></canvas>
       </div>
     </div>`;
+    // Rendu différé (le canvas doit exister dans le DOM)
+    setTimeout(() => drawTaylorChart(taylorId, m), 50);
   }
 
   if(html === ''){
@@ -1813,6 +1877,68 @@ if('serviceWorker' in navigator){
   });
 }
 
+// ============== Diagramme Taylor (pH × TAC, zones LSI) ==============
+const _taylorCharts = {};
+function drawTaylorChart(canvasId, m){
+  const cv = document.getElementById(canvasId);
+  if(!cv || typeof Chart === 'undefined') return;
+  if(_taylorCharts[canvasId]){ try{ _taylorCharts[canvasId].destroy(); }catch(e){} }
+
+  const isSalt = m.modeDesinf === 'sel';
+  // Échantillonnage 2D : pour chaque (pH, TAC) on calcule le LSI à TH/temp/CYA constants
+  // → on construit 3 zones (corrosive / équilibrée / entartrante) sous forme de points colorés
+  const pHRange = [];
+  for(let p = 7.0; p <= 8.2; p += 0.05) pHRange.push(+p.toFixed(2));
+  const tacRange = [];
+  for(let t = 40; t <= 200; t += 5) tacRange.push(t);
+
+  const corrosive = [], equilibre = [], entartrant = [];
+  for(const p of pHRange){
+    for(const t of tacRange){
+      const lsi = calcLSI(p, m.temp, m.th, t, m.cya, isSalt);
+      if(lsi == null) continue;
+      const pt = {x: p, y: t};
+      if(lsi < -0.3) corrosive.push(pt);
+      else if(lsi > 0.3) entartrant.push(pt);
+      else equilibre.push(pt);
+    }
+  }
+
+  const datasets = [
+    {label:'Corrosive', data: corrosive, backgroundColor:'rgba(244,114,182,.18)', pointRadius:4, pointStyle:'rect'},
+    {label:'Équilibre', data: equilibre, backgroundColor:'rgba(110,231,183,.22)', pointRadius:4, pointStyle:'rect'},
+    {label:'Entartrante', data: entartrant, backgroundColor:'rgba(253,224,71,.20)', pointRadius:4, pointStyle:'rect'},
+    {label:'Votre eau', data: [{x: m.ph, y: m.tac}], backgroundColor:'#ffffff', borderColor:'#0a3d62', borderWidth:2, pointRadius:7, pointHoverRadius:9, order:0}
+  ];
+
+  _taylorCharts[canvasId] = new Chart(cv, {
+    type: 'scatter',
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins:{
+        legend:{display:true, position:'bottom', labels:{font:{size:10}, color:'#cbd5e1', boxWidth:10, padding:8}},
+        tooltip:{
+          callbacks:{
+            label: ctx => {
+              const x = ctx.parsed.x, y = ctx.parsed.y;
+              if(ctx.dataset.label === 'Votre eau'){
+                const lsi = calcLSI(x, m.temp, m.th, y, m.cya, isSalt);
+                return `pH ${x.toFixed(2)} · TAC ${y} → LSI ${lsi>=0?'+':''}${lsi.toFixed(2)}`;
+              }
+              return `${ctx.dataset.label} : pH ${x.toFixed(2)} · TAC ${y}`;
+            }
+          }
+        }
+      },
+      scales:{
+        x:{type:'linear', min:7.0, max:8.2, title:{display:true, text:'pH', color:'#cbd5e1', font:{size:11}}, ticks:{color:'#94a3b8', font:{size:10}}, grid:{color:'rgba(255,255,255,.05)'}},
+        y:{type:'linear', min:40, max:200, title:{display:true, text:'TAC (ppm)', color:'#cbd5e1', font:{size:11}}, ticks:{color:'#94a3b8', font:{size:10}}, grid:{color:'rgba(255,255,255,.05)'}}
+      }
+    }
+  });
+}
+
 // ============== Tendances ==============
 function linearTrend(points){
   const n = points.length;
@@ -1853,12 +1979,15 @@ function renderTrends(){
     const phPts = toPoints('ph');
     if(phPts.length >= 3){
       const slope = linearTrend(phPts);
-      if(slope !== null && Math.abs(slope) >= 0.05){
+      const spanDays = phPts[phPts.length-1].x - phPts[0].x;
+      // pH-creep : on n'alerte que si la dérive est nette ET observée sur 4+ jours
+      if(slope !== null && Math.abs(slope) >= 0.04 && spanDays >= 4){
         const dir = slope > 0 ? 'monte' : 'descend';
         const why = slope > 0
-          ? 'souvent le signe d\'un TAC trop bas ou d\'une eau dure'
-          : 'le TAC est probablement insuffisant pour stabiliser le pH';
-        insights.push({level:'warn', icon:'📈', text:`pH ${dir} de ${Math.abs(slope).toFixed(2)} par jour — ${why}.`});
+          ? 'classique d\'un TAC trop élevé (>120-150 ppm) : le CO₂ s\'échappe et fait remonter le pH. Baisse le TAC à 80-100 ppm pour stabiliser'
+          : 'signe d\'un TAC insuffisant (<80 ppm) qui ne tamponne plus l\'eau. Remonte le TAC pour empêcher les chutes';
+        const icon = slope > 0 ? '📈' : '📉';
+        insights.push({level:'warn', icon, text:`pH ${dir} de ${Math.abs(slope).toFixed(2)}/jour sur ${Math.round(spanDays)} j — ${why}.`});
       }
     }
 
