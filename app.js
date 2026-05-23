@@ -3,13 +3,146 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.6.0-beta';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
   reminders: 'cp_reminders_v1',
-  lastInputs: 'cp_last_inputs_v1'
+  lastInputs: 'cp_last_inputs_v1',
+  bassins: 'cp_bassins_v1',
+  activeBassin: 'cp_active_bassin_id'
 };
+
+// ============== Multi-bassins ==============
+// Palette de couleurs auto-assignées aux nouveaux bassins
+const BASSIN_COLORS = ['#5eead4', '#fbbf24', '#f472b6', '#a78bfa', '#60a5fa', '#fb923c', '#34d399'];
+const BASSIN_EMOJIS_SUGGEST = ['🏡','🏠','🏊','🌊','🏖️','🌴','💧','☀️'];
+
+function uid(prefix='b'){ return prefix + '_' + Math.random().toString(36).slice(2, 10); }
+
+function getBassins(){ return loadJSON(STORAGE_KEYS.bassins, []); }
+function getActiveBassinId(){ return localStorage.getItem(STORAGE_KEYS.activeBassin); }
+function setActiveBassinId(id){ localStorage.setItem(STORAGE_KEYS.activeBassin, id); }
+function getActiveBassin(){
+  const list = getBassins();
+  const id = getActiveBassinId();
+  return list.find(b => b.id === id) || list.find(b => !b.archived) || list[0] || null;
+}
+function getActiveBassins(){ return getBassins().filter(b => !b.archived); }
+function getBassinById(id){ return getBassins().find(b => b.id === id) || null; }
+
+function saveBassins(list){ saveJSON(STORAGE_KEYS.bassins, list); }
+
+function createBassin(patch){
+  const list = getBassins();
+  const existingColors = list.map(b => b.couleur);
+  const freeColor = BASSIN_COLORS.find(c => !existingColors.includes(c)) || BASSIN_COLORS[list.length % BASSIN_COLORS.length];
+  const b = {
+    id: uid(),
+    nom: patch.nom || 'Bassin',
+    emoji: patch.emoji || '🏊',
+    couleur: patch.couleur || freeColor,
+    archived: false,
+    createdAt: Date.now(),
+    config: {
+      volume: patch.volume ?? null,
+      modeDesinf: patch.modeDesinf || 'chlore',
+      marqueBandelette: patch.marqueBandelette || null,
+      phSouhaite: patch.phSouhaite ?? 7.4,
+      tacSouhaite: patch.tacSouhaite ?? 100,
+      cya: patch.cya ?? null,
+      selSouhaite: patch.selSouhaite ?? 4,
+      thSouhaite: patch.thSouhaite ?? 25
+    }
+  };
+  list.push(b);
+  saveBassins(list);
+  return b;
+}
+
+function updateBassin(id, patch){
+  const list = getBassins();
+  const i = list.findIndex(b => b.id === id);
+  if(i < 0) return null;
+  list[i] = {...list[i], ...patch, config: {...list[i].config, ...(patch.config||{})}};
+  saveBassins(list);
+  return list[i];
+}
+
+function archiveBassin(id){ return updateBassin(id, {archived: true}); }
+function restoreBassin(id){ return updateBassin(id, {archived: false}); }
+
+function deleteBassinAndData(id){
+  const list = getBassins().filter(b => b.id !== id);
+  saveBassins(list);
+  // Purge des mesures rattachées
+  const measures = loadJSON(STORAGE_KEYS.measurements, []).filter(m => m.bassinId !== id);
+  saveJSON(STORAGE_KEYS.measurements, measures);
+  // Si c'était l'actif, basculer sur le premier non-archivé
+  if(getActiveBassinId() === id){
+    const fallback = list.find(b => !b.archived) || list[0];
+    if(fallback) setActiveBassinId(fallback.id);
+    else localStorage.removeItem(STORAGE_KEYS.activeBassin);
+  }
+}
+
+/**
+ * Migration automatique au démarrage : si aucun bassin n'existe encore,
+ * crée un bassin "Principal" depuis la config actuelle (cp_last_inputs_v1)
+ * et tagge toutes les mesures existantes avec son id.
+ */
+function migrateToMultiBassinsIfNeeded(){
+  const existing = getBassins();
+  if(existing.length > 0) return;
+
+  const lastInputs = loadJSON(STORAGE_KEYS.lastInputs, {}) || {};
+  const measurements = loadJSON(STORAGE_KEYS.measurements, []);
+
+  const principal = createBassin({
+    nom: 'Mon bassin',
+    emoji: '🏡',
+    couleur: BASSIN_COLORS[0],
+    volume: lastInputs.volume ?? null,
+    modeDesinf: lastInputs.modeDesinf || 'chlore',
+    marqueBandelette: lastInputs.marqueBandelette || null,
+    phSouhaite: lastInputs.phSouhaite ?? 7.4,
+    tacSouhaite: lastInputs.tacSouhaite ?? 100,
+    cya: lastInputs.cya ?? null,
+    selSouhaite: lastInputs.selSouhaite ?? 4,
+    thSouhaite: lastInputs.thSouhaite ?? 25
+  });
+  setActiveBassinId(principal.id);
+
+  // Tagger les mesures existantes sans bassinId
+  if(measurements.length){
+    let dirty = false;
+    measurements.forEach(m => { if(!m.bassinId){ m.bassinId = principal.id; dirty = true; } });
+    if(dirty) saveJSON(STORAGE_KEYS.measurements, measurements);
+  }
+}
+
+/**
+ * Lit toutes les mesures du bassin actif uniquement.
+ * Toutes les vues (Historique, Tendances, Graphiques, Doses…) passent par ici.
+ */
+function loadActiveMeasurements(){
+  const id = getActiveBassinId();
+  if(!id) return [];
+  return loadJSON(STORAGE_KEYS.measurements, []).filter(m => m.bassinId === id);
+}
+
+/**
+ * Sauve la liste filtrée du bassin actif. Reconstitue le tableau global
+ * en concaténant avec les mesures des autres bassins.
+ */
+function saveActiveMeasurements(list){
+  const id = getActiveBassinId();
+  if(!id){ saveJSON(STORAGE_KEYS.measurements, list); return; }
+  const others = loadJSON(STORAGE_KEYS.measurements, []).filter(m => m.bassinId !== id);
+  // S'assurer que les mesures sauvées portent bien le bassinId
+  list.forEach(m => { if(!m.bassinId) m.bassinId = id; });
+  saveJSON(STORAGE_KEYS.measurements, [...others, ...list]);
+}
 
 // ============== Utilitaires ==============
 function $(id){return document.getElementById(id)}
@@ -466,6 +599,13 @@ function autoSaveBassinParams(){
   const merged = {...current};
   Object.entries(next).forEach(([k,v]) => { if(v !== null && v !== '') merged[k] = v; });
   saveJSON(STORAGE_KEYS.lastInputs, merged);
+  // Persiste aussi dans la config du bassin actif (source de vérité multi-bassins)
+  const activeId = getActiveBassinId();
+  if(activeId){
+    const cfgPatch = {};
+    Object.entries(next).forEach(([k,v]) => { if(v !== null && v !== '') cfgPatch[k] = v; });
+    if(Object.keys(cfgPatch).length) updateBassin(activeId, {config: cfgPatch});
+  }
   // Synchronise les champs miroir de la page Rappels
   const mirror = {volume:'cfgVolume', phSouhaite:'cfgPhSouhaite', tacSouhaite:'cfgTacSouhaite', cya:'cfgCya', selSouhaite:'cfgSelSouhaite', thSouhaite:'cfgThSouhaite'};
   Object.entries(mirror).forEach(([k, id]) => {
@@ -493,6 +633,13 @@ function saveBassinConfigFromRappels(){
   const merged = {...current};
   Object.entries(cfg).forEach(([k,v]) => { if(v !== null && v !== '') merged[k] = v; });
   saveJSON(STORAGE_KEYS.lastInputs, merged);
+  // Persiste aussi dans la config du bassin actif
+  const activeId = getActiveBassinId();
+  if(activeId){
+    const cfgPatch = {};
+    Object.entries(cfg).forEach(([k,v]) => { if(v !== null && v !== '') cfgPatch[k] = v; });
+    if(Object.keys(cfgPatch).length) updateBassin(activeId, {config: cfgPatch});
+  }
   // Reflète sur la page Mesures
   const mirror = {volume:'volume', phSouhaite:'phSouhaite', tacSouhaite:'tacSouhaite', cya:'cya', selSouhaite:'selSouhaite', thSouhaite:'thSouhaite'};
   Object.entries(mirror).forEach(([k, id]) => {
@@ -502,6 +649,28 @@ function saveBassinConfigFromRappels(){
   cloudBackupSync();
   toast('Bassin configuré ✓');
   showSavedPill();
+}
+
+// Applique la config d'un bassin aux inputs (utilisé lors d'un switch)
+function applyBassinConfigToInputs(bassin){
+  if(!bassin || !bassin.config) return;
+  const c = bassin.config;
+  const setVal = (id, v) => { const el = $(id); if(el && v !== null && v !== undefined) el.value = v; };
+  setVal('volume', c.volume);
+  setVal('phSouhaite', c.phSouhaite);
+  setVal('tacSouhaite', c.tacSouhaite);
+  setVal('cya', c.cya);
+  setVal('selSouhaite', c.selSouhaite);
+  setVal('thSouhaite', c.thSouhaite);
+  if(c.modeDesinf && $('modeDesinf')) $('modeDesinf').value = c.modeDesinf;
+  // Miroir page Rappels
+  setVal('cfgVolume', c.volume);
+  setVal('cfgPhSouhaite', c.phSouhaite);
+  setVal('cfgTacSouhaite', c.tacSouhaite);
+  setVal('cfgCya', c.cya);
+  setVal('cfgSelSouhaite', c.selSouhaite);
+  setVal('cfgThSouhaite', c.thSouhaite);
+  if(c.modeDesinf && $('cfgModeDesinf')) $('cfgModeDesinf').value = c.modeDesinf;
 }
 
 // ============== Affichage "dernier contrôle il y a X" ==============
@@ -524,7 +693,7 @@ function relativeTime(dateStr){
 function updateLastControlInfo(){
   const el = $('lastControlInfo');
   if(!el) return;
-  const list = loadJSON(STORAGE_KEYS.measurements, []);
+  const list = loadActiveMeasurements();
   if(!list.length){
     el.style.display = 'none';
     return;
@@ -558,10 +727,11 @@ function saveAndCalc(){
     tacSouhaite: m.tacSouhaite, cya: m.cya
   });
 
-  // Sauvegarder dans l'historique
-  const list = loadJSON(STORAGE_KEYS.measurements, []);
+  // Sauvegarder dans l'historique du bassin actif
+  m.bassinId = getActiveBassinId();
+  const list = loadActiveMeasurements();
   list.push(m);
-  saveJSON(STORAGE_KEYS.measurements, list);
+  saveActiveMeasurements(list);
 
   updateStatus(m);
   updateCclBadge(m);
@@ -1005,7 +1175,7 @@ function renderCorrections(measurement, targetContainer){
 
 // ============== Historique ==============
 function renderHistory(){
-  const list = loadJSON(STORAGE_KEYS.measurements, []);
+  const list = loadActiveMeasurements();
   const wrap = $('historyList');
   if(list.length === 0){
     wrap.innerHTML = `<div class="empty">
@@ -1035,9 +1205,9 @@ function renderHistory(){
 
 function deleteMeasurement(idx){
   if(!confirm('Supprimer cette mesure ?')) return;
-  const list = loadJSON(STORAGE_KEYS.measurements, []);
+  const list = loadActiveMeasurements();
   list.splice(idx, 1);
-  saveJSON(STORAGE_KEYS.measurements, list);
+  saveActiveMeasurements(list);
   renderHistory();
   renderCharts();
   updateLastControlInfo();
@@ -1053,7 +1223,7 @@ function renderCharts(){
   renderTrends();
   const days = parseInt($('chartRange').value);
   const cutoff = Date.now() - days*86400000;
-  const list = loadJSON(STORAGE_KEYS.measurements, [])
+  const list = loadActiveMeasurements()
     .filter(m => new Date(m.date).getTime() >= cutoff)
     .sort((a,b) => new Date(a.date) - new Date(b.date));
 
@@ -1389,8 +1559,10 @@ function exportData(){
     measurements: loadJSON(STORAGE_KEYS.measurements, []),
     reminders: loadJSON(STORAGE_KEYS.reminders, {}),
     lastInputs: loadJSON(STORAGE_KEYS.lastInputs, {}),
+    bassins: getBassins(),
+    activeBassin: getActiveBassinId(),
     exportDate: new Date().toISOString(),
-    version: 1
+    version: 2
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
@@ -1412,6 +1584,8 @@ function importData(event){
       if(data.measurements) saveJSON(STORAGE_KEYS.measurements, data.measurements);
       if(data.reminders) saveJSON(STORAGE_KEYS.reminders, data.reminders);
       if(data.lastInputs) saveJSON(STORAGE_KEYS.lastInputs, data.lastInputs);
+      if(data.bassins) saveJSON(STORAGE_KEYS.bassins, data.bassins);
+      if(data.activeBassin) setActiveBassinId(data.activeBassin);
       toast('Données importées');
       location.reload();
     }catch(err){
@@ -1452,6 +1626,22 @@ function collectBackupData(){
     measurements: loadJSON(STORAGE_KEYS.measurements, []),
     reminders: loadJSON(STORAGE_KEYS.reminders, {}),
     lastInputs: loadJSON(STORAGE_KEYS.lastInputs, {}),
+    bassins: getBassins(),
+    activeBassin: getActiveBassinId(),
+    version: APP_VERSION,
+    savedAt: new Date().toISOString()
+  };
+}
+
+// Collecte d'un bassin unique (pour partage : code par bassin)
+function collectSingleBassinBackup(bassinId){
+  const b = getBassinById(bassinId);
+  if(!b) return null;
+  const measurements = loadJSON(STORAGE_KEYS.measurements, []).filter(m => m.bassinId === bassinId);
+  return {
+    type: 'single-bassin',
+    bassin: b,
+    measurements,
     version: APP_VERSION,
     savedAt: new Date().toISOString()
   };
@@ -1527,14 +1717,57 @@ async function restoreFromCode(){
   try{
     const res = await backupCall({action:'restore', code});
     const d = res.data || {};
+
+    // Backup d'un bassin unique → fusion (ajouter ce bassin + ses mesures à l'existant)
+    if(d.type === 'single-bassin' && d.bassin){
+      const existing = getBassins();
+      // Si le bassin existe déjà (même id) on demande quoi faire
+      if(existing.some(b => b.id === d.bassin.id)){
+        if(!confirm('Ce bassin existe déjà dans tes données. Écraser sa config et ses mesures ?')) return;
+        // Remplace le bassin et ses mesures
+        const others = existing.filter(b => b.id !== d.bassin.id);
+        saveBassins([...others, d.bassin]);
+        const otherMeasures = loadJSON(STORAGE_KEYS.measurements, []).filter(m => m.bassinId !== d.bassin.id);
+        saveJSON(STORAGE_KEYS.measurements, [...otherMeasures, ...(d.measurements||[])]);
+      } else {
+        // Nouveau bassin : on l'ajoute proprement
+        saveBassins([...existing, d.bassin]);
+        const allMeasures = loadJSON(STORAGE_KEYS.measurements, []);
+        saveJSON(STORAGE_KEYS.measurements, [...allMeasures, ...(d.measurements||[])]);
+      }
+      setActiveBassinId(d.bassin.id);
+      toast(`Bassin "${d.bassin.nom}" importé`);
+      setTimeout(()=>location.reload(), 900);
+      return;
+    }
+
+    // Backup global (legacy ou v2) → remplace tout
     if(d.measurements) saveJSON(STORAGE_KEYS.measurements, d.measurements);
     if(d.reminders) saveJSON(STORAGE_KEYS.reminders, d.reminders);
     if(d.lastInputs) saveJSON(STORAGE_KEYS.lastInputs, d.lastInputs);
+    if(d.bassins) saveJSON(STORAGE_KEYS.bassins, d.bassins);
+    if(d.activeBassin) setActiveBassinId(d.activeBassin);
     localStorage.setItem(BACKUP_CODE_KEY, code); // adopte ce code pour les synchros futures
     toast('Sauvegarde restaurée');
     setTimeout(()=>location.reload(), 900);
   }catch(e){
     toast(e.message || 'Restauration impossible','warn');
+  }
+}
+
+// Crée et publie une sauvegarde dédiée à un seul bassin (code distinct)
+async function shareBassinCloud(bassinId){
+  const b = getBassinById(bassinId);
+  if(!b) return;
+  const code = generateBackupCode();
+  try{
+    await backupCall({action:'save', code, data: collectSingleBassinBackup(bassinId)});
+    // Stocke le code sur le bassin pour le retrouver
+    updateBassin(bassinId, {shareCode: code, shareCodeAt: Date.now()});
+    return code;
+  }catch(e){
+    toast('Génération du code impossible — vérifie ta connexion','warn');
+    return null;
   }
 }
 
@@ -1955,7 +2188,7 @@ function linearTrend(points){
 function renderTrends(){
   const wrap = $('trendsContent');
   if(!wrap) return;
-  const list = loadJSON(STORAGE_KEYS.measurements, []);
+  const list = loadActiveMeasurements();
   const insights = [];
   const now = Date.now();
 
@@ -2032,10 +2265,232 @@ function renderTrends(){
   }).join('');
 }
 
+// ============== UI bassins (switcher + modale) ==============
+let _bassinModalEditingId = null;
+let _bassinModalEmoji = '🏊';
+let _bassinModalCouleur = BASSIN_COLORS[0];
+
+function renderBassinSwitcher(){
+  const wrap = $('bassinSwitcher');
+  if(!wrap) return;
+  const bassins = getActiveBassins();
+  const activeId = getActiveBassinId();
+
+  // N'affiche pas le switcher si un seul bassin et aucun archivé (UI propre tant qu'on n'en a qu'un)
+  const archived = getBassins().filter(b => b.archived).length;
+  if(bassins.length <= 1 && archived === 0){
+    wrap.style.display = 'none';
+    // Mais on peut quand même proposer d'ajouter un bassin via un mini-CTA
+    wrap.innerHTML = '';
+    return;
+  }
+  wrap.style.display = 'flex';
+
+  const chips = bassins.map(b => {
+    const isActive = b.id === activeId;
+    const editBtn = isActive
+      ? `<span class="bassin-chip-edit" onclick="event.stopPropagation();openBassinModal('${b.id}')" title="Modifier">⚙</span>`
+      : '';
+    return `<div class="bassin-chip ${isActive?'active':''}" onclick="switchBassin('${b.id}')" data-id="${b.id}">
+      <span class="dot-color" style="color:${b.couleur};background:${b.couleur}"></span>
+      <span class="chip-emoji">${b.emoji||'🏊'}</span>
+      <span>${escapeHtml(b.nom)}</span>
+      ${editBtn}
+    </div>`;
+  }).join('');
+
+  const addChip = `<div class="bassin-chip bassin-chip-add" onclick="openBassinModal()">＋ Bassin</div>`;
+  wrap.innerHTML = chips + addChip;
+}
+
+function switchBassin(id){
+  const b = getBassinById(id);
+  if(!b || b.archived) return;
+  setActiveBassinId(id);
+  applyBassinConfigToInputs(b);
+  // Re-render toutes les vues qui dépendent du bassin
+  renderBassinSwitcher();
+  updateLastControlInfo();
+  renderHistory();
+  renderTrends();
+  if(typeof renderCorrections === 'function') renderCorrections();
+  if(typeof renderCharts === 'function') renderCharts();
+  toast(`Bassin actif : ${b.emoji||''} ${b.nom}`);
+}
+
+function openBassinModal(id){
+  _bassinModalEditingId = id || null;
+  const b = id ? getBassinById(id) : null;
+  const isEdit = !!b;
+
+  $('bassinModalTitle').textContent = isEdit ? `Modifier "${b.nom}"` : 'Nouveau bassin';
+  $('bassinModalSaveBtn').textContent = isEdit ? 'Enregistrer' : 'Créer le bassin';
+  $('bassinModalNom').value = isEdit ? b.nom : '';
+  $('bassinModalVolume').value = isEdit ? (b.config.volume ?? '') : '';
+  $('bassinModalMode').value = isEdit ? (b.config.modeDesinf || 'chlore') : 'chlore';
+  _bassinModalEmoji = isEdit ? (b.emoji || '🏊') : '🏊';
+  _bassinModalCouleur = isEdit ? (b.couleur || BASSIN_COLORS[0]) : BASSIN_COLORS[getBassins().length % BASSIN_COLORS.length];
+
+  // Render emoji picker
+  $('bassinModalEmoji').innerHTML = BASSIN_EMOJIS_SUGGEST.map(e =>
+    `<span class="${e===_bassinModalEmoji?'selected':''}" onclick="pickBassinEmoji('${e}')">${e}</span>`
+  ).join('');
+  // Render color picker
+  $('bassinModalCouleur').innerHTML = BASSIN_COLORS.map(c =>
+    `<span class="${c===_bassinModalCouleur?'selected':''}" style="background:${c};color:${c}" onclick="pickBassinCouleur('${c}')"></span>`
+  ).join('');
+
+  // Section actions
+  const actions = $('bassinModalActions');
+  if(actions){
+    actions.style.display = isEdit ? 'block' : 'none';
+    // Texte du bouton archiver/restaurer
+    const archBtn = $('bassinArchiveBtn');
+    if(archBtn && b){
+      archBtn.innerHTML = b.archived
+        ? '♻️ Restaurer <span style="opacity:.6;font-size:12px">— remettre dans la liste active</span>'
+        : '📦 Archiver <span style="opacity:.6;font-size:12px">— cacher sans supprimer</span>';
+    }
+    // Reset share code box
+    const shareBox = $('bassinShareCodeBox');
+    if(shareBox){ shareBox.style.display = 'none'; shareBox.innerHTML = ''; }
+  }
+
+  $('bassinModalOverlay').style.display = 'flex';
+}
+
+function closeBassinModal(){
+  $('bassinModalOverlay').style.display = 'none';
+  _bassinModalEditingId = null;
+}
+
+function pickBassinEmoji(e){
+  _bassinModalEmoji = e;
+  $('bassinModalEmoji').querySelectorAll('span').forEach(s => {
+    s.classList.toggle('selected', s.textContent === e);
+  });
+}
+
+function pickBassinCouleur(c){
+  _bassinModalCouleur = c;
+  $('bassinModalCouleur').querySelectorAll('span').forEach(s => {
+    s.classList.toggle('selected', s.style.backgroundColor && getComputedStyle(s).backgroundColor === hexToRgb(c));
+  });
+}
+function hexToRgb(hex){
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function saveBassinFromModal(){
+  const nom = $('bassinModalNom').value.trim();
+  if(!nom){ toast('Donne un nom au bassin','warn'); return; }
+  const volume = parseFloat($('bassinModalVolume').value);
+  const modeDesinf = $('bassinModalMode').value;
+  const patch = {
+    nom, emoji: _bassinModalEmoji, couleur: _bassinModalCouleur,
+    config: {
+      volume: isNaN(volume) ? null : volume,
+      modeDesinf
+    }
+  };
+  if(_bassinModalEditingId){
+    updateBassin(_bassinModalEditingId, patch);
+    toast('Bassin mis à jour');
+  } else {
+    const b = createBassin({
+      nom, emoji: _bassinModalEmoji, couleur: _bassinModalCouleur,
+      volume: patch.config.volume, modeDesinf
+    });
+    setActiveBassinId(b.id);
+    applyBassinConfigToInputs(b);
+    toast(`Bassin "${b.nom}" créé`);
+  }
+  closeBassinModal();
+  renderBassinSwitcher();
+  updateLastControlInfo();
+  renderHistory();
+  renderTrends();
+  cloudBackupSync();
+}
+
+function archiveBassinFromModal(){
+  if(!_bassinModalEditingId) return;
+  const b = getBassinById(_bassinModalEditingId);
+  if(!b) return;
+  if(b.archived){
+    restoreBassin(b.id);
+    toast('Bassin restauré');
+  } else {
+    // S'il ne reste qu'un bassin actif, on refuse
+    if(getActiveBassins().length <= 1){
+      toast('Impossible d\'archiver le dernier bassin actif','warn');
+      return;
+    }
+    archiveBassin(b.id);
+    // Si c'était l'actif, on bascule
+    if(getActiveBassinId() === b.id){
+      const fallback = getActiveBassins()[0];
+      if(fallback){ setActiveBassinId(fallback.id); applyBassinConfigToInputs(fallback); }
+    }
+    toast('Bassin archivé');
+  }
+  closeBassinModal();
+  renderBassinSwitcher();
+  updateLastControlInfo();
+  renderHistory();
+  renderTrends();
+  cloudBackupSync();
+}
+
+function deleteBassinFromModal(){
+  if(!_bassinModalEditingId) return;
+  const b = getBassinById(_bassinModalEditingId);
+  if(!b) return;
+  if(getActiveBassins().length <= 1 && !b.archived){
+    toast('Impossible de supprimer le dernier bassin actif','warn');
+    return;
+  }
+  const measureCount = loadJSON(STORAGE_KEYS.measurements, []).filter(m => m.bassinId === b.id).length;
+  if(!confirm(`Supprimer "${b.nom}" définitivement ?\n\n${measureCount} mesure${measureCount>1?'s':''} ${measureCount>1?'seront':'sera'} aussi effacée${measureCount>1?'s':''}. Cette action est irréversible.`)) return;
+  deleteBassinAndData(b.id);
+  closeBassinModal();
+  // Recharge config du nouveau bassin actif
+  const newActive = getActiveBassin();
+  if(newActive) applyBassinConfigToInputs(newActive);
+  renderBassinSwitcher();
+  updateLastControlInfo();
+  renderHistory();
+  renderTrends();
+  cloudBackupSync();
+  toast('Bassin supprimé');
+}
+
+async function generateShareCodeForBassin(){
+  if(!_bassinModalEditingId) return;
+  const box = $('bassinShareCodeBox');
+  if(box){ box.style.display = 'block'; box.innerHTML = '⏳ Génération en cours…'; }
+  const code = await shareBassinCloud(_bassinModalEditingId);
+  if(!code){
+    if(box){ box.innerHTML = '<span style="color:var(--coral)">Échec — vérifie ta connexion</span>'; }
+    return;
+  }
+  if(box){
+    box.innerHTML = `
+      <div style="margin-bottom:8px;opacity:.85">Donne ce code à qui veut récupérer ce bassin :</div>
+      <div style="font-size:15px;letter-spacing:1px;font-weight:600;word-break:break-all">${code}</div>
+      <button class="btn-ghost" style="margin-top:10px;padding:6px 10px;font-size:12px" onclick="navigator.clipboard.writeText('${code}').then(()=>toast('Code copié'))">Copier</button>
+    `;
+  }
+}
+
 // ============== Wizard premier lancement ==============
 function maybeOpenWizard(){
-  const measurements = loadJSON(STORAGE_KEYS.measurements, []);
-  if(measurements.length === 0 && !localStorage.getItem('cp_wizard_done')){
+  // Premier lancement = aucun bassin créé (ni mesures)
+  if(getBassins().length === 0 && !localStorage.getItem('cp_wizard_done')){
+    // Crée un bassin par défaut, le wizard l'enrichira
+    const b = createBassin({nom: 'Mon bassin', emoji: '🏡'});
+    setActiveBassinId(b.id);
     setTimeout(openWizard, 400);
   }
 }
@@ -2078,6 +2533,12 @@ function wizardSetMode(mode){
 function wizardFinish(){
   const brand = $('wizBrand').value.trim();
   if(brand) localStorage.setItem('cp_test_brand', brand);
+  // S'assure que la config du bassin actif est à jour côté multi-bassins
+  const activeId = getActiveBassinId();
+  if(activeId){
+    updateBassin(activeId, {config: {marqueBandelette: brand || null}});
+  }
+  renderBassinSwitcher();
   closeWizard();
   toast('Configuration enregistrée — à toi de mesurer !');
 }
@@ -2189,7 +2650,7 @@ function getActionsTextList(m){
 }
 
 function shareControl(measurement){
-  const list = loadJSON(STORAGE_KEYS.measurements, []);
+  const list = loadActiveMeasurements();
   if(list.length === 0 && !measurement){ toast('Aucune mesure à partager','warn'); return; }
   const m = measurement || list[list.length-1];
   const st = evaluateStatus(m);
@@ -2344,7 +2805,7 @@ function renderHistEntryMeasurements(m){
 }
 
 function openHistDetail(idx){
-  const list = loadJSON(STORAGE_KEYS.measurements, []);
+  const list = loadActiveMeasurements();
   const m = list[idx];
   if(!m) return;
   __histDetailIdx = idx;
@@ -2374,14 +2835,14 @@ function switchHistTab(tab){
 
 function shareHistEntry(){
   if(__histDetailIdx === null) return;
-  const list = loadJSON(STORAGE_KEYS.measurements, []);
+  const list = loadActiveMeasurements();
   const m = list[__histDetailIdx];
   if(m) shareControl(m);
 }
 
 function reloadHistEntry(){
   if(__histDetailIdx === null) return;
-  const list = loadJSON(STORAGE_KEYS.measurements, []);
+  const list = loadActiveMeasurements();
   const m = list[__histDetailIdx];
   if(!m) return;
   const fieldMap = {
@@ -2410,7 +2871,15 @@ function reloadHistEntry(){
 // ============== Init ==============
 document.addEventListener('DOMContentLoaded', ()=>{
   if($('appVersion')) $('appVersion').textContent = 'v' + APP_VERSION;
+  // Migration multi-bassins (no-op si déjà fait) — DOIT s'exécuter avant loadLastInputs
+  migrateToMultiBassinsIfNeeded();
+  // Si un bassin existe, sa config prime sur lastInputs
+  const activeB = getActiveBassin();
+  if(activeB) applyBassinConfigToInputs(activeB);
   loadLastInputs();
+  // Réapplique la config bassin actif après loadLastInputs (priorité bassin)
+  if(activeB) applyBassinConfigToInputs(activeB);
+  renderBassinSwitcher();
   loadReminders();
   renderHistory();
   renderTrends();

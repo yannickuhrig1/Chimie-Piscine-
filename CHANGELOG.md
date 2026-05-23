@@ -5,6 +5,22 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.6.0-beta] — 2026-05-23 — branche `feature/multi-bassins`
+
+### Ajouté
+- **Gestion multi-bassins** : l'app suit plusieurs piscines (la tienne, celle d'un proche, etc.) sans mélanger les données. Chaque bassin a son nom, son emoji, sa couleur d'accent, sa config (volume, mode désinfection, cibles pH/TAC/CYA/sel/TH) et son propre historique de mesures.
+- **Sélecteur de bassins** en haut de page (ligne de chips colorées emoji + nom + ⚙ pour modifier). Tap pour switcher, **＋** pour créer un nouveau bassin. Caché tant qu'il n'y a qu'un bassin (UI propre par défaut).
+- **Modale création / édition** : choix de l'emoji (8 préréglés), couleur d'accent (palette 7 teintes), volume, mode de désinfection.
+- **Archivage** (cache un bassin sans rien supprimer, restaurable) et **suppression définitive** (bassin + ses mesures, confirmation avec nombre de mesures impactées).
+- **Sauvegarde cloud par bassin** : bouton « Générer un code de partage » dans la modale d'édition, code dédié à ce bassin uniquement, transférable à un autre appareil (utile pour rendre la gestion à un proche).
+- **Sauvegarde cloud globale étendue** : le code global existant embarque maintenant tous les bassins + configs + mesures. Restauration complète sur un nouvel appareil.
+- **Migration automatique** : à la première ouverture de la v1.6, les mesures et la config existantes sont rattachées à un bassin « Mon bassin » créé d'office. Aucune action utilisateur, aucune perte de données.
+
+### Modifié
+- Toutes les vues (Historique, Tendances, Doses, Graphiques, Partage en image) filtrent désormais par bassin actif.
+- `autoSaveBassinParams` et `saveBassinConfigFromRappels` persistent en plus la config dans le bassin actif (source de vérité multi-bassins). `lastInputs` reste pour rétro-compatibilité.
+- Export / Import JSON inclut maintenant la liste des bassins et l'id du bassin actif. Version du format passée à 2.
+
 ## [1.5.0] — 2026-05-23
 
 ### Ajouté

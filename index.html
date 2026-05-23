@@ -414,6 +414,74 @@
   .ticket-actions button{padding:11px;font-size:12px}
   .card.ferme{opacity:.62}
 
+  /* Sélecteur de bassins */
+  .bassin-switcher{
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;
+    margin:0 0 18px;padding:8px;
+    background:linear-gradient(135deg,rgba(0,0,0,.18),rgba(0,0,0,.08));
+    border:1px solid rgba(255,255,255,.06);border-radius:14px;
+  }
+  .bassin-chip{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:7px 12px;font-size:13px;font-weight:500;line-height:1;
+    background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);
+    border-radius:999px;color:var(--foam);cursor:pointer;
+    transition:transform .12s,background .15s,border-color .15s;
+    -webkit-user-select:none;user-select:none;
+  }
+  .bassin-chip:hover{background:rgba(255,255,255,.07);transform:translateY(-1px)}
+  .bassin-chip .dot-color{
+    width:9px;height:9px;border-radius:50%;
+    box-shadow:0 0 6px currentColor;display:inline-block;
+  }
+  .bassin-chip.active{
+    background:rgba(255,255,255,.10);
+    border-color:rgba(255,255,255,.22);
+    box-shadow:0 2px 12px rgba(0,0,0,.25);
+  }
+  .bassin-chip .chip-emoji{font-size:14px;line-height:1}
+  .bassin-chip-edit{
+    margin-left:4px;padding:2px 4px;border-radius:6px;
+    background:rgba(255,255,255,.05);font-size:12px;opacity:.7;
+  }
+  .bassin-chip-edit:hover{background:rgba(255,255,255,.12);opacity:1}
+  .bassin-chip-add{
+    background:transparent;border:1px dashed rgba(255,255,255,.20);
+    color:var(--shallow);font-weight:600;
+  }
+  .bassin-chip-add:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.35)}
+
+  /* Modale bassin */
+  .bassin-modal-overlay{
+    display:none;position:fixed;inset:0;background:rgba(2,12,26,.85);
+    backdrop-filter:blur(8px);z-index:9999;padding:20px;
+    align-items:center;justify-content:center;
+  }
+  .bassin-modal{
+    background:linear-gradient(135deg,rgba(20,60,90,.95),rgba(10,40,70,.95));
+    border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:22px;
+    max-width:460px;width:100%;color:#fff;
+    max-height:calc(100vh - 80px);overflow-y:auto;
+  }
+  .bassin-modal h2{font-family:'Fraunces',serif;font-size:20px;font-weight:600;margin:0 0 14px}
+  .bassin-modal label{display:block;font-size:12px;color:var(--shallow);opacity:.8;margin:12px 0 6px;text-transform:uppercase;letter-spacing:.5px}
+  .bassin-modal input[type="text"], .bassin-modal input[type="number"], .bassin-modal select{
+    width:100%;padding:10px 12px;font-size:14px;background:rgba(0,0,0,.25);
+    border:1px solid rgba(255,255,255,.1);border-radius:10px;color:#fff;
+    font-family:inherit;box-sizing:border-box;
+  }
+  .emoji-picker, .color-picker{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+  .emoji-picker span, .color-picker span{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:34px;height:34px;border-radius:50%;cursor:pointer;
+    border:2px solid transparent;font-size:18px;
+    transition:transform .12s,border-color .15s;
+  }
+  .emoji-picker span{background:rgba(255,255,255,.05)}
+  .emoji-picker span:hover, .color-picker span:hover{transform:scale(1.1)}
+  .emoji-picker span.selected, .color-picker span.selected{border-color:#fff}
+  .color-picker span{box-shadow:0 0 8px currentColor}
+
   /* Install banner */
   .install-banner{
     background:linear-gradient(135deg,rgba(255,209,102,.15),rgba(255,209,102,.05));
@@ -445,6 +513,9 @@
       <div id="globalStatus" class="status-pill ok"><span class="pulse"></span><span id="statusText">OK</span></div>
     </div>
   </header>
+
+  <!-- =================== SÉLECTEUR DE BASSINS =================== -->
+  <div id="bassinSwitcher" class="bassin-switcher" style="display:none"></div>
 
   <div id="installBanner" class="install-banner" style="display:none">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14m0 0l-5-5m5 5l5-5M5 21h14"/></svg>
@@ -515,6 +586,57 @@
         <div style="display:flex;gap:10px;margin-top:22px">
           <button onclick="closeWizard()" class="btn-ghost" style="flex:1">Passer</button>
           <button onclick="wizardFinish()" class="btn-primary" style="flex:2">Terminer</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================== MODALE BASSIN (création / édition) =================== -->
+  <div id="bassinModalOverlay" class="bassin-modal-overlay" onclick="if(event.target===this)closeBassinModal()">
+    <div class="bassin-modal">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <h2 id="bassinModalTitle">Nouveau bassin</h2>
+        <button onclick="closeBassinModal()" class="btn-ghost" style="padding:4px 10px;font-size:18px;width:auto;line-height:1" aria-label="Fermer">×</button>
+      </div>
+
+      <label>Nom</label>
+      <input type="text" id="bassinModalNom" placeholder="Mon bassin" maxlength="40">
+
+      <label>Emoji</label>
+      <div class="emoji-picker" id="bassinModalEmoji"></div>
+
+      <label>Couleur</label>
+      <div class="color-picker" id="bassinModalCouleur"></div>
+
+      <label>Volume du bassin <span style="opacity:.5;text-transform:none">(m³)</span></label>
+      <input type="number" id="bassinModalVolume" step="0.5" placeholder="50" inputmode="decimal">
+
+      <label>Mode de désinfection</label>
+      <select id="bassinModalMode">
+        <option value="chlore">Chlore</option>
+        <option value="sel">Sel (électrolyse)</option>
+        <option value="brome">Brome</option>
+      </select>
+
+      <div style="display:flex;gap:8px;margin-top:18px;flex-wrap:wrap">
+        <button onclick="closeBassinModal()" class="btn-ghost" style="flex:1;min-width:120px">Annuler</button>
+        <button onclick="saveBassinFromModal()" class="btn-primary" style="flex:2;min-width:140px" id="bassinModalSaveBtn">Créer le bassin</button>
+      </div>
+
+      <!-- Actions (visibles uniquement en édition) -->
+      <div id="bassinModalActions" style="display:none;margin-top:18px;padding-top:18px;border-top:1px solid var(--depth-line)">
+        <label style="margin-bottom:8px">Actions</label>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button onclick="generateShareCodeForBassin()" class="btn-ghost" style="text-align:left;padding:10px 12px">
+            🔗 Générer un code de partage <span style="opacity:.6;font-size:12px">— transférer ce bassin à un autre appareil</span>
+          </button>
+          <div id="bassinShareCodeBox" style="display:none;background:rgba(94,234,212,.08);padding:12px;border-radius:10px;font-family:'JetBrains Mono',monospace;font-size:13px"></div>
+          <button onclick="archiveBassinFromModal()" class="btn-ghost" style="text-align:left;padding:10px 12px" id="bassinArchiveBtn">
+            📦 Archiver <span style="opacity:.6;font-size:12px">— cacher sans supprimer</span>
+          </button>
+          <button onclick="deleteBassinFromModal()" class="btn-ghost" style="text-align:left;padding:10px 12px;color:var(--coral)">
+            🗑️ Supprimer définitivement <span style="opacity:.6;font-size:12px">— mesures + config perdues</span>
+          </button>
         </div>
       </div>
     </div>
