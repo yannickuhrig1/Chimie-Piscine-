@@ -5,7 +5,7 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
-## [1.5.0-beta] — 2026-05-23 — branche `feature/water-balance-v2`
+## [1.5.0] — 2026-05-23
 
 ### Ajouté
 - **Diagramme Taylor (pH × TAC)** sous la carte Langelier : graphique 2D avec 3 zones colorées (corrosive / équilibrée / entartrante) calculées dynamiquement selon TH, température et CYA. Point blanc = ta mesure actuelle, tooltip affiche le LSI exact en survolant n'importe quel point.
