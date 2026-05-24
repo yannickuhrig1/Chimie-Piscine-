@@ -811,7 +811,7 @@
       <div class="card-header">
         <div class="card-title"><span class="dot"></span>TAC &amp; CYA</div>
       </div>
-      <div class="field-row-3">
+      <div class="field-row">
         <div class="field">
           <label>TAC mesuré</label>
           <div class="input-wrap">
@@ -826,10 +826,19 @@
             <span class="input-unit">ppm</span>
           </div>
         </div>
+      </div>
+      <div class="field-row">
         <div class="field">
-          <label>CYA</label>
+          <label>CYA mesuré</label>
           <div class="input-wrap">
             <input type="number" id="cya" step="1" placeholder="30" inputmode="decimal">
+            <span class="input-unit">ppm</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>CYA visé</label>
+          <div class="input-wrap">
+            <input type="number" id="cyaSouhaite" step="1" placeholder="30" inputmode="decimal">
             <span class="input-unit">ppm</span>
           </div>
         </div>
@@ -1069,11 +1078,20 @@
           </div>
         </div>
       </div>
-      <div class="field">
-        <label>CYA (stabilisant)</label>
-        <div class="input-wrap">
-          <input type="number" id="cfgCya" step="1" placeholder="30" inputmode="decimal">
-          <span class="input-unit">ppm</span>
+      <div class="field-row">
+        <div class="field">
+          <label>CYA mesuré <span style="opacity:.5;font-size:10px">(stabilisant)</span></label>
+          <div class="input-wrap">
+            <input type="number" id="cfgCya" step="1" placeholder="30" inputmode="decimal">
+            <span class="input-unit">ppm</span>
+          </div>
+        </div>
+        <div class="field">
+          <label>CYA visé</label>
+          <div class="input-wrap">
+            <input type="number" id="cfgCyaSouhaite" step="1" placeholder="30" inputmode="decimal">
+            <span class="input-unit">ppm</span>
+          </div>
         </div>
       </div>
       <details style="margin:6px 0 12px">
