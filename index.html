@@ -484,6 +484,18 @@
   .emoji-picker span.selected, .color-picker span.selected{border-color:#fff}
   .color-picker span{box-shadow:0 0 8px currentColor}
 
+  /* Articles éducation */
+  .edu-article{font-size:14px;line-height:1.7;color:var(--foam)}
+  .edu-article h3{font-family:'Fraunces',serif;color:#7fd4d2;font-size:16px;font-weight:600;margin:18px 0 8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .edu-article h4{color:var(--lemon);font-size:14px;font-weight:600;margin:14px 0 6px}
+  .edu-article p{margin:0 0 10px}
+  .edu-article ul, .edu-article ol{margin:0 0 12px 0;padding-left:22px}
+  .edu-article li{margin-bottom:4px}
+  .edu-article strong{color:#fff}
+  .edu-article em{color:var(--shallow);font-style:italic}
+  .edu-article table{margin:8px 0}
+  .edu-article table th{color:var(--shallow);font-weight:500;border-bottom:1px solid rgba(255,255,255,.1)}
+
   /* Install banner */
   .install-banner{
     background:linear-gradient(135deg,rgba(255,209,102,.15),rgba(255,209,102,.05));
@@ -584,6 +596,21 @@
   </div>
 
   <!-- =================== MODALE BASSIN (création / édition) =================== -->
+  <!-- =================== MODALE ÉDUCATION =================== -->
+  <div id="eduOverlay" style="display:none;position:fixed;inset:0;background:rgba(2,12,26,.92);backdrop-filter:blur(8px);z-index:9998;padding:20px;align-items:flex-start;justify-content:center;overflow-y:auto" onclick="if(event.target===this)closeEducation()">
+    <div style="background:linear-gradient(135deg,rgba(20,60,90,.95),rgba(10,40,70,.95));border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:22px;max-width:680px;width:100%;color:#fff;margin:20px 0 140px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px">
+        <div style="display:flex;align-items:center;gap:10px;flex:1">
+          <button id="eduBack" onclick="showEduScreen(null)" class="btn-ghost" style="padding:4px 10px;width:auto;font-size:14px;display:none">← Retour</button>
+          <h2 id="eduTitle" style="font-family:'Fraunces',serif;font-size:18px;font-weight:600;margin:0;line-height:1.3">Apprendre la chimie de l'eau</h2>
+        </div>
+        <button onclick="closeEducation()" class="btn-ghost" style="padding:4px 10px;font-size:18px;width:auto;line-height:1" aria-label="Fermer">×</button>
+      </div>
+      <div id="eduList"></div>
+      <div id="eduDetail" class="edu-article" style="display:none"></div>
+    </div>
+  </div>
+
   <div id="bassinModalOverlay" class="bassin-modal-overlay" onclick="if(event.target===this)closeBassinModal()">
     <div class="bassin-modal">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -619,6 +646,9 @@
       <div id="bassinModalActions" style="display:none;margin-top:18px;padding-top:18px;border-top:1px solid var(--depth-line)">
         <label style="margin-bottom:8px">Actions</label>
         <div style="display:flex;flex-direction:column;gap:8px">
+          <button onclick="geolocateBassinFromModal()" class="btn-ghost" style="text-align:left;padding:10px 12px" id="bassinGeoBtn">
+            📍 Activer la météo locale <span style="opacity:.6;font-size:12px">— prévisions T° / UV / pluie</span>
+          </button>
           <button onclick="generateShareCodeForBassin()" class="btn-ghost" style="text-align:left;padding:10px 12px">
             🔗 Générer un code de partage <span style="opacity:.6;font-size:12px">— transférer ce bassin à un autre appareil</span>
           </button>
@@ -833,6 +863,8 @@
     <h1 class="page-title">Corrections <em>recommandées</em></h1>
     <p class="page-sub">Doses calculées selon tes mesures · <span style="color:var(--leaf)">vert = aucune action</span></p>
 
+    <div id="weatherCard" class="card" style="display:none"></div>
+
     <div id="correctionContent">
       <div class="empty">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
@@ -896,6 +928,17 @@
   <div class="page" id="page-rappels">
     <h1 class="page-title">Rappels <em>de contrôle</em></h1>
     <p class="page-sub">Programme tes notifications</p>
+
+    <div class="card" onclick="openEducation()" style="cursor:pointer;background:linear-gradient(135deg,rgba(127,212,210,.10),rgba(127,212,210,.04));border:1px solid rgba(127,212,210,.25)">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="font-size:32px">📘</div>
+        <div style="flex:1">
+          <div style="font-weight:600;color:#fff;margin-bottom:4px">Apprendre la chimie de l'eau</div>
+          <div style="font-size:13px;color:var(--shallow);opacity:.85;line-height:1.5">6 articles courts pour comprendre les paramètres, les traitements, les saisons et les urgences.</div>
+        </div>
+        <div style="color:#7fd4d2;font-size:20px">→</div>
+      </div>
+    </div>
 
     <div class="divider">Configurer mon bassin</div>
     <div class="card">
