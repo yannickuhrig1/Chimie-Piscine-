@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.6.5';
+const APP_VERSION = '1.6.6';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -1716,6 +1716,24 @@ function disableCloudBackup(){
   toast('Sauvegarde cloud désactivée');
 }
 
+// Formatage live du champ "restoreCode" : force PISC-, majuscules, tirets auto tous les 4 chars
+function formatBackupCodeInput(input){
+  let raw = (input.value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  // Garantit le préfixe PISC en début (même si l'user efface)
+  if(!raw.startsWith('PISC')){
+    // On retire un préfixe partiel (P, PI, PIS) et on remet PISC complet
+    raw = 'PISC' + raw.replace(/^P?I?S?C?/, '');
+  }
+  // 4 chars PISC + 16 chars de payload max
+  raw = raw.slice(0, 20);
+  // Reformate avec tirets : PISC-XXXX-XXXX-XXXX-XXXX
+  let out = raw.slice(0, 4);
+  for(let i = 4; i < raw.length; i += 4){
+    out += '-' + raw.slice(i, i + 4);
+  }
+  input.value = out;
+}
+
 function copyBackupCode(){
   const code = getBackupCode();
   if(!code) return;
@@ -1818,7 +1836,13 @@ function renderBackupUI(){
         <summary style="cursor:pointer;font-size:12px;color:var(--shallow);opacity:.85">J'ai déjà un code de sauvegarde</summary>
         <div class="field" style="margin-top:10px">
           <label for="restoreCode">Code de sauvegarde</label>
-          <input type="text" id="restoreCode" class="contact-input" placeholder="PISC-XXXX-XXXX-XXXX-XXXX" autocomplete="off" autocapitalize="characters">
+          <input type="text" id="restoreCode" class="contact-input"
+            value="PISC-"
+            placeholder="PISC-XXXX-XXXX-XXXX-XXXX"
+            autocomplete="off" autocapitalize="characters" spellcheck="false"
+            maxlength="24"
+            style="text-transform:uppercase;font-family:'JetBrains Mono',monospace;letter-spacing:1px"
+            oninput="formatBackupCodeInput(this)">
         </div>
         <button class="btn-ghost" style="width:100%" onclick="restoreFromCode()">Restaurer mes données</button>
       </details>`;

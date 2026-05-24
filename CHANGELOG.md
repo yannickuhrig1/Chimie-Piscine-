@@ -5,6 +5,11 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.6.6] — 2026-05-24
+
+### Modifié
+- **Champ « code de sauvegarde » plus accueillant** dans la carte Restauration : le préfixe **`PISC-`** est désormais pré-rempli, les **majuscules forcées** (texte CSS + autocapitalize) et les **tirets sont insérés automatiquement** tous les 4 caractères à la saisie. Plus besoin d'écrire les `-` ni de basculer en majuscules — l'utilisateur peut juste taper les 16 lettres/chiffres.
+
 ## [1.6.5] — 2026-05-24
 
 ### Modifié
