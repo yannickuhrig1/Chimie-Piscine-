@@ -5,6 +5,11 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.6.8] — 2026-05-24
+
+### Ajouté
+- Carte **« Crédits & ressources »** dans la page Contact avec un bouton qui ouvre le groupe Facebook **SOS Piscine V3**, source d'une grande partie des formules, seuils et conseils utilisés par l'app. Manière de remercier la communauté et de pointer les nouveaux utilisateurs vers une vraie expertise piscine.
+
 ## [1.6.7] — 2026-05-24
 
 ### Corrigé
