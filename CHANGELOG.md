@@ -5,6 +5,13 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.7.0-beta] — 2026-05-24 — branche `feature/vidange-meteo-education`
+
+### Ajouté
+- **Calculateur de vidange partielle** : nouvelle carte dans Doses qui s'affiche quand au moins un paramètre est trop haut pour être corrigé chimiquement (CYA > 40, sel > 5 g/L, TH > 30 °f). Calcule automatiquement le volume d'eau à vidanger pour ramener à la cible, le pourcentage du bassin que ça représente, et la procédure à suivre. Si plusieurs paramètres sont concernés en même temps, l'app prend la plus grosse vidange et précise tous les paramètres traités.
+- **Météo locale (Open-Meteo)** : carte « Météo locale » en haut des Doses avec les 3 prochains jours (T° max, UV, pluie) et recommandations préventives : *« demain 32°C, ajoute +0,3 ppm de chlore ce soir »*, *« forte pluie après-demain, re-mesure après »*, *« UV à 8, vérifie que ton CYA protège ton chlore »*. Activation par bouton « 📍 Activer la météo locale » dans la modale d'édition du bassin → géolocalisation navigateur + reverse-geocode gratuit. Données mises en cache 3 h pour ne pas spammer l'API.
+- **Section « Apprendre la chimie de l'eau »** dans Rappels : modale plein écran avec 6 articles courts (Les paramètres clés, HOCl la vraie désinfection, Eau trouble/verte/brune, pH instable, Choc chloré, Le cycle d'une saison). Contenu rédigé à partir des conseils récurrents du groupe SOS Piscine V3.
+
 ## [1.6.8] — 2026-05-24
 
 ### Ajouté

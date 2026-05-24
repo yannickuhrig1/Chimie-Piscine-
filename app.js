@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.6.8';
+const APP_VERSION = '1.7.0-beta';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -424,6 +424,44 @@ function interp(table, x){
     if(x >= x0 && x <= x1) return y0 + (y1-y0) * (x-x0)/(x1-x0);
   }
   return table[table.length-1][1];
+}
+
+/**
+ * Calcule les vidanges partielles nécessaires pour ramener à la cible
+ * les paramètres qui ne peuvent pas être réduits chimiquement :
+ * CYA (> 40), sel (> 5 g/L), TH (> 30 °f).
+ *
+ * Formule : volume_à_vidanger = (val_actuel − val_cible) / val_actuel × volume_bassin
+ * → suppose une dilution parfaite par eau neuve à 0.
+ * Pour le sel et le TH, l'eau du réseau apporte un peu (notamment TH dans les
+ * régions calcaires) — la valeur est une estimation haute.
+ */
+function computeDrainActions(m){
+  const out = [];
+  if(!m.volume) return out;
+  const computeDrain = (actuel, cible) => {
+    if(actuel == null || actuel <= cible) return null;
+    return (actuel - cible) / actuel * m.volume;
+  };
+  // CYA : cible 30 ppm (au-delà de 40, le chlore devient inefficace)
+  if(m.cya != null && m.cya > 40){
+    const cible = 30;
+    const vol = computeDrain(m.cya, cible);
+    if(vol > 0.5) out.push({label:'CYA trop haut', actuel:m.cya, cible, unit:'ppm', volume:vol});
+  }
+  // Sel : cible 4 g/L (au-delà de 5, électrolyseur encrassé + risque corrosion)
+  if(m.sel != null && m.sel > 5){
+    const cible = m.selSouhaite ?? 4;
+    const vol = computeDrain(m.sel, cible);
+    if(vol > 0.5) out.push({label:'Sel trop haut', actuel:m.sel, cible, unit:'g/L', volume:vol});
+  }
+  // TH : cible 25 °f (au-delà de 30 °f, entartrant + risque dépôts)
+  if(m.th != null && m.th > 30){
+    const cible = m.thSouhaite ?? 25;
+    const vol = computeDrain(m.th, cible);
+    if(vol > 0.5) out.push({label:'TH trop haut', actuel:m.th, cible, unit:'°f', volume:vol});
+  }
+  return out;
 }
 
 function lsiStatus(lsi){
@@ -1177,6 +1215,39 @@ function renderCorrections(measurement, targetContainer){
     </div>`;
     // Rendu différé (le canvas doit exister dans le DOM)
     setTimeout(() => drawTaylorChart(taylorId, m), 50);
+  }
+
+  // ===== Vidange partielle (CYA / sel / TH trop élevés — non corrigeables chimiquement) =====
+  if(m.volume){
+    const drains = computeDrainActions(m);
+    if(drains.length){
+      const worst = drains.reduce((a, b) => a.volume > b.volume ? a : b);
+      const pct = (worst.volume / m.volume) * 100;
+      html += `<div class="card">
+        <div class="card-header">
+          <div class="card-title" style="color:var(--lemon)"><span class="dot" style="background:var(--lemon);box-shadow:0 0 10px var(--lemon)"></span>Vidange partielle</div>
+          <span class="status-pill warn"><span class="pulse"></span>${drains.map(d => d.label).join(' · ')}</span>
+        </div>
+        <div class="result warn">
+          <div class="result-multi">
+            <div class="item">
+              <div class="result-label">Volume à vidanger</div>
+              <div class="result-value">${fmt(worst.volume, 1)}<span class="unit">m³</span></div>
+              <div class="result-note" style="margin-top:4px;opacity:.75">≈ ${fmt(pct, 0)} % du bassin</div>
+            </div>
+            <div class="item">
+              <div class="result-label">Remplir avec</div>
+              <div class="result-value">${fmt(worst.volume, 1)}<span class="unit">m³</span></div>
+              <div class="result-note" style="margin-top:4px;opacity:.75">d'eau du réseau</div>
+            </div>
+          </div>
+          <div class="result-note" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--depth-line);line-height:1.5">
+            ${drains.map(d => `<div>📉 <strong>${d.label}</strong> ${fmt(d.actuel,1)} → ${fmt(d.cible,1)} ${d.unit} (vidange ${fmt(d.volume,1)} m³)</div>`).join('')}
+            <div style="margin-top:8px;opacity:.85">Procédure : vidange par skimmer le matin, remplissage en fin de journée. Remettre Cl et bicarbonate après — la nouvelle eau dilue tous les paramètres, pas seulement celui qui est en excès.</div>
+          </div>
+        </div>
+      </div>`;
+    }
   }
 
   if(html === ''){
@@ -2308,6 +2379,143 @@ function renderTrends(){
   }).join('');
 }
 
+// ============== Météo locale (Open-Meteo, gratuit, pas de clé) ==============
+const WEATHER_TTL_MS = 3 * 3600 * 1000; // 3 h
+const WEATHER_CACHE_KEY = 'cp_weather_cache_v1';
+
+async function fetchWeatherForBassin(bassin){
+  if(!bassin || !bassin.config || !bassin.config.geo) return null;
+  const {lat, lon} = bassin.config.geo;
+  if(!lat || !lon) return null;
+  // Cache
+  const cacheAll = loadJSON(WEATHER_CACHE_KEY, {});
+  const cached = cacheAll[bassin.id];
+  if(cached && cached.savedAt && (Date.now() - cached.savedAt) < WEATHER_TTL_MS){
+    return cached.data;
+  }
+  try{
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&daily=temperature_2m_max,uv_index_max,precipitation_sum,weather_code&timezone=auto&forecast_days=3`;
+    const resp = await fetch(url);
+    if(!resp.ok) return null;
+    const data = await resp.json();
+    cacheAll[bassin.id] = {savedAt: Date.now(), data};
+    saveJSON(WEATHER_CACHE_KEY, cacheAll);
+    return data;
+  }catch(e){
+    console.warn('Open-Meteo fetch failed', e);
+    return cached ? cached.data : null;
+  }
+}
+
+// Recos à partir des prévisions
+function computeWeatherInsights(weather, m){
+  if(!weather || !weather.daily) return [];
+  const out = [];
+  const d = weather.daily;
+  // Index 0 = aujourd'hui, 1 = demain, 2 = après-demain
+  const labels = ["aujourd'hui", "demain", "après-demain"];
+  // T° max canicule
+  d.temperature_2m_max.forEach((t, i) => {
+    if(t >= 30 && i <= 1){
+      out.push({level:'warn', icon:'🌡', text:`${labels[i]} ${fmt(t,0)}°C — ajoute +0,3 à 0,5 ppm de chlore préventif (forte conso au soleil).`});
+    }
+  });
+  // UV élevé
+  const uvMax = Math.max(...d.uv_index_max);
+  if(uvMax >= 8){
+    out.push({level:'warn', icon:'☀', text:`UV max ${fmt(uvMax,1)} — assure-toi d'avoir ${m && m.cya >= 25 ? 'ton' : 'au moins 25 ppm de'} CYA pour protéger ton chlore.`});
+  }
+  // Pluie
+  d.precipitation_sum.forEach((mm, i) => {
+    if(i > 2) return;
+    if(mm >= 20){
+      out.push({level:'warn', icon:'🌧', text:`Forte pluie ${labels[i]} (${fmt(mm,0)} mm) — re-mesure tous les paramètres après, l'eau du bassin sera diluée et acidifiée.`});
+    } else if(mm >= 10){
+      out.push({level:'info', icon:'💧', text:`Pluie ${labels[i]} (${fmt(mm,0)} mm) — pense à re-tester pH et Cl après l'épisode.`});
+    }
+  });
+  return out;
+}
+
+function renderWeatherCard(){
+  const wrap = $('weatherCard');
+  if(!wrap) return;
+  const b = getActiveBassin();
+  if(!b || !b.config || !b.config.geo){
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = 'block';
+  wrap.innerHTML = `<div class="card-header">
+    <div class="card-title"><span class="dot" style="background:#7fd4d2;box-shadow:0 0 10px #7fd4d2"></span>Météo locale</div>
+    <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">${escapeHtml(b.config.geo.ville || 'Position')}</span>
+  </div>
+  <div id="weatherContent" style="color:var(--shallow);font-size:13px;padding:8px 0">Chargement…</div>`;
+
+  fetchWeatherForBassin(b).then(w => {
+    const content = $('weatherContent');
+    if(!content) return;
+    if(!w || !w.daily){
+      content.innerHTML = `<div style="opacity:.7">Données météo indisponibles. <button class="btn-ghost" style="padding:4px 8px;font-size:12px;margin-left:8px" onclick="renderWeatherCard()">Réessayer</button></div>`;
+      return;
+    }
+    const d = w.daily;
+    const labels = ["Auj.", "Demain", "Après-d."];
+    const cols = labels.map((lbl, i) => `
+      <div style="flex:1;text-align:center;padding:10px;background:rgba(255,255,255,.04);border-radius:10px">
+        <div style="font-size:11px;color:var(--shallow);opacity:.7;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${lbl}</div>
+        <div style="font-size:20px;font-weight:600;color:#fff">${fmt(d.temperature_2m_max[i],0)}°C</div>
+        <div style="font-size:11px;color:var(--shallow);margin-top:4px">UV ${fmt(d.uv_index_max[i],1)} · ${fmt(d.precipitation_sum[i],0)} mm</div>
+      </div>`).join('');
+    const m = loadActiveMeasurements().slice(-1)[0] || null;
+    const insights = computeWeatherInsights(w, m);
+    const insightsHtml = insights.length
+      ? `<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--depth-line)">${insights.map(i => `
+          <div style="display:flex;gap:10px;padding:6px 0;font-size:13px;line-height:1.5;color:var(--foam)">
+            <span style="color:${i.level==='warn'?'var(--lemon)':'#7fd4d2'};flex:0 0 auto;width:20px;text-align:center">${i.icon}</span>
+            <span>${i.text}</span>
+          </div>`).join('')}</div>`
+      : `<div style="margin-top:10px;color:var(--leaf);font-size:13px">✓ Conditions stables — pas d'action préventive nécessaire.</div>`;
+    content.innerHTML = `<div style="display:flex;gap:8px">${cols}</div>${insightsHtml}`;
+  });
+}
+
+// Géolocalisation rapide pour une carte de bassin
+async function setBassinGeoFromBrowser(bassinId){
+  if(!navigator.geolocation){ toast('Géolocalisation indisponible', 'warn'); return null; }
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      async pos => {
+        const {latitude:lat, longitude:lon} = pos.coords;
+        // Reverse-geocode léger via Open-Meteo (gratuit)
+        let ville = 'Position GPS';
+        try{
+          const r = await fetch(`https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat}&longitude=${lon}&count=1&language=fr&format=json`);
+          if(r.ok){
+            const j = await r.json();
+            if(j.results && j.results[0]){
+              const it = j.results[0];
+              ville = it.name + (it.admin1 ? ', ' + it.admin1 : '');
+            }
+          }
+        }catch(e){}
+        updateBassin(bassinId, {config: {geo: {lat, lon, ville}}});
+        toast(`Météo activée pour ${ville}`);
+        resolve({lat, lon, ville});
+      },
+      err => { toast('Permission de localisation refusée', 'warn'); resolve(null); },
+      {timeout: 8000, maximumAge: 24*3600*1000}
+    );
+  });
+}
+
+async function geolocateActiveBassinForWeather(){
+  const b = getActiveBassin();
+  if(!b) return;
+  const r = await setBassinGeoFromBrowser(b.id);
+  if(r) renderWeatherCard();
+}
+
 // ============== UI bassins (switcher + modale) ==============
 let _bassinModalEditingId = null;
 let _bassinModalEmoji = '🏊';
@@ -2357,6 +2565,7 @@ function switchBassin(id){
   renderTrends();
   if(typeof renderCorrections === 'function') renderCorrections();
   if(typeof renderCharts === 'function') renderCharts();
+  if(typeof renderWeatherCard === 'function') renderWeatherCard();
   toast(`Bassin actif : ${b.emoji||''} ${b.nom}`);
 }
 
@@ -2508,6 +2717,22 @@ function deleteBassinFromModal(){
   toast('Bassin supprimé');
 }
 
+async function geolocateBassinFromModal(){
+  if(!_bassinModalEditingId) return;
+  const btn = $('bassinGeoBtn');
+  if(btn){ btn.disabled = true; btn.innerHTML = '⏳ Localisation en cours…'; }
+  const r = await setBassinGeoFromBrowser(_bassinModalEditingId);
+  if(btn){
+    btn.disabled = false;
+    if(r){
+      btn.innerHTML = `✓ Météo activée — ${escapeHtml(r.ville)} <span style="opacity:.6;font-size:12px">(modifier pour mettre à jour)</span>`;
+    } else {
+      btn.innerHTML = '📍 Activer la météo locale <span style="opacity:.6;font-size:12px">— prévisions T° / UV / pluie</span>';
+    }
+  }
+  renderWeatherCard();
+}
+
 async function generateShareCodeForBassin(){
   if(!_bassinModalEditingId) return;
   const box = $('bassinShareCodeBox');
@@ -2523,6 +2748,228 @@ async function generateShareCodeForBassin(){
       <div style="font-size:15px;letter-spacing:1px;font-weight:600;word-break:break-all">${code}</div>
       <button class="btn-ghost" style="margin-top:10px;padding:6px 10px;font-size:12px" onclick="navigator.clipboard.writeText('${code}').then(()=>toast('Code copié'))">Copier</button>
     `;
+  }
+}
+
+// ============== Section éducation / glossaire ==============
+const EDU_ARTICLES = [
+  {
+    id: 'parametres',
+    icon: '🧪',
+    title: 'Les paramètres clés',
+    summary: 'pH, Fcl, CYA, TAC, TH — à quoi ça sert et où viser ?',
+    body: `
+      <h3>pH (acidité)</h3>
+      <p>Indicateur de l'acidité de l'eau. <strong>Cible 7,2-7,4</strong>. En dessous = corrosif (joints, métaux). Au-dessus = chlore inactif + dépôts calcaires + irritations.</p>
+
+      <h3>Chlore libre (Fcl)</h3>
+      <p>La quantité de chlore disponible pour désinfecter. <strong>Cible = CYA / 10</strong> (donc 3 ppm si CYA à 30). Sans CYA, vise 0,5-1 ppm seulement.</p>
+
+      <h3>Chlore total (Tcl) et chloramines (Ccl)</h3>
+      <p>Tcl = tout le chlore, libre + combiné. Ccl = Tcl − Fcl = chlore déjà consommé par les contaminants. <strong>Si Ccl > 0,6 ppm → superchloration nécessaire</strong> (odeur typique de "javel" qui pique).</p>
+
+      <h3>CYA (stabilisant / acide cyanurique)</h3>
+      <p>Protège ton chlore du soleil. <strong>Cible 20-30 ppm</strong>. Au-delà de 40 ppm, le chlore devient inefficace — vidange partielle obligatoire (le CYA ne s'élimine que par dilution).</p>
+
+      <h3>TAC (alcalinité)</h3>
+      <p>C'est le "tampon" qui stabilise ton pH. <strong>Cible 80-100 ppm</strong>. Trop bas (< 60) = pH qui plonge. Trop haut (> 150) = pH qui monte tout le temps (dégazage CO₂).</p>
+
+      <h3>TH (dureté / calcaire)</h3>
+      <p>Quantité de calcium et magnésium dans l'eau. <strong>Cible 15-25 °f</strong>. Trop bas = eau corrosive. Trop haut = entartrage des équipements et des parois.</p>
+
+      <h3>Sel</h3>
+      <p>Pour les piscines à électrolyse au sel. <strong>Cible 4 g/L</strong> (vérifie ta notice — les électrolyseurs récents acceptent 2,5-3,5). Trop haut = corrosion + électrolyseur encrassé.</p>
+    `
+  },
+  {
+    id: 'hocl',
+    icon: '💧',
+    title: 'HOCl : la vraie mesure de désinfection',
+    summary: 'Pourquoi 3 ppm de chlore libre ne désinfectent pas vraiment 3 ppm.',
+    body: `
+      <p>Quand tu mesures du <strong>chlore libre (Fcl)</strong>, tu mesures la somme de deux choses :</p>
+      <ul>
+        <li><strong>HOCl</strong> (acide hypochloreux) — la forme <em>active</em> qui désinfecte</li>
+        <li><strong>OCl⁻</strong> (ion hypochlorite) — la forme <em>inactive</em>, juste un stock</li>
+      </ul>
+      <p>La répartition entre les deux dépend du <strong>pH</strong> et du <strong>CYA</strong>.</p>
+      <h3>L'effet du pH</h3>
+      <p>À pH 7,5 : 50 % HOCl, 50 % OCl⁻. À pH 6,8 : <strong>85 % HOCl</strong>. À pH 8,0 : seulement 25 % HOCl. C'est pour ça qu'un pH élevé "désactive" ton chlore.</p>
+      <h3>L'effet du CYA</h3>
+      <p>Le CYA séquestre une grande partie du chlore libre pour le protéger du soleil. Avec CYA à 30 ppm, seulement <strong>2-3 % de ton Fcl est actif</strong>. C'est normal — c'est le prix à payer pour ne pas tout perdre au soleil.</p>
+      <h3>Le bon seuil</h3>
+      <p>Pour désinfecter efficacement, vise <strong>HOCl ≥ 0,05 ppm</strong>. En dessous, les bactéries prennent le dessus. C'est ce que la carte "Pouvoir désinfectant" calcule pour toi.</p>
+      <h3>Astuce choc</h3>
+      <p>Avant un choc curatif, baisse temporairement ton pH à 6,8 → tu multiplies l'efficacité du chlore par ~2. Tu remontes le pH à 7,2 après.</p>
+    `
+  },
+  {
+    id: 'eau-verte',
+    icon: '🦠',
+    title: 'Eau trouble, eau verte, eau brune — que faire ?',
+    summary: 'Diagnostic et actions selon la couleur du problème.',
+    body: `
+      <h3>Eau verte (algues)</h3>
+      <p><strong>Cause</strong> : prolifération d'algues, souvent à cause d'un chlore qui chute (manque, CYA trop bas pour le soleil, ou trop élevé qui rend le chlore inefficace).</p>
+      <ol>
+        <li>Brosse les parois (les algues se fixent dessus)</li>
+        <li>Vérifie pH (vise 7,2) et CYA</li>
+        <li>Choc curatif : Fcl à CYA × 0,5 (donc 15 ppm si CYA 30)</li>
+        <li>Filtre 24-48 h en continu, lave le filtre à mi-parcours</li>
+        <li>Floculant si l'eau reste laiteuse après</li>
+      </ol>
+
+      <h3>Eau trouble laiteuse</h3>
+      <p><strong>Cause</strong> : eau dure (calcaire en suspension), pH ou TAC mal réglés, ou filtration insuffisante.</p>
+      <ul>
+        <li>Vérifie TH (si > 30 °f → vidange partielle)</li>
+        <li>Vérifie pH et LSI (si entartrant → baisse pH)</li>
+        <li>Floculant + filtration prolongée</li>
+      </ul>
+
+      <h3>Eau brune / rouille</h3>
+      <p><strong>Cause</strong> : présence de fer ou manganèse (souvent une nouvelle arrivée d'eau du réseau ou puits). Aggravé par un chlore qui oxyde le métal en suspension.</p>
+      <ul>
+        <li>Séquestrant métaux (anti-fer / chélateur)</li>
+        <li>Filtration prolongée + lavage filtre</li>
+        <li>Évite la superchloration tant que le fer n'est pas séquestré</li>
+      </ul>
+
+      <h3>Mousse en surface</h3>
+      <p>Souvent des crèmes solaires + sueur + surfactants. Anti-mousse en spray + brosser pour aider la filtration à les capter.</p>
+    `
+  },
+  {
+    id: 'ph-instable',
+    icon: '📈',
+    title: 'Pourquoi mon pH ne reste pas stable ?',
+    summary: 'Diagnostiquer une dérive du pH en regardant le TAC.',
+    body: `
+      <p>Si ton pH dérive régulièrement, le coupable n'est presque jamais le pH lui-même mais le <strong>TAC</strong> (alcalinité).</p>
+
+      <h3>Le TAC = le "tampon"</h3>
+      <p>Imagine le TAC comme un amortisseur. Si tu n'en as pas assez (< 60 ppm), le pH descend tout seul (les acides comme le CO₂ dissous l'attaquent). Si tu en as trop (> 150 ppm), le CO₂ s'échappe (dégazage) et le pH <em>monte</em> tout seul.</p>
+
+      <h3>Diagnostic</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin:10px 0">
+        <tr style="background:rgba(255,255,255,.05)"><th style="text-align:left;padding:6px">Tu observes</th><th style="text-align:left;padding:6px">Cause probable</th></tr>
+        <tr><td style="padding:6px">pH ↗ régulièrement</td><td style="padding:6px">TAC trop élevé (baisse à 80-100)</td></tr>
+        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">pH ↘ régulièrement</td><td style="padding:6px">TAC trop bas (remonte à 80-100)</td></tr>
+        <tr><td style="padding:6px">pH stable</td><td style="padding:6px">TAC OK ✓</td></tr>
+      </table>
+
+      <h3>Erreur fréquente</h3>
+      <p>Ajouter de l'acide chlorhydrique en boucle parce que le pH monte. Si le TAC est trop haut, tu corriges le symptôme et l'acide va aussi te baisser le TAC, ce qui peut <em>aggraver</em> la situation à long terme. Vérifie ton TAC <strong>avant</strong> d'ajouter de l'acide.</p>
+
+      <h3>L'app le détecte automatiquement</h3>
+      <p>La carte "Tendances" surveille la pente de ton pH sur 14 jours. Si elle dérive de plus de 0,04 par jour sur 4+ jours, tu auras une alerte avec la cause probable.</p>
+    `
+  },
+  {
+    id: 'choc',
+    icon: '⚡',
+    title: 'Choc chloré : quand et comment ?',
+    summary: 'Curatif, préventif, superchloration — comment ne pas se planter.',
+    body: `
+      <h3>3 types de "choc" à ne pas confondre</h3>
+
+      <h4>1. Choc curatif</h4>
+      <p>Réservé aux <strong>vrais problèmes</strong> : eau verte, Fcl < 50 % de la cible, après une grosse contamination (animal, accident, etc.).</p>
+      <ul>
+        <li>Vise Fcl = CYA × 0,5 (15 ppm pour CYA à 30)</li>
+        <li>Reste hors du bassin tant que Fcl > 5 ppm</li>
+        <li>Astuce : baisse le pH à 6,8 avant pour maximiser l'efficacité</li>
+      </ul>
+
+      <h4>2. Superchloration (élimination des chloramines)</h4>
+      <p>Quand le chlore combiné (Ccl) dépasse 0,6 ppm. C'est lui qui crée l'odeur "javel" et l'irritation des yeux.</p>
+      <ul>
+        <li>Vise Fcl = 10 × Ccl pour casser la liaison</li>
+        <li>Le calcul est fait par l'app dans la carte "Superchloration"</li>
+      </ul>
+
+      <h4>3. Choc préventif (à éviter en général)</h4>
+      <p>Beaucoup de gens "chlorent à fond" par sécurité. C'est <strong>contre-productif</strong> : tu fais grimper ton CYA (si tu utilises du stabilisé), tu attaques les liners, et tu n'es pas plus protégé. Mieux vaut maintenir Fcl à la cible <strong>constamment</strong>.</p>
+
+      <h3>Choc = pas de baignade</h3>
+      <p>Tant que Fcl > 5 ppm, ne te baigne pas (irritation cutanée, oculaire, voire respiratoire avec un mauvais pH). Compte 24-48 h selon le soleil pour que ça redescende.</p>
+    `
+  },
+  {
+    id: 'cycle',
+    icon: '📅',
+    title: 'Le cycle d\'une saison',
+    summary: 'Mise en route, été, fin de saison, hivernage.',
+    body: `
+      <h3>🌱 Mise en route (mars-avril)</h3>
+      <ol>
+        <li>Vide les bouchons d'hivernage, redémarre la filtration</li>
+        <li>Lave le filtre à fond (l'eau qui sort doit être claire)</li>
+        <li>Mesure tous les paramètres et corrige (pH, TAC en priorité, puis Cl et CYA)</li>
+        <li>Choc curatif si l'eau est laiteuse ou verte (souvent oui)</li>
+        <li>Filtre 24/24 les premiers jours</li>
+      </ol>
+
+      <h3>☀ Été (mai-août)</h3>
+      <ul>
+        <li>Mesure 2× par semaine (pH + Fcl), 1× tous les 15 j pour le reste</li>
+        <li>Filtre = durée en heures ≈ T° eau / 2 (eau à 28°C → 14 h/jour)</li>
+        <li>Brosse les parois 1× par semaine pour empêcher les algues</li>
+        <li>Lave le filtre quand la pression monte de +0,5 bar par rapport au filtre propre</li>
+      </ul>
+
+      <h3>🍂 Fin de saison (septembre)</h3>
+      <ul>
+        <li>Recommence à réduire la durée de filtration</li>
+        <li>Maintiens Fcl jusqu'à 12°C d'eau</li>
+        <li>Lave le filtre à fond avant de couper</li>
+      </ul>
+
+      <h3>❄ Hivernage (octobre-mars)</h3>
+      <p>Deux écoles :</p>
+      <ul>
+        <li><strong>Actif</strong> : filtration 2-4 h/jour quand T° eau < 12°C, pas de produit hivernage. Plus simple, mais consomme un peu d'électricité.</li>
+        <li><strong>Passif</strong> : couvrir, baisser le niveau d'eau, vidanger les skimmers, ajouter un anti-algues hivernage. Plus économe en énergie, mais demande une remise en route plus longue au printemps.</li>
+      </ul>
+      <p>Dans tous les cas : <strong>équilibre l'eau avant</strong> (pH, TAC, TH). Une eau déséquilibrée pendant 5 mois fait beaucoup plus de dégâts qu'une saison entière.</p>
+    `
+  }
+];
+
+function openEducation(articleId){
+  if(!$('eduOverlay')) return;
+  $('eduOverlay').style.display = 'flex';
+  showEduScreen(articleId || null);
+}
+function closeEducation(){
+  if($('eduOverlay')) $('eduOverlay').style.display = 'none';
+}
+function showEduScreen(articleId){
+  const list = $('eduList');
+  const detail = $('eduDetail');
+  if(!list || !detail) return;
+  if(!articleId){
+    list.style.display = 'block';
+    detail.style.display = 'none';
+    $('eduBack').style.display = 'none';
+    $('eduTitle').textContent = 'Apprendre la chimie de l\'eau';
+    list.innerHTML = EDU_ARTICLES.map(a => `
+      <div onclick="showEduScreen('${a.id}')" style="display:flex;gap:14px;padding:14px;margin-bottom:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.06);border-radius:12px;cursor:pointer;transition:transform .12s,background .15s" onmouseenter="this.style.background='rgba(255,255,255,.07)'" onmouseleave="this.style.background='rgba(255,255,255,.04)'">
+        <div style="font-size:24px;flex:0 0 auto">${a.icon}</div>
+        <div style="flex:1 1 auto">
+          <div style="font-weight:600;color:#fff;margin-bottom:4px">${escapeHtml(a.title)}</div>
+          <div style="font-size:13px;color:var(--shallow);opacity:.85;line-height:1.5">${escapeHtml(a.summary)}</div>
+        </div>
+      </div>
+    `).join('');
+  } else {
+    const a = EDU_ARTICLES.find(x => x.id === articleId);
+    if(!a) return showEduScreen(null);
+    list.style.display = 'none';
+    detail.style.display = 'block';
+    $('eduBack').style.display = 'inline-block';
+    $('eduTitle').textContent = `${a.icon} ${a.title}`;
+    detail.innerHTML = a.body;
   }
 }
 
@@ -2935,6 +3382,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   renderTrends();
   renderBackupUI();
   updateLastControlInfo();
+  renderWeatherCard();
 
   if($('shareBtn')) $('shareBtn').addEventListener('click', () => shareControl());
 
