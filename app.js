@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.8.0-dashboard';
+const APP_VERSION = '1.8.1-dashboard';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -95,6 +95,7 @@ function createBassin(patch){
       phSouhaite: patch.phSouhaite ?? 7.4,
       tacSouhaite: patch.tacSouhaite ?? 100,
       cya: patch.cya ?? null,
+      cyaSouhaite: patch.cyaSouhaite ?? 30,
       selSouhaite: patch.selSouhaite ?? 4,
       thSouhaite: patch.thSouhaite ?? 25
     }
@@ -155,6 +156,7 @@ function migrateToMultiBassinsIfNeeded(){
     phSouhaite: lastInputs.phSouhaite ?? 7.4,
     tacSouhaite: lastInputs.tacSouhaite ?? 100,
     cya: lastInputs.cya ?? null,
+    cyaSouhaite: lastInputs.cyaSouhaite ?? 30,
     selSouhaite: lastInputs.selSouhaite ?? 4,
     thSouhaite: lastInputs.thSouhaite ?? 25
   });
@@ -488,9 +490,9 @@ function computeDrainActions(m){
     if(actuel == null || actuel <= cible) return null;
     return (actuel - cible) / actuel * m.volume;
   };
-  // CYA : cible 30 ppm (au-delà de 40, le chlore devient inefficace)
+  // CYA : cible utilisateur ou défaut 30 ppm (au-delà de 40, le chlore devient inefficace)
   if(m.cya != null && m.cya > 40){
-    const cible = 30;
+    const cible = m.cyaSouhaite ?? 30;
     const vol = computeDrain(m.cya, cible);
     if(vol > 0.5) out.push({label:'CYA trop haut', actuel:m.cya, cible, unit:'ppm', volume:vol});
   }
@@ -627,6 +629,7 @@ function readInputs(){
     tac: num('tacMesure'),
     tacSouhaite: num('tacSouhaite'),
     cya: num('cya'),
+    cyaSouhaite: num('cyaSouhaite'),
     // Mesures avancées
     temp: num('temp'),
     sel: opt.sel === false ? null : num('selMesure'),
@@ -648,11 +651,12 @@ function loadLastInputs(){
   setVal('phSouhaite','phSouhaite');
   setVal('tacSouhaite','tacSouhaite');
   setVal('cya','cya');
+  setVal('cyaSouhaite','cyaSouhaite');
   setVal('selSouhaite','selSouhaite');
   setVal('thSouhaite','thSouhaite');
   if(last.modeDesinf && $('modeDesinf')) $('modeDesinf').value = last.modeDesinf;
   // Synchronise aussi les champs miroir de la page Rappels
-  ['cfgVolume','cfgPhSouhaite','cfgTacSouhaite','cfgCya','cfgSelSouhaite','cfgThSouhaite'].forEach(id => {
+  ['cfgVolume','cfgPhSouhaite','cfgTacSouhaite','cfgCya','cfgCyaSouhaite','cfgSelSouhaite','cfgThSouhaite'].forEach(id => {
     const el = $(id);
     if(!el) return;
     const key = id.replace('cfg','').replace(/^[A-Z]/, c=>c.toLowerCase());
@@ -678,6 +682,7 @@ function autoSaveBassinParams(){
     phSouhaite: num('phSouhaite'),
     tacSouhaite: num('tacSouhaite'),
     cya: num('cya'),
+    cyaSouhaite: num('cyaSouhaite'),
     selSouhaite: num('selSouhaite'),
     thSouhaite: num('thSouhaite'),
     modeDesinf: $('modeDesinf') ? $('modeDesinf').value : null
@@ -694,7 +699,7 @@ function autoSaveBassinParams(){
     if(Object.keys(cfgPatch).length) updateBassin(activeId, {config: cfgPatch});
   }
   // Synchronise les champs miroir de la page Rappels
-  const mirror = {volume:'cfgVolume', phSouhaite:'cfgPhSouhaite', tacSouhaite:'cfgTacSouhaite', cya:'cfgCya', selSouhaite:'cfgSelSouhaite', thSouhaite:'cfgThSouhaite'};
+  const mirror = {volume:'cfgVolume', phSouhaite:'cfgPhSouhaite', tacSouhaite:'cfgTacSouhaite', cya:'cfgCya', cyaSouhaite:'cfgCyaSouhaite', selSouhaite:'cfgSelSouhaite', thSouhaite:'cfgThSouhaite'};
   Object.entries(mirror).forEach(([k, id]) => {
     if(next[k] !== null && $(id)) $(id).value = next[k];
   });
@@ -708,6 +713,7 @@ function saveBassinConfigFromRappels(){
     phSouhaite: parseFloat($('cfgPhSouhaite').value) || null,
     tacSouhaite: parseFloat($('cfgTacSouhaite').value) || null,
     cya: parseFloat($('cfgCya').value) || null,
+    cyaSouhaite: parseFloat($('cfgCyaSouhaite').value) || null,
     selSouhaite: parseFloat($('cfgSelSouhaite').value) || null,
     thSouhaite: parseFloat($('cfgThSouhaite').value) || null,
     modeDesinf: $('cfgModeDesinf') ? $('cfgModeDesinf').value : null
@@ -728,7 +734,7 @@ function saveBassinConfigFromRappels(){
     if(Object.keys(cfgPatch).length) updateBassin(activeId, {config: cfgPatch});
   }
   // Reflète sur la page Mesures
-  const mirror = {volume:'volume', phSouhaite:'phSouhaite', tacSouhaite:'tacSouhaite', cya:'cya', selSouhaite:'selSouhaite', thSouhaite:'thSouhaite'};
+  const mirror = {volume:'volume', phSouhaite:'phSouhaite', tacSouhaite:'tacSouhaite', cya:'cya', cyaSouhaite:'cyaSouhaite', selSouhaite:'selSouhaite', thSouhaite:'thSouhaite'};
   Object.entries(mirror).forEach(([k, id]) => {
     if(cfg[k] !== null && $(id)) $(id).value = cfg[k];
   });
@@ -747,6 +753,7 @@ function applyBassinConfigToInputs(bassin){
   setVal('phSouhaite', c.phSouhaite);
   setVal('tacSouhaite', c.tacSouhaite);
   setVal('cya', c.cya);
+  setVal('cyaSouhaite', c.cyaSouhaite);
   setVal('selSouhaite', c.selSouhaite);
   setVal('thSouhaite', c.thSouhaite);
   if(c.modeDesinf && $('modeDesinf')) $('modeDesinf').value = c.modeDesinf;
@@ -755,6 +762,7 @@ function applyBassinConfigToInputs(bassin){
   setVal('cfgPhSouhaite', c.phSouhaite);
   setVal('cfgTacSouhaite', c.tacSouhaite);
   setVal('cfgCya', c.cya);
+  setVal('cfgCyaSouhaite', c.cyaSouhaite);
   setVal('cfgSelSouhaite', c.selSouhaite);
   setVal('cfgThSouhaite', c.thSouhaite);
   if(c.modeDesinf && $('cfgModeDesinf')) $('cfgModeDesinf').value = c.modeDesinf;
@@ -3432,7 +3440,7 @@ function reloadHistEntry(){
   const fieldMap = {
     volume:'volume', phMesure:'ph', phSouhaite:'phSouhaite',
     fcl:'fcl', tcl:'tcl', tacMesure:'tac', tacSouhaite:'tacSouhaite',
-    cya:'cya', temp:'temp', selMesure:'sel', selSouhaite:'selSouhaite',
+    cya:'cya', cyaSouhaite:'cyaSouhaite', temp:'temp', selMesure:'sel', selSouhaite:'selSouhaite',
     thMesure:'th', thSouhaite:'thSouhaite', phosphate:'phosphate', brome:'brome'
   };
   Object.entries(fieldMap).forEach(([fieldId, key]) => {
@@ -3446,6 +3454,7 @@ function reloadHistEntry(){
   if($('cfgPhSouhaite')) $('cfgPhSouhaite').value = m.phSouhaite ?? '';
   if($('cfgTacSouhaite')) $('cfgTacSouhaite').value = m.tacSouhaite ?? '';
   if($('cfgCya')) $('cfgCya').value = m.cya ?? '';
+  if($('cfgCyaSouhaite')) $('cfgCyaSouhaite').value = m.cyaSouhaite ?? '';
   updateCclBadge(m);
   closeHistDetail();
   switchTab('mesure');
@@ -3523,7 +3532,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   applyDesktopViewMode();
 
   // Auto-save sur les paramètres bassin (debounced via input event)
-  ['volume','phSouhaite','tacSouhaite','cya','selSouhaite','thSouhaite'].forEach(id => {
+  ['volume','phSouhaite','tacSouhaite','cya','cyaSouhaite','selSouhaite','thSouhaite'].forEach(id => {
     const el = $(id);
     if(el) el.addEventListener('input', autoSaveBassinParams);
   });
@@ -3541,7 +3550,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
     }, 180);
   }
   // Tous les inputs de mesure déclenchent le live preview
-  ['volume','phMesure','phSouhaite','fcl','tcl','tacMesure','tacSouhaite','cya',
+  ['volume','phMesure','phSouhaite','fcl','tcl','tacMesure','tacSouhaite','cya','cyaSouhaite',
    'temp','modeDesinf','selMesure','selSouhaite','thMesure','thSouhaite','phosphate','brome']
     .forEach(id => {
       const el = $(id);
@@ -3554,7 +3563,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if(window.matchMedia && window.matchMedia('(min-width: 1000px)').matches){
     scheduleLivePreview();
   }
-  const cfgMap = {cfgVolume:'volume',cfgPhSouhaite:'phSouhaite',cfgTacSouhaite:'tacSouhaite',cfgCya:'cya',cfgSelSouhaite:'selSouhaite',cfgThSouhaite:'thSouhaite'};
+  const cfgMap = {cfgVolume:'volume',cfgPhSouhaite:'phSouhaite',cfgTacSouhaite:'tacSouhaite',cfgCya:'cya',cfgCyaSouhaite:'cyaSouhaite',cfgSelSouhaite:'selSouhaite',cfgThSouhaite:'thSouhaite'};
   Object.entries(cfgMap).forEach(([id, mainId]) => {
     const el = $(id);
     if(el) el.addEventListener('input', () => {
