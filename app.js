@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.7.2';
+const APP_VERSION = '1.8.0-cockpit';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -31,6 +31,29 @@ function applyOptionalFieldsVisibility(){
     const key = el.dataset.optionalField;
     el.style.display = cfg[key] === false ? 'none' : '';
   });
+}
+
+// Mode d'affichage desktop (standard vs cockpit/split-view)
+const VIEW_MODE_KEY = 'cp_desktop_view_v1';
+function getDesktopViewMode(){
+  return localStorage.getItem(VIEW_MODE_KEY) || 'standard';
+}
+function setDesktopViewMode(mode){
+  localStorage.setItem(VIEW_MODE_KEY, mode);
+  applyDesktopViewMode();
+}
+function applyDesktopViewMode(){
+  const cockpit = getDesktopViewMode() === 'cockpit';
+  document.body.classList.toggle('cockpit-view', cockpit);
+  const adv = document.getElementById('advCard');
+  if(adv && cockpit && window.matchMedia && window.matchMedia('(min-width: 1000px)').matches){
+    adv.open = true;
+  }
+  // Re-render le live preview si on vient d'activer la vue cockpit
+  if(cockpit && typeof renderCorrections === 'function'){
+    const target = document.getElementById('liveCorrectionContent');
+    if(target) renderCorrections(readInputs(), target);
+  }
 }
 
 // ============== Multi-bassins ==============
@@ -3476,12 +3499,48 @@ document.addEventListener('DOMContentLoaded', ()=>{
   });
   applyOptionalFieldsVisibility();
 
+  // Toggle "Vue cockpit (PC)"
+  const viewToggle = $('viewModeCockpit');
+  if(viewToggle){
+    viewToggle.checked = getDesktopViewMode() === 'cockpit';
+    viewToggle.addEventListener('change', () => {
+      setDesktopViewMode(viewToggle.checked ? 'cockpit' : 'standard');
+    });
+  }
+  applyDesktopViewMode();
+
   // Auto-save sur les paramètres bassin (debounced via input event)
   ['volume','phSouhaite','tacSouhaite','cya','selSouhaite','thSouhaite'].forEach(id => {
     const el = $(id);
     if(el) el.addEventListener('input', autoSaveBassinParams);
   });
   if($('modeDesinf')) $('modeDesinf').addEventListener('change', autoSaveBassinParams);
+
+  // === Plan C : aperçu live des doses (desktop split view) ===
+  let _livePreviewTimer = null;
+  function scheduleLivePreview(){
+    if(_livePreviewTimer) clearTimeout(_livePreviewTimer);
+    _livePreviewTimer = setTimeout(()=>{
+      const target = $('liveCorrectionContent');
+      if(target && typeof renderCorrections === 'function'){
+        renderCorrections(readInputs(), target);
+      }
+    }, 180);
+  }
+  // Tous les inputs de mesure déclenchent le live preview
+  ['volume','phMesure','phSouhaite','fcl','tcl','tacMesure','tacSouhaite','cya',
+   'temp','modeDesinf','selMesure','selSouhaite','thMesure','thSouhaite','phosphate','brome']
+    .forEach(id => {
+      const el = $(id);
+      if(el){
+        el.addEventListener('input', scheduleLivePreview);
+        if(el.tagName === 'SELECT') el.addEventListener('change', scheduleLivePreview);
+      }
+    });
+  // Render initial si données pré-saisies
+  if(window.matchMedia && window.matchMedia('(min-width: 1000px)').matches){
+    scheduleLivePreview();
+  }
   const cfgMap = {cfgVolume:'volume',cfgPhSouhaite:'phSouhaite',cfgTacSouhaite:'tacSouhaite',cfgCya:'cya',cfgSelSouhaite:'selSouhaite',cfgThSouhaite:'thSouhaite'};
   Object.entries(cfgMap).forEach(([id, mainId]) => {
     const el = $(id);
