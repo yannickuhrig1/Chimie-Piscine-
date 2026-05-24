@@ -5,6 +5,11 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.6.4] — 2026-05-24
+
+### Corrigé
+- **Modale d'édition de bassin masquée par la barre de navigation** : sur écrans courts ou avec beaucoup de contenu, le bas de la modale (boutons « Archiver / Supprimer / Générer un code de partage ») passait sous la nav du bas. Même fix que la modale d'historique en v1.4.2 : `max-height:100vh − 140px` + `margin-bottom:120px` pour réserver l'espace de la nav.
+
 ## [1.6.3] — 2026-05-24
 
 ### Corrigé
