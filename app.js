@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.7.1';
+const APP_VERSION = '1.8.0-desktop-split';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -3452,6 +3452,32 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if(el) el.addEventListener('input', autoSaveBassinParams);
   });
   if($('modeDesinf')) $('modeDesinf').addEventListener('change', autoSaveBassinParams);
+
+  // === Plan C : aperçu live des doses (desktop split view) ===
+  let _livePreviewTimer = null;
+  function scheduleLivePreview(){
+    if(_livePreviewTimer) clearTimeout(_livePreviewTimer);
+    _livePreviewTimer = setTimeout(()=>{
+      const target = $('liveCorrectionContent');
+      if(target && typeof renderCorrections === 'function'){
+        renderCorrections(readInputs(), target);
+      }
+    }, 180);
+  }
+  // Tous les inputs de mesure déclenchent le live preview
+  ['volume','phMesure','phSouhaite','fcl','tcl','tacMesure','tacSouhaite','cya',
+   'temp','modeDesinf','selMesure','selSouhaite','thMesure','thSouhaite','phosphate','brome']
+    .forEach(id => {
+      const el = $(id);
+      if(el){
+        el.addEventListener('input', scheduleLivePreview);
+        if(el.tagName === 'SELECT') el.addEventListener('change', scheduleLivePreview);
+      }
+    });
+  // Render initial si données pré-saisies
+  if(window.matchMedia && window.matchMedia('(min-width: 1000px)').matches){
+    scheduleLivePreview();
+  }
   const cfgMap = {cfgVolume:'volume',cfgPhSouhaite:'phSouhaite',cfgTacSouhaite:'tacSouhaite',cfgCya:'cya',cfgSelSouhaite:'selSouhaite',cfgThSouhaite:'thSouhaite'};
   Object.entries(cfgMap).forEach(([id, mainId]) => {
     const el = $(id);
