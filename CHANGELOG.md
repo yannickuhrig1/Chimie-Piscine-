@@ -5,6 +5,15 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.6.5] — 2026-05-24
+
+### Modifié
+- **Carte « Désinfection » réécrite** pour être compréhensible sans formation chimique :
+  - Renommée en **« Pouvoir désinfectant »**, plus parlant.
+  - Le label « HOCl actif » devient **« Chlore actif (HOCl) »** avec un verdict instantané sous la valeur : *✓ Très efficace / ✓ Suffisant / ⚠ Limite — vire vite à l'algue / ✗ Insuffisant — risque bactérien*, selon des paliers (0,03 / 0,05 / 0,10 ppm) issus de la littérature désinfection eau.
+  - Le label « Fcl cible (CYA / 10) » devient **« Cible Fcl total »**, avec en sous-texte « min X – choc Y ppm » plus court.
+  - **Phrase d'explication ajoutée en bas de la carte** : *« Sur tes 2 ppm de Fcl mesurés, seuls 0,051 ppm (2,6 %) désinfectent vraiment. Le reste est séquestré par le CYA (30 ppm) — utile pour résister au soleil, mais ça réduit l'efficacité immédiate. »* — fait le pont entre Fcl mesuré et HOCl réel.
+
 ## [1.6.4] — 2026-05-24
 
 ### Corrigé

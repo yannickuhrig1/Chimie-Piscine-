@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.6.4';
+const APP_VERSION = '1.6.5';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -968,23 +968,37 @@ function renderCorrections(measurement, targetContainer){
     if(m.fcl < t.min){ tone='danger'; label='Fcl insuffisant pour le CYA'; }
     else if(m.fcl < t.target){ tone='warn'; label='Fcl sous la cible'; }
     else if(m.fcl > t.shock){ tone='warn'; label='Fcl niveau choc'; }
+    // Verdict HOCl (la vraie mesure de l'efficacité désinfectante)
+    let hoclVerdict, hoclColor;
+    if(hocl >= 0.10){ hoclVerdict = '✓ Très efficace'; hoclColor = 'var(--leaf)'; }
+    else if(hocl >= 0.05){ hoclVerdict = '✓ Suffisant'; hoclColor = 'var(--leaf)'; }
+    else if(hocl >= 0.03){ hoclVerdict = '⚠ Limite — vire vite à l\'algue'; hoclColor = 'var(--lemon)'; }
+    else { hoclVerdict = '✗ Insuffisant — risque bactérien'; hoclColor = 'var(--coral)'; }
+    // Part de Fcl réellement active (en %)
+    const actifPct = m.fcl > 0 ? Math.min(100, (hocl/m.fcl)*100) : 0;
     html += `<div class="card">
       <div class="card-header">
-        <div class="card-title"><span class="dot" style="background:var(--leaf);box-shadow:0 0 10px var(--leaf)"></span>Désinfection</div>
+        <div class="card-title"><span class="dot" style="background:var(--leaf);box-shadow:0 0 10px var(--leaf)"></span>Pouvoir désinfectant</div>
         <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">Modèle O'Brien</span>
       </div>
       <div class="result ${tone}">
         <div class="result-multi">
           <div class="item">
-            <div class="result-label">HOCl actif</div>
+            <div class="result-label">Chlore actif (HOCl)</div>
             <div class="result-value">${fmt(hocl, 3)}<span class="unit">ppm</span></div>
+            <div class="result-note" style="color:${hoclColor};font-weight:500;margin-top:4px">${hoclVerdict}</div>
           </div>
           <div class="item">
-            <div class="result-label">Fcl cible (CYA / 10)</div>
+            <div class="result-label">Cible Fcl total</div>
             <div class="result-value">${fmt(t.target, 2)}<span class="unit">ppm</span></div>
+            <div class="result-note" style="margin-top:4px;opacity:.75">min ${fmt(t.min,1)} – choc ${fmt(t.shock,0)} ppm</div>
           </div>
         </div>
-        <div class="result-note">${label} · min ${fmt(t.min,2)} – cible ${fmt(t.target,2)} – choc ${fmt(t.shock,2)} ppm (CYA ${m.cya ? fmt(m.cya,0)+' ppm' : 'non saisi'})</div>
+        <div class="result-note" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--depth-line);line-height:1.5">
+          <strong>Ce que ça veut dire</strong> — sur tes ${fmt(m.fcl,2)} ppm de Fcl mesurés, seuls <strong>${fmt(hocl,3)} ppm (${fmt(actifPct,1)}&nbsp;%)</strong> désinfectent vraiment.
+          ${m.cya >= 5 ? `Le reste est séquestré par le CYA (${fmt(m.cya,0)} ppm) — utile pour résister au soleil, mais ça réduit l'efficacité immédiate.` : 'Sans stabilisant (CYA), tout le Fcl est actif mais brûle vite au soleil.'}
+          ${tone !== 'ok' ? `<br><span style="color:var(--lemon)">⚠ ${label}.</span>` : ''}
+        </div>
       </div>
     </div>`;
   }
