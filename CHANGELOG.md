@@ -5,7 +5,7 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
-## [1.7.0-beta] — 2026-05-24 — branche `feature/vidange-meteo-education`
+## [1.7.0] — 2026-05-24
 
 ### Ajouté
 - **Calculateur de vidange partielle** : nouvelle carte dans Doses qui s'affiche quand au moins un paramètre est trop haut pour être corrigé chimiquement (CYA > 40, sel > 5 g/L, TH > 30 °f). Calcule automatiquement le volume d'eau à vidanger pour ramener à la cible, le pourcentage du bassin que ça représente, et la procédure à suivre. Si plusieurs paramètres sont concernés en même temps, l'app prend la plus grosse vidange et précise tous les paramètres traités.
