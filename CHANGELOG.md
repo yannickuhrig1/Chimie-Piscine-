@@ -5,6 +5,11 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.6.3] — 2026-05-24
+
+### Corrigé
+- **Impossible de créer un 2ᵉ bassin** : le sélecteur (qui contient le bouton **＋ Bassin**) était caché tant qu'on n'avait qu'un seul bassin, pour faire « propre ». Effet de bord : aucune façon d'ajouter un autre bassin sans passer par la console. Le sélecteur est maintenant toujours affiché dès qu'au moins un bassin existe.
+
 ## [1.6.2] — 2026-05-23
 
 ### Corrigé

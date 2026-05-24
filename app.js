@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.6.2';
+const APP_VERSION = '1.6.3';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -2277,14 +2277,13 @@ function renderBassinSwitcher(){
   const bassins = getActiveBassins();
   const activeId = getActiveBassinId();
 
-  // N'affiche pas le switcher si un seul bassin et aucun archivé (UI propre tant qu'on n'en a qu'un)
-  const archived = getBassins().filter(b => b.archived).length;
-  if(bassins.length <= 1 && archived === 0){
+  // Pas de bassin du tout (avant wizard) : on cache
+  if(bassins.length === 0){
     wrap.style.display = 'none';
-    // Mais on peut quand même proposer d'ajouter un bassin via un mini-CTA
     wrap.innerHTML = '';
     return;
   }
+  // Sinon toujours affiché : on a besoin du bouton "+ Bassin" même avec un seul bassin
   wrap.style.display = 'flex';
 
   const chips = bassins.map(b => {
