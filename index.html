@@ -639,6 +639,16 @@
       grid-template-columns:repeat(auto-fill, minmax(360px, 1fr));
       gap:16px;
       align-items:start;
+      grid-auto-flow:dense; /* comble les trous après les éléments full-width */
+    }
+    /* Titre + sous-titre des pages occupent toute la largeur */
+    body.dashboard-view #page-historique.active > .page-title,
+    body.dashboard-view #page-historique.active > .page-sub,
+    body.dashboard-view #page-rappels.active > .page-title,
+    body.dashboard-view #page-rappels.active > .page-sub,
+    body.dashboard-view #page-contact.active > .page-title,
+    body.dashboard-view #page-contact.active > .page-sub{
+      grid-column:1 / -1;
     }
     body.dashboard-view #correctionContent > .card,
     body.dashboard-view #page-historique.active > .card,
