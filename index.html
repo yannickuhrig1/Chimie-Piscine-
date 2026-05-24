@@ -630,30 +630,36 @@
     }
     body.dashboard-view header{max-width:1280px}
 
-    /* Pages denses : grid auto-fill */
+    /* Pages denses : grid auto-fill — IMPORTANT : .active sinon display:grid casse l'isolation */
     body.dashboard-view #correctionContent,
-    body.dashboard-view #page-historique,
-    body.dashboard-view #page-rappels,
-    body.dashboard-view #page-contact{
+    body.dashboard-view #page-historique.active,
+    body.dashboard-view #page-rappels.active,
+    body.dashboard-view #page-contact.active{
       display:grid;
       grid-template-columns:repeat(auto-fill, minmax(360px, 1fr));
       gap:16px;
       align-items:start;
     }
     body.dashboard-view #correctionContent > .card,
-    body.dashboard-view #page-historique > .card,
-    body.dashboard-view #page-rappels > .card,
-    body.dashboard-view #page-contact > .card{
+    body.dashboard-view #page-historique.active > .card,
+    body.dashboard-view #page-rappels.active > .card,
+    body.dashboard-view #page-contact.active > .card{
       margin-bottom:0;
     }
     body.dashboard-view #weatherCard,
-    body.dashboard-view #page-rappels > .card[onclick*="openEducation"],
-    body.dashboard-view #page-historique > .divider,
-    body.dashboard-view #page-historique > #historyList{
+    body.dashboard-view #page-rappels.active > .card[onclick*="openEducation"],
+    body.dashboard-view #page-historique.active > .divider,
+    body.dashboard-view #page-historique.active > #historyList{
       grid-column:1 / -1;
     }
-    body.dashboard-view #page-historique > .card:has(.chart-wrap){
+    body.dashboard-view #page-historique.active > .card:has(.chart-wrap){
       grid-column:span 2;
+    }
+    /* Reminder-items et autres enfants non-card de page-rappels prennent toute la largeur */
+    body.dashboard-view #page-rappels.active > .divider,
+    body.dashboard-view #page-rappels.active > .reminder-item,
+    body.dashboard-view #page-rappels.active > .bassin-export-row{
+      grid-column:1 / -1;
     }
 
     /* Page Mesure : split layout (hérité via classe cockpit-view ajoutée en JS) */

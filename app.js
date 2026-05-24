@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.8.1-dashboard';
+const APP_VERSION = '1.8.2-dashboard';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
