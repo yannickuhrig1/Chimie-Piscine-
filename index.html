@@ -579,6 +579,103 @@
     body.cockpit-view #mesureLivePreview::-webkit-scrollbar{width:6px}
     body.cockpit-view #mesureLivePreview::-webkit-scrollbar-thumb{background:rgba(127,219,218,.2);border-radius:3px}
   }
+
+  /* ===== DASHBOARD VIEW (Plan D — sidebar + grid + cockpit) ===== */
+  @media (min-width: 1100px){
+    body.dashboard-view{
+      --sidebar-w: 220px;
+    }
+
+    /* Nav transformée en sidebar verticale */
+    body.dashboard-view nav.tabs{
+      position:fixed;
+      top:0; bottom:0; left:0; right:auto;
+      width:var(--sidebar-w);
+      padding:24px 14px;
+      background:linear-gradient(180deg, rgba(4,29,46,.92), rgba(2,14,26,.92));
+      border-right:1px solid var(--border);
+      overflow-y:auto;
+      display:flex; flex-direction:column;
+    }
+    body.dashboard-view nav.tabs::before{
+      content:'💧 Chimie Piscine';
+      display:block;
+      font-family:'Fraunces',serif;
+      font-size:15px; font-weight:600;
+      color:var(--shallow);
+      padding:0 14px 18px;
+      margin-bottom:8px;
+      border-bottom:1px solid var(--border);
+      letter-spacing:-.01em;
+    }
+    body.dashboard-view .tabs-inner{
+      background:transparent; backdrop-filter:none; -webkit-backdrop-filter:none;
+      border:none; box-shadow:none; border-radius:0; padding:0;
+      max-width:none;
+      display:flex; flex-direction:column; gap:4px;
+    }
+    body.dashboard-view .tab{
+      flex-direction:row; justify-content:flex-start;
+      gap:12px; padding:12px 14px;
+      font-size:13px; letter-spacing:.02em;
+      border-radius:10px; text-align:left;
+    }
+    body.dashboard-view .tab svg{width:18px;height:18px;flex-shrink:0}
+
+    /* Contenu décalé à droite de la sidebar */
+    body.dashboard-view .app{
+      margin-left:var(--sidebar-w);
+      max-width:none;
+      padding:32px 40px 60px;
+    }
+    body.dashboard-view header{max-width:1280px}
+
+    /* Pages denses : grid auto-fill */
+    body.dashboard-view #correctionContent,
+    body.dashboard-view #page-historique,
+    body.dashboard-view #page-rappels,
+    body.dashboard-view #page-contact{
+      display:grid;
+      grid-template-columns:repeat(auto-fill, minmax(360px, 1fr));
+      gap:16px;
+      align-items:start;
+    }
+    body.dashboard-view #correctionContent > .card,
+    body.dashboard-view #page-historique > .card,
+    body.dashboard-view #page-rappels > .card,
+    body.dashboard-view #page-contact > .card{
+      margin-bottom:0;
+    }
+    body.dashboard-view #weatherCard,
+    body.dashboard-view #page-rappels > .card[onclick*="openEducation"],
+    body.dashboard-view #page-historique > .divider,
+    body.dashboard-view #page-historique > #historyList{
+      grid-column:1 / -1;
+    }
+    body.dashboard-view #page-historique > .card:has(.chart-wrap){
+      grid-column:span 2;
+    }
+
+    /* Page Mesure : split layout (hérité via classe cockpit-view ajoutée en JS) */
+    /* Sticky preview header un peu plus bas pour ne pas toucher le top */
+
+    /* Toast et pill repositionnés à droite de la sidebar */
+    body.dashboard-view .toast,
+    body.dashboard-view .bassin-saved-pill{
+      left:calc(50% + var(--sidebar-w) / 2);
+    }
+
+    /* Modale bassin / éducation : un poil plus large */
+    body.dashboard-view .bassin-modal{max-width:600px}
+  }
+
+  /* Très large (≥ 1500px) : laisse respirer */
+  @media (min-width: 1500px){
+    body.dashboard-view .app{
+      max-width:1400px;
+      margin-left:max(var(--sidebar-w), calc(50% - 700px));
+    }
+  }
 </style>
 </head>
 <body>
@@ -1161,12 +1258,19 @@
 
     <div class="card" style="margin-top:14px">
       <div class="card-header">
-        <div class="card-title"><span class="dot" style="background:#a78bfa;box-shadow:0 0 10px #a78bfa"></span>Vue cockpit (PC)</div>
-        <label class="switch"><input type="checkbox" id="viewModeCockpit"><span class="switch-slider"></span></label>
+        <div class="card-title"><span class="dot" style="background:#a78bfa;box-shadow:0 0 10px #a78bfa"></span>Vue sur ordinateur</div>
       </div>
-      <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6">
-        Active la disposition 2 colonnes sur la page <strong>Mesures</strong> : saisie à gauche, aperçu live des doses à droite. Pour écran d'ordinateur (≥ 1000 px). Sans effet sur mobile.
+      <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6;margin-bottom:12px">
+        Choisis comment l'app s'affiche sur grand écran. Sans effet sur mobile.
       </p>
+      <div class="field">
+        <select id="desktopViewSelect">
+          <option value="standard">Standard — colonne centrée</option>
+          <option value="cockpit">Cockpit — split Mesure + aperçu live</option>
+          <option value="dashboard">Dashboard — sidebar gauche + grille</option>
+        </select>
+      </div>
+      <p style="font-size:11px;color:var(--shallow);opacity:.7;line-height:1.55;margin-top:8px" id="desktopViewHint"></p>
     </div>
 
     <div class="reminder-item">

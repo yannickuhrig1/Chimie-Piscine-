@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.8.0-cockpit';
+const APP_VERSION = '1.8.0-dashboard';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -43,14 +43,16 @@ function setDesktopViewMode(mode){
   applyDesktopViewMode();
 }
 function applyDesktopViewMode(){
-  const cockpit = getDesktopViewMode() === 'cockpit';
-  document.body.classList.toggle('cockpit-view', cockpit);
+  const mode = getDesktopViewMode();
+  const isCockpit = mode === 'cockpit' || mode === 'dashboard';
+  const isDashboard = mode === 'dashboard';
+  document.body.classList.toggle('cockpit-view', isCockpit);
+  document.body.classList.toggle('dashboard-view', isDashboard);
   const adv = document.getElementById('advCard');
-  if(adv && cockpit && window.matchMedia && window.matchMedia('(min-width: 1000px)').matches){
+  if(adv && isCockpit && window.matchMedia && window.matchMedia('(min-width: 1000px)').matches){
     adv.open = true;
   }
-  // Re-render le live preview si on vient d'activer la vue cockpit
-  if(cockpit && typeof renderCorrections === 'function'){
+  if(isCockpit && typeof renderCorrections === 'function'){
     const target = document.getElementById('liveCorrectionContent');
     if(target) renderCorrections(readInputs(), target);
   }
@@ -3499,12 +3501,23 @@ document.addEventListener('DOMContentLoaded', ()=>{
   });
   applyOptionalFieldsVisibility();
 
-  // Toggle "Vue cockpit (PC)"
-  const viewToggle = $('viewModeCockpit');
-  if(viewToggle){
-    viewToggle.checked = getDesktopViewMode() === 'cockpit';
-    viewToggle.addEventListener('change', () => {
-      setDesktopViewMode(viewToggle.checked ? 'cockpit' : 'standard');
+  // Sélecteur de vue PC (standard / cockpit / dashboard)
+  const viewSelect = $('desktopViewSelect');
+  const viewHint = $('desktopViewHint');
+  const HINTS = {
+    standard: 'Affichage classique — toutes les pages en une seule colonne centrée.',
+    cockpit: 'Sur la page Mesure, saisie à gauche et aperçu live des doses à droite. Mesures avancées dépliées.',
+    dashboard: 'Navigation en sidebar à gauche + cartes en grille sur Doses / Historique / Rappels / Contact + cockpit. À partir de 1100 px.'
+  };
+  function refreshViewHint(m){
+    if(viewHint) viewHint.textContent = HINTS[m] || '';
+  }
+  if(viewSelect){
+    viewSelect.value = getDesktopViewMode();
+    refreshViewHint(viewSelect.value);
+    viewSelect.addEventListener('change', () => {
+      setDesktopViewMode(viewSelect.value);
+      refreshViewHint(viewSelect.value);
     });
   }
   applyDesktopViewMode();
