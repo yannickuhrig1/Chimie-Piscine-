@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.6.6';
+const APP_VERSION = '1.6.7';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -152,8 +152,12 @@ function toast(msg,kind='ok',duration=2400){
 }
 function fmt(v,d=2){
   if(v===null||v===undefined||isNaN(v))return '—';
-  if(Math.abs(v)<0.01&&v!==0)return v.toExponential(2);
-  return Number(v.toFixed(d)).toLocaleString('fr-FR',{maximumFractionDigits:d});
+  if(v===0) return '0';
+  // Notation scientifique seulement si avec d décimales le résultat arrondirait à zéro
+  // (sinon on respecte le nombre de décimales demandé : fmt(0.003, 3) → "0,003")
+  const rounded = Number(v.toFixed(d));
+  if(rounded === 0) return v.toExponential(2);
+  return rounded.toLocaleString('fr-FR',{maximumFractionDigits:d});
 }
 function loadJSON(key,def){
   try{const v=localStorage.getItem(key);return v?JSON.parse(v):def}catch(e){return def}

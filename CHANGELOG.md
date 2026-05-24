@@ -5,6 +5,11 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.6.7] — 2026-05-24
+
+### Corrigé
+- **Notation scientifique cryptique** (ex. « 2.76e-3 ppm » sur le HOCl) remplacée par du décimal classique (« 0,003 ppm »). La fonction `fmt()` ne bascule désormais en exponentielle que si la valeur est si petite qu'avec le nombre de décimales demandé elle s'afficherait `0` — sinon elle respecte les décimales (utile pour `fmt(0.003, 3)` qui rendait avant `3.00e-3` au lieu de `0,003`).
+
 ## [1.6.6] — 2026-05-24
 
 ### Modifié
