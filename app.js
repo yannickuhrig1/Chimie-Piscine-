@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.7.1';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -2727,10 +2727,51 @@ async function geolocateBassinFromModal(){
     if(r){
       btn.innerHTML = `✓ Météo activée — ${escapeHtml(r.ville)} <span style="opacity:.6;font-size:12px">(modifier pour mettre à jour)</span>`;
     } else {
-      btn.innerHTML = '📍 Activer la météo locale <span style="opacity:.6;font-size:12px">— prévisions T° / UV / pluie</span>';
+      btn.innerHTML = '📍 Activer la météo locale <span style="opacity:.6;font-size:12px">— GPS du navigateur</span>';
     }
   }
   renderWeatherCard();
+}
+
+// Recherche par ville / code postal via Open-Meteo geocoding (gratuit, sans clé)
+async function setBassinGeoFromAddress(){
+  if(!_bassinModalEditingId) return;
+  const input = $('bassinManualVille');
+  const searchBtn = $('bassinGeoSearchBtn');
+  const geoBtn = $('bassinGeoBtn');
+  const q = (input?.value || '').trim();
+  if(!q){ toast('Saisis une ville ou un code postal', 'warn'); return; }
+  if(searchBtn){ searchBtn.disabled = true; searchBtn.textContent = '⏳'; }
+  try{
+    const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1&language=fr&format=json`;
+    const r = await fetch(url);
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    if(!j.results || !j.results[0]){
+      toast('Adresse introuvable — essaie une ville plus grande', 'warn');
+      return;
+    }
+    const it = j.results[0];
+    const ville = it.name
+      + (it.admin1 ? ', ' + it.admin1 : '')
+      + (it.country_code && it.country_code !== 'FR' ? ' (' + it.country_code + ')' : '');
+    updateBassin(_bassinModalEditingId, {config: {geo: {lat: it.latitude, lon: it.longitude, ville}}});
+    // Purge le cache météo pour ce bassin (nouvelle position)
+    const cacheAll = loadJSON(WEATHER_CACHE_KEY, {});
+    delete cacheAll[_bassinModalEditingId];
+    saveJSON(WEATHER_CACHE_KEY, cacheAll);
+    if(geoBtn){
+      geoBtn.innerHTML = `✓ Météo activée — ${escapeHtml(ville)} <span style="opacity:.6;font-size:12px">(modifier pour mettre à jour)</span>`;
+    }
+    if(input) input.value = '';
+    toast(`Météo activée pour ${ville}`);
+    renderWeatherCard();
+  }catch(e){
+    console.warn('Geocoding failed', e);
+    toast('Recherche impossible — vérifie ta connexion', 'warn');
+  }finally{
+    if(searchBtn){ searchBtn.disabled = false; searchBtn.textContent = 'Chercher'; }
+  }
 }
 
 async function generateShareCodeForBassin(){

@@ -647,8 +647,14 @@
         <label style="margin-bottom:8px">Actions</label>
         <div style="display:flex;flex-direction:column;gap:8px">
           <button onclick="geolocateBassinFromModal()" class="btn-ghost" style="text-align:left;padding:10px 12px" id="bassinGeoBtn">
-            📍 Activer la météo locale <span style="opacity:.6;font-size:12px">— prévisions T° / UV / pluie</span>
+            📍 Activer la météo locale <span style="opacity:.6;font-size:12px">— GPS du navigateur</span>
           </button>
+          <div style="display:flex;gap:6px;align-items:stretch;padding:0 2px">
+            <input type="text" id="bassinManualVille" placeholder="Ou saisir une ville / code postal"
+              style="flex:1;padding:8px 10px;font-size:13px;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-family:inherit;box-sizing:border-box"
+              onkeydown="if(event.key==='Enter'){event.preventDefault();setBassinGeoFromAddress()}">
+            <button class="btn-ghost" onclick="setBassinGeoFromAddress()" style="padding:8px 14px;font-size:13px;width:auto;flex:0 0 auto" id="bassinGeoSearchBtn">Chercher</button>
+          </div>
           <button onclick="generateShareCodeForBassin()" class="btn-ghost" style="text-align:left;padding:10px 12px">
             🔗 Générer un code de partage <span style="opacity:.6;font-size:12px">— transférer ce bassin à un autre appareil</span>
           </button>

@@ -5,6 +5,11 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.7.1] — 2026-05-24
+
+### Ajouté
+- **Saisie manuelle de la ville pour la météo** : sous le bouton GPS dans la modale d'édition du bassin, un champ texte « Ou saisir une ville / code postal » + bouton **Chercher**. Utile quand le GPS du navigateur est refusé / imprécis, ou pour suivre la météo d'un bassin distant. Géocoding via Open-Meteo (gratuit, sans clé). Entrée clavier supporte la touche Entrée.
+
 ## [1.7.0] — 2026-05-24
 
 ### Ajouté
