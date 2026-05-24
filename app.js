@@ -3,15 +3,35 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.7.1';
+const APP_VERSION = '1.7.2';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
   reminders: 'cp_reminders_v1',
   lastInputs: 'cp_last_inputs_v1',
   bassins: 'cp_bassins_v1',
-  activeBassin: 'cp_active_bassin_id'
+  activeBassin: 'cp_active_bassin_id',
+  optionalFields: 'cp_optional_fields_v1'
 };
+
+// Champs avancés activables/désactivables depuis Paramètres
+const DEFAULT_OPTIONAL_FIELDS = {sel: true, th: true, phosphate: true, brome: true};
+function getOptionalFields(){
+  return Object.assign({}, DEFAULT_OPTIONAL_FIELDS, loadJSON(STORAGE_KEYS.optionalFields, {}));
+}
+function setOptionalField(key, enabled){
+  const cur = getOptionalFields();
+  cur[key] = !!enabled;
+  saveJSON(STORAGE_KEYS.optionalFields, cur);
+  applyOptionalFieldsVisibility();
+}
+function applyOptionalFieldsVisibility(){
+  const cfg = getOptionalFields();
+  document.querySelectorAll('[data-optional-field]').forEach(el => {
+    const key = el.dataset.optionalField;
+    el.style.display = cfg[key] === false ? 'none' : '';
+  });
+}
 
 // ============== Multi-bassins ==============
 // Palette de couleurs auto-assignées aux nouveaux bassins
@@ -572,6 +592,7 @@ function switchTab(name){
 // ============== Saisie & Sauvegarde ==============
 function readInputs(){
   const modeEl = $('modeDesinf');
+  const opt = getOptionalFields();
   return {
     volume: num('volume'),
     ph: num('phMesure'),
@@ -583,12 +604,12 @@ function readInputs(){
     cya: num('cya'),
     // Mesures avancées
     temp: num('temp'),
-    sel: num('selMesure'),
-    selSouhaite: num('selSouhaite'),
-    th: num('thMesure'),
-    thSouhaite: num('thSouhaite'),
-    phosphate: num('phosphate'),
-    brome: num('brome'),
+    sel: opt.sel === false ? null : num('selMesure'),
+    selSouhaite: opt.sel === false ? null : num('selSouhaite'),
+    th: opt.th === false ? null : num('thMesure'),
+    thSouhaite: opt.th === false ? null : num('thSouhaite'),
+    phosphate: opt.phosphate === false ? null : num('phosphate'),
+    brome: opt.brome === false ? null : num('brome'),
     modeDesinf: modeEl ? modeEl.value : 'chlore',
     date: new Date().toISOString()
   };
@@ -3445,6 +3466,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
   // Met à jour le badge si données pré-saisies
   const m = readInputs();
   if(m.fcl!==null && m.tcl!==null) updateCclBadge(m);
+
+  // Toggles "Champs avancés affichés" — init + listeners
+  ['sel','th','phosphate','brome'].forEach(k => {
+    const cb = $('optField_' + k);
+    if(!cb) return;
+    cb.checked = getOptionalFields()[k] !== false;
+    cb.addEventListener('change', () => setOptionalField(k, cb.checked));
+  });
+  applyOptionalFieldsVisibility();
 
   // Auto-save sur les paramètres bassin (debounced via input event)
   ['volume','phSouhaite','tacSouhaite','cya','selSouhaite','thSouhaite'].forEach(id => {
