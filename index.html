@@ -857,7 +857,7 @@
           </div>
         </div>
 
-        <div class="field-row">
+        <div class="field-row" data-optional-field="sel">
           <div class="field">
             <label>Sel mesuré</label>
             <div class="input-wrap">
@@ -874,7 +874,7 @@
           </div>
         </div>
 
-        <div class="field-row">
+        <div class="field-row" data-optional-field="th">
           <div class="field">
             <label>TH mesuré</label>
             <div class="input-wrap">
@@ -892,14 +892,14 @@
         </div>
 
         <div class="field-row">
-          <div class="field">
+          <div class="field" data-optional-field="phosphate">
             <label>Phosphates</label>
             <div class="input-wrap">
               <input type="number" id="phosphate" step="10" placeholder="200" inputmode="decimal">
               <span class="input-unit">ppb</span>
             </div>
           </div>
-          <div class="field">
+          <div class="field" data-optional-field="brome">
             <label>Brome mesuré</label>
             <div class="input-wrap">
               <input type="number" id="brome" step="0.1" placeholder="2.5" inputmode="decimal">
@@ -1126,6 +1126,33 @@
       <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6">
         Petit « ? » à côté des champs de mesure avec une explication. Pratique au début, désactivable une fois rodé.
       </p>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="card-header">
+        <div class="card-title"><span class="dot"></span>Champs avancés affichés</div>
+      </div>
+      <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6;margin-bottom:12px">
+        Cache les mesures que tu n'utilises pas pour alléger la saisie.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;cursor:pointer">
+          <span>Sel <span style="opacity:.6;font-size:12px">(électrolyse)</span></span>
+          <span class="switch"><input type="checkbox" id="optField_sel"><span class="switch-slider"></span></span>
+        </label>
+        <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;cursor:pointer">
+          <span>TH <span style="opacity:.6;font-size:12px">(dureté)</span></span>
+          <span class="switch"><input type="checkbox" id="optField_th"><span class="switch-slider"></span></span>
+        </label>
+        <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;cursor:pointer">
+          <span>Phosphates</span>
+          <span class="switch"><input type="checkbox" id="optField_phosphate"><span class="switch-slider"></span></span>
+        </label>
+        <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;cursor:pointer">
+          <span>Brome <span style="opacity:.6;font-size:12px">(alternative au chlore)</span></span>
+          <span class="switch"><input type="checkbox" id="optField_brome"><span class="switch-slider"></span></span>
+        </label>
+      </div>
     </div>
 
     <div class="reminder-item">
