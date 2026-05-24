@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.8.0-desktop-split';
+const APP_VERSION = '1.8.0-cockpit';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -31,6 +31,29 @@ function applyOptionalFieldsVisibility(){
     const key = el.dataset.optionalField;
     el.style.display = cfg[key] === false ? 'none' : '';
   });
+}
+
+// Mode d'affichage desktop (standard vs cockpit/split-view)
+const VIEW_MODE_KEY = 'cp_desktop_view_v1';
+function getDesktopViewMode(){
+  return localStorage.getItem(VIEW_MODE_KEY) || 'standard';
+}
+function setDesktopViewMode(mode){
+  localStorage.setItem(VIEW_MODE_KEY, mode);
+  applyDesktopViewMode();
+}
+function applyDesktopViewMode(){
+  const cockpit = getDesktopViewMode() === 'cockpit';
+  document.body.classList.toggle('cockpit-view', cockpit);
+  const adv = document.getElementById('advCard');
+  if(adv && cockpit && window.matchMedia && window.matchMedia('(min-width: 1000px)').matches){
+    adv.open = true;
+  }
+  // Re-render le live preview si on vient d'activer la vue cockpit
+  if(cockpit && typeof renderCorrections === 'function'){
+    const target = document.getElementById('liveCorrectionContent');
+    if(target) renderCorrections(readInputs(), target);
+  }
 }
 
 // ============== Multi-bassins ==============
@@ -3475,6 +3498,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
     cb.addEventListener('change', () => setOptionalField(k, cb.checked));
   });
   applyOptionalFieldsVisibility();
+
+  // Toggle "Vue cockpit (PC)"
+  const viewToggle = $('viewModeCockpit');
+  if(viewToggle){
+    viewToggle.checked = getDesktopViewMode() === 'cockpit';
+    viewToggle.addEventListener('change', () => {
+      setDesktopViewMode(viewToggle.checked ? 'cockpit' : 'standard');
+    });
+  }
+  applyDesktopViewMode();
 
   // Auto-save sur les paramètres bassin (debounced via input event)
   ['volume','phSouhaite','tacSouhaite','cya','selSouhaite','thSouhaite'].forEach(id => {

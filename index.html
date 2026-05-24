@@ -507,24 +507,30 @@
   .install-banner .ib-text{flex:1;font-size:12px}
   .install-banner button{padding:8px 14px;font-size:12px;background:var(--lemon);color:var(--abyss)}
 
-  /* ===== Mobile : aperçu live caché ===== */
+  /* ===== Aperçu live caché par défaut (toujours sur mobile, opt-in sur PC) ===== */
   #mesureLivePreview{display:none}
 
-  /* ===== DESKTOP LAYOUT (Plan C — split view) ===== */
+  /* ===== DESKTOP LAYOUT (Plan C — split view opt-in via Paramètres) ===== */
   @media (min-width: 1000px){
+    /* Largeur élargie sur PC, vue standard centrée */
     .app{max-width:1200px;padding:32px 32px 0}
     .tabs-inner{max-width:680px}
     .page-title{font-size:38px}
     .page-sub{font-size:14px;margin-bottom:24px}
 
-    /* Split view sur la page Mesure */
-    #mesureLayout{
+    body:not(.cockpit-view) #page-mesure{
+      max-width:680px;
+      margin:0 auto;
+    }
+
+    /* Vue cockpit : split layout activé */
+    body.cockpit-view #mesureLayout{
       display:grid;
       grid-template-columns: minmax(360px, 1fr) minmax(360px, 1fr);
       gap:24px;
       align-items:start;
     }
-    #mesureLivePreview{
+    body.cockpit-view #mesureLivePreview{
       display:block;
       position:sticky;
       top:24px;
@@ -538,7 +544,7 @@
       -webkit-backdrop-filter:blur(20px) saturate(150%);
       box-shadow:var(--shadow);
     }
-    .live-preview-header{
+    body.cockpit-view .live-preview-header{
       font-family:'Fraunces',serif;
       font-size:17px;
       color:var(--foam);
@@ -549,7 +555,7 @@
       padding-bottom:12px;
       border-bottom:1px solid var(--border);
     }
-    .live-preview-hint{
+    body.cockpit-view .live-preview-hint{
       margin-left:auto;
       font-family:'Manrope',sans-serif;
       font-size:11px;
@@ -557,8 +563,7 @@
       color:var(--shallow);
       opacity:.7;
     }
-    /* Cartes dans le panneau : style plus discret */
-    #liveCorrectionContent .card{
+    body.cockpit-view #liveCorrectionContent .card{
       padding:14px;
       margin-bottom:10px;
       border-radius:14px;
@@ -566,14 +571,13 @@
       border:1px solid rgba(255,255,255,.05);
       box-shadow:none;
     }
-    #liveCorrectionContent .card::before{display:none}
-    #liveCorrectionContent .card-header{margin-bottom:10px}
-    #liveCorrectionContent .card-title{font-size:15px}
-    #liveCorrectionContent .empty{padding:30px 16px}
-    #liveCorrectionContent .empty p{font-size:13px}
-    /* Scrollbar discrète */
-    #mesureLivePreview::-webkit-scrollbar{width:6px}
-    #mesureLivePreview::-webkit-scrollbar-thumb{background:rgba(127,219,218,.2);border-radius:3px}
+    body.cockpit-view #liveCorrectionContent .card::before{display:none}
+    body.cockpit-view #liveCorrectionContent .card-header{margin-bottom:10px}
+    body.cockpit-view #liveCorrectionContent .card-title{font-size:15px}
+    body.cockpit-view #liveCorrectionContent .empty{padding:30px 16px}
+    body.cockpit-view #liveCorrectionContent .empty p{font-size:13px}
+    body.cockpit-view #mesureLivePreview::-webkit-scrollbar{width:6px}
+    body.cockpit-view #mesureLivePreview::-webkit-scrollbar-thumb{background:rgba(127,219,218,.2);border-radius:3px}
   }
 </style>
 </head>
@@ -1153,6 +1157,16 @@
           <span class="switch"><input type="checkbox" id="optField_brome"><span class="switch-slider"></span></span>
         </label>
       </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="card-header">
+        <div class="card-title"><span class="dot" style="background:#a78bfa;box-shadow:0 0 10px #a78bfa"></span>Vue cockpit (PC)</div>
+        <label class="switch"><input type="checkbox" id="viewModeCockpit"><span class="switch-slider"></span></label>
+      </div>
+      <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6">
+        Active la disposition 2 colonnes sur la page <strong>Mesures</strong> : saisie à gauche, aperçu live des doses à droite. Pour écran d'ordinateur (≥ 1000 px). Sans effet sur mobile.
+      </p>
     </div>
 
     <div class="reminder-item">
