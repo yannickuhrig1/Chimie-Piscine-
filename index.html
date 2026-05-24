@@ -506,6 +506,81 @@
   .install-banner svg{flex-shrink:0;color:var(--lemon)}
   .install-banner .ib-text{flex:1;font-size:12px}
   .install-banner button{padding:8px 14px;font-size:12px;background:var(--lemon);color:var(--abyss)}
+
+  /* ===== DESKTOP LAYOUT (Plan B — grid auto-fill) ===== */
+  @media (min-width: 900px){
+    .app{max-width:1200px;padding:32px 32px 0}
+    .tabs-inner{max-width:680px}
+    .page-title{font-size:38px}
+    .page-sub{font-size:14px;margin-bottom:24px}
+
+    /* Header s'étale sur la largeur */
+    header{margin-bottom:30px}
+
+    /* Bassin switcher pleine largeur, plus aéré */
+    .bassin-switcher{margin-bottom:22px;padding:10px 14px}
+
+    /* Pages denses : auto-fill grid (cartes en colonnes) */
+    #correctionContent,
+    #page-historique,
+    #page-rappels,
+    #page-contact{
+      display:grid;
+      grid-template-columns:repeat(auto-fill, minmax(360px, 1fr));
+      gap:16px;
+      align-items:start;
+    }
+    /* Pas de margin-bottom dans le grid (le gap s'en charge) */
+    #correctionContent > .card,
+    #page-historique > .card,
+    #page-rappels > .card,
+    #page-contact > .card{
+      margin-bottom:0;
+    }
+
+    /* Cartes "pleine largeur" : météo, éducation banner, divider, liste historique */
+    #weatherCard,
+    #page-rappels > .card[onclick*="openEducation"],
+    #page-historique > .divider,
+    #page-historique > #historyList{
+      grid-column:1 / -1;
+    }
+
+    /* Charts : 2 par ligne sur desktop pour rester lisibles */
+    #page-historique > .card:has(.chart-wrap){
+      grid-column:span 2;
+    }
+    /* La carte Tendances reste en 1 colonne */
+
+    /* Page mesure : single column centrée, un peu plus large */
+    #page-mesure{
+      max-width:680px;
+      margin:0 auto;
+    }
+
+    /* Page admin : single column centrée */
+    #page-admin{
+      max-width:780px;
+      margin:0 auto;
+    }
+
+    /* Modale bassin plus large */
+    .bassin-modal{max-width:560px}
+
+    /* Modale éducation et histDetail aussi */
+    #histDetailOverlay > div,
+    #eduOverlay > div{
+      max-width:780px !important;
+    }
+  }
+
+  /* ===== Très large (≥ 1400px) : 3-4 colonnes max ===== */
+  @media (min-width: 1400px){
+    .app{max-width:1320px}
+    #page-historique > .card:has(.chart-wrap){
+      grid-column:span 2;
+    }
+  }
 </style>
 </head>
 <body>
