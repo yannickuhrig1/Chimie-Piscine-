@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.9.1-spa';
+const APP_VERSION = '1.9.2';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -342,6 +342,19 @@ function calcSel(volume, selMesure, selSouhaite){
     return {action:'ok', delta:0, kg:0};
   }
   return {action:'ajout', delta, kg: delta * volume};
+}
+
+/**
+ * Acide cyanurique (stabilisant / CYA) à ajouter pour atteindre la cible
+ * 1 g de CYA pur dans 1 m³ d'eau ≈ 1 ppm. Le CYA ne s'élimine pas (sauf dilution).
+ * Au-delà de cyaSouhaite + 10, on ne propose pas d'ajout (gestion via vidange — computeDrainActions).
+ */
+function calcCYA(volume, cyaMesure, cyaSouhaite){
+  if(volume == null || cyaSouhaite == null) return null;
+  const actuel = cyaMesure ?? 0;
+  const delta = cyaSouhaite - actuel;
+  if(delta <= 0) return {action:'ok', delta:0, g:0};
+  return {action:'ajout', delta, g: delta * volume};
 }
 
 /**
@@ -1164,6 +1177,33 @@ function renderCorrections(measurement, targetContainer){
         <div class="result ok">
           <div class="result-label">Dureté correcte</div>
           <div class="result-note">TH ${fmt(m.th,0)} °f conforme à la cible (${fmt(cible,0)} °f).</div>
+        </div>
+      </div>`;
+    }
+  }
+
+  // ===== CYA (stabilisant) — ajout uniquement, la vidange est gérée par computeDrainActions =====
+  if((m.cyaSouhaite !== null || m.cya !== null) && m.cya !== null && m.cya <= 40){
+    const cible = m.cyaSouhaite ?? 30;
+    const c = calcCYA(m.volume, m.cya, cible);
+    if(c && c.action === 'ajout' && c.g >= 5){
+      html += `<div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="dot"></span>Apport stabilisant (CYA)</div>
+          <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">Cible ${fmt(cible,0)} ppm</span>
+        </div>
+        <div class="result">
+          <div class="result-label">Acide cyanurique à ajouter</div>
+          <div class="result-value">${fmt(c.g, 0)}<span class="unit">g</span></div>
+          <div class="result-note">Δ +${fmt(c.delta,0)} ppm · Verser les granulés dans le panier du skimmer, filtration en marche · dissolution complète sous 2–5 jours.</div>
+        </div>
+      </div>`;
+    } else if(c && c.action === 'ok' && m.cya !== null){
+      html += `<div class="card">
+        <div class="card-header"><div class="card-title"><span class="dot"></span>CYA</div></div>
+        <div class="result ok">
+          <div class="result-label">Stabilisant correct</div>
+          <div class="result-note">${fmt(m.cya,0)} ppm conforme à la cible (${fmt(cible,0)} ppm).</div>
         </div>
       </div>`;
     }
