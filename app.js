@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.9.5';
+const APP_VERSION = '1.9.6';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -3658,16 +3658,19 @@ document.addEventListener('DOMContentLoaded', ()=>{
   }
 });
 
-// ============== Theme mode (standard / spa) ==============
+// ============== Theme mode (standard / spa / glass) ==============
 const THEME_MODE_KEY = 'cp_theme_mode_v1';
+const THEME_MODES = ['standard','spa','glass'];
 function getThemeMode(){
   const v = localStorage.getItem(THEME_MODE_KEY);
-  return (v === 'spa') ? 'spa' : 'standard';
+  return THEME_MODES.includes(v) ? v : 'standard';
 }
 function setThemeMode(m){
-  m = (m === 'spa') ? 'spa' : 'standard';
+  m = THEME_MODES.includes(m) ? m : 'standard';
   localStorage.setItem(THEME_MODE_KEY, m);
-  document.body.classList.toggle('theme-spa', m === 'spa');
+  document.body.classList.remove('theme-spa','theme-glass');
+  if(m === 'spa') document.body.classList.add('theme-spa');
+  else if(m === 'glass') document.body.classList.add('theme-glass');
 }
 
 // ============== Eyebrow date (mode spa uniquement) ==============

@@ -793,10 +793,148 @@
     body.cockpit-view header{max-width:1280px}
     /* L'aperçu live / split-view existant continue de fonctionner */
   }
+
+  /* ============================================================
+     THEME GLASS — Apple Premium (opt-in via body.theme-glass)
+     Minimaliste, blur 40px, accents bleu/violet, typo sans-serif tight
+     ============================================================ */
+  body.theme-glass{
+    --glass-accent:#5eb3ff;
+    --glass-accent-2:#7c5cff;
+    --glass-text:#f5f7fa;
+    --glass-text-muted:rgba(245,247,250,.55);
+    --glass-text-faint:rgba(245,247,250,.32);
+    --glass-bg-soft:rgba(255,255,255,.06);
+    --glass-bg-hover:rgba(255,255,255,.09);
+    --glass-border-soft:rgba(255,255,255,.10);
+    font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Inter','Manrope',system-ui,sans-serif;
+    letter-spacing:-.01em;
+    -webkit-font-smoothing:antialiased;
+    background-image:
+      radial-gradient(ellipse 1000px 600px at 15% -10%, rgba(94,179,255,.18), transparent 60%),
+      radial-gradient(ellipse 800px 500px at 90% 100%, rgba(124,92,255,.14), transparent 60%),
+      linear-gradient(180deg, #040b1c 0%, #0a1832 50%, #0f2042 100%);
+  }
+  body.theme-glass::before{opacity:.05}
+  body.theme-glass .caustics{display:none}
+
+  body.theme-glass .page-eyebrow{display:none}
+  body.theme-glass .page-title{
+    font-family:-apple-system,'Inter',system-ui,sans-serif;
+    font-size:32px;font-weight:600;letter-spacing:-.025em;line-height:1.1;
+    color:var(--glass-text);
+  }
+  body.theme-glass .page-title em{
+    font-style:normal;color:var(--shallow);font-weight:600;
+  }
+  body.theme-glass .page-lede,
+  body.theme-glass .page-sub{
+    font-size:14px;color:var(--glass-text-muted);line-height:1.55;
+  }
+
+  body.theme-glass .card{
+    background:var(--glass-bg-soft);
+    border:1px solid var(--glass-border-soft);
+    border-radius:24px;
+    padding:24px;
+    backdrop-filter:blur(40px) saturate(140%);
+    -webkit-backdrop-filter:blur(40px) saturate(140%);
+    box-shadow:0 4px 16px -4px rgba(0,0,0,.3);
+  }
+  body.theme-glass .card::before{
+    background:linear-gradient(90deg,transparent,rgba(94,179,255,.4),transparent);
+  }
+  body.theme-glass .card-title{
+    font-family:-apple-system,'Inter',system-ui,sans-serif;
+    font-size:14px;font-weight:600;letter-spacing:-.005em;color:var(--glass-text);
+  }
+  body.theme-glass .card-title .dot{
+    background:var(--glass-accent);box-shadow:0 0 10px var(--glass-accent);
+  }
+
+  body.theme-glass input[type="number"],
+  body.theme-glass input[type="text"],
+  body.theme-glass input[type="email"],
+  body.theme-glass input[type="datetime-local"],
+  body.theme-glass select,
+  body.theme-glass textarea{
+    background:rgba(0,0,0,.18);
+    border:1px solid rgba(255,255,255,.06);
+    border-radius:14px;
+    padding:14px 44px 14px 16px;
+    color:var(--glass-text);
+    font-family:-apple-system,'Inter',system-ui,sans-serif;
+    font-size:18px;font-weight:500;letter-spacing:-.01em;
+    font-feature-settings:'tnum';
+  }
+  body.theme-glass input:focus,
+  body.theme-glass select:focus,
+  body.theme-glass textarea:focus{
+    border-color:rgba(94,179,255,.5);
+    background:rgba(0,0,0,.3);
+    box-shadow:0 0 0 4px rgba(94,179,255,.12);
+  }
+  body.theme-glass label{
+    font-size:11px;color:var(--glass-text-faint);
+    font-weight:500;text-transform:uppercase;letter-spacing:.06em;
+  }
+  body.theme-glass .input-unit{
+    color:var(--glass-text-faint);
+    font-family:-apple-system,'Inter',system-ui,sans-serif;
+    font-size:12px;font-weight:500;
+  }
+
+  body.theme-glass .btn-primary{
+    background:linear-gradient(180deg,#6cbbff,#3a8ee6);
+    box-shadow:0 8px 24px -8px rgba(94,179,255,.5), inset 0 1px 0 rgba(255,255,255,.2);
+    border-radius:14px;letter-spacing:-.005em;
+  }
+  body.theme-glass .tab.active{
+    background:linear-gradient(180deg,#6cbbff,#3a8ee6);
+    box-shadow:0 4px 14px -4px rgba(94,179,255,.5);
+  }
+
+  /* Result blocks : valeurs un peu plus tight */
+  body.theme-glass .result-value{
+    font-family:-apple-system,'Inter',system-ui,sans-serif;
+    letter-spacing:-.025em;font-weight:600;
+  }
+
+  @media (min-width:1000px){
+    /* Sidebar cockpit en theme glass */
+    body.theme-glass.cockpit-view nav.tabs{
+      background:linear-gradient(180deg, rgba(8,18,36,.85), rgba(4,11,28,.75));
+      border-right-color:rgba(255,255,255,.06);
+    }
+    body.theme-glass.cockpit-view nav.tabs::before{
+      content:'◉ Chimie Piscine';
+      font-family:-apple-system,'Inter',system-ui,sans-serif;
+      color:var(--glass-text);font-weight:600;letter-spacing:-.015em;
+    }
+    body.theme-glass.cockpit-view .tab.active{
+      background:rgba(94,179,255,.14);
+      box-shadow:inset 3px 0 0 var(--glass-accent);
+    }
+
+    /* Layout 2-col aussi en theme-glass + cockpit (réutilise le pattern spa) */
+    body.theme-glass.cockpit-view #page-mesure #mesureLayout{
+      display:grid;grid-template-columns:minmax(420px,1fr) minmax(360px,440px);
+      gap:32px;align-items:start;
+    }
+    body.theme-glass.cockpit-view #page-mesure #mesureInputs{display:flex;flex-direction:column;gap:18px}
+    body.theme-glass.cockpit-view #page-mesure #mesureLivePreview{
+      display:block;position:sticky;top:24px;
+      background:var(--glass-bg-soft);
+      border:1px solid var(--glass-border-soft);border-radius:24px;
+      padding:24px;backdrop-filter:blur(40px) saturate(140%);
+    }
+    body.theme-glass .app{max-width:1180px;padding:32px 40px 0}
+    body.theme-glass .page-title{font-size:38px}
+  }
 </style>
 </head>
 <body>
-<script>try{if(localStorage.getItem('cp_theme_mode_v1')==='spa')document.body.classList.add('theme-spa')}catch(e){}</script>
+<script>try{const t=localStorage.getItem('cp_theme_mode_v1');if(t==='spa')document.body.classList.add('theme-spa');else if(t==='glass')document.body.classList.add('theme-glass');}catch(e){}</script>
 <div class="caustics"></div>
 
 <div class="app">
@@ -1405,6 +1543,7 @@
         <select id="themeModeSelect">
           <option value="standard">Standard — interface compacte (par défaut)</option>
           <option value="spa">Spa premium — typo serif, valeurs en grand format</option>
+          <option value="glass">Apple / Glass — minimal, blur premium</option>
         </select>
       </div>
     </div>
