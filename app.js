@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.9.2';
+const APP_VERSION = '1.9.3';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -501,11 +501,14 @@ function computeDrainActions(m){
     if(actuel == null || actuel <= cible) return null;
     return (actuel - cible) / actuel * m.volume;
   };
-  // CYA : cible utilisateur ou défaut 30 ppm (au-delà de 40, le chlore devient inefficace)
-  if(m.cya != null && m.cya > 40){
+  // CYA : vidange si on dépasse la cible utilisateur de plus de 5 ppm, OU au-delà de 40 (seuil critique).
+  // Le CYA ne se dégrade pas (sauf dilution), donc dès qu'on dépasse durablement la cible, faut vidanger.
+  if(m.cya != null){
     const cible = m.cyaSouhaite ?? 30;
-    const vol = computeDrain(m.cya, cible);
-    if(vol > 0.5) out.push({label:'CYA trop haut', actuel:m.cya, cible, unit:'ppm', volume:vol});
+    if(m.cya > cible + 5 || m.cya > 40){
+      const vol = computeDrain(m.cya, cible);
+      if(vol > 0.5) out.push({label:'CYA trop haut', actuel:m.cya, cible, unit:'ppm', volume:vol});
+    }
   }
   // Sel : cible 4 g/L (au-delà de 5, électrolyseur encrassé + risque corrosion)
   if(m.sel != null && m.sel > 5){
@@ -1182,8 +1185,8 @@ function renderCorrections(measurement, targetContainer){
     }
   }
 
-  // ===== CYA (stabilisant) — ajout uniquement, la vidange est gérée par computeDrainActions =====
-  if((m.cyaSouhaite !== null || m.cya !== null) && m.cya !== null && m.cya <= 40){
+  // ===== CYA (stabilisant) — ajout si trop bas ; vidange gérée par computeDrainActions =====
+  if(m.cya !== null){
     const cible = m.cyaSouhaite ?? 30;
     const c = calcCYA(m.volume, m.cya, cible);
     if(c && c.action === 'ajout' && c.g >= 5){
@@ -1198,7 +1201,9 @@ function renderCorrections(measurement, targetContainer){
           <div class="result-note">Δ +${fmt(c.delta,0)} ppm · Verser les granulés dans le panier du skimmer, filtration en marche · dissolution complète sous 2–5 jours.</div>
         </div>
       </div>`;
-    } else if(c && c.action === 'ok' && m.cya !== null){
+    } else if(c && c.action === 'ok' && m.cya >= cible - 5 && m.cya <= cible + 5){
+      // "Correct" affiché uniquement quand on est proche de la cible (±5 ppm).
+      // Au-dessus, la carte vidange (computeDrainActions) prend le relais.
       html += `<div class="card">
         <div class="card-header"><div class="card-title"><span class="dot"></span>CYA</div></div>
         <div class="result ok">
