@@ -590,69 +590,68 @@
 
   /* ============================================================
      REDESIGN SPA — Aquatic Premium (v1.9.0-spa)
-     Refonte typographique et tactile, sans casser les pages existantes
+     OPT-IN via body.theme-spa (sélectionnable dans Rappels → Apparence)
      ============================================================ */
 
-  /* Background ré-équilibré : moins de bruit, plus de profondeur */
-  body{
+  /* Hide eyebrow en mode standard, fallback style page-lede */
+  body:not(.theme-spa) .page-eyebrow{display:none}
+  body:not(.theme-spa) .page-lede{font-size:13px;color:var(--shallow);opacity:.75;margin-bottom:20px}
+
+  /* === Mode SPA actif === */
+  body.theme-spa{
     background-image:
       radial-gradient(ellipse 70% 50% at 80% -5%, rgba(127,219,218,.18), transparent 60%),
       radial-gradient(ellipse 60% 40% at 10% 100%, rgba(255,140,97,.10), transparent 60%),
       linear-gradient(165deg, var(--abyss) 0%, #072a44 35%, #0a3d62 80%);
   }
-  body::before{opacity:.25}
-  .caustics{opacity:.06}
+  body.theme-spa::before{opacity:.25}
+  body.theme-spa .caustics{opacity:.06}
 
-  /* App container : largeur fluide jusqu'à desktop */
-  .app{max-width:560px}
+  body.theme-spa .app{max-width:560px}
 
-  /* === Eyebrow (date / context line) === */
-  .page-eyebrow{
+  body.theme-spa .page-eyebrow{
     font-family:'Fraunces',serif;font-style:italic;
     color:var(--coral-warm);font-size:13.5px;font-weight:400;
     margin-bottom:8px;display:flex;align-items:center;gap:10px;
     letter-spacing:.005em;
   }
-  .page-eyebrow::before{
+  body.theme-spa .page-eyebrow::before{
     content:'';display:block;width:28px;height:1px;
     background:var(--coral-warm);opacity:.65;
   }
 
-  /* === Titres amplifiés === */
-  .page-title{font-size:38px;font-weight:500;letter-spacing:-.03em;line-height:1.02;margin-bottom:8px}
-  .page-title em{color:var(--shallow)}
-  .page-lede{
+  body.theme-spa .page-title{font-size:38px;font-weight:500;letter-spacing:-.03em;line-height:1.02;margin-bottom:8px}
+  body.theme-spa .page-title em{color:var(--shallow)}
+  body.theme-spa .page-lede{
     font-size:14.5px;color:var(--text-muted);line-height:1.55;
     max-width:540px;margin-bottom:24px;
   }
 
-  /* === Carte Mesure : trait haut + intérieur épuré === */
-  #page-mesure .card{
+  body.theme-spa #page-mesure .card{
     background:var(--glass-soft);
     border:1px solid var(--border-soft);
     border-radius:18px;padding:22px 20px;
     box-shadow:var(--shadow-soft);
   }
-  #page-mesure .card::before{
+  body.theme-spa #page-mesure .card::before{
     background:linear-gradient(90deg,transparent,rgba(127,219,218,.5),transparent);
   }
-  #page-mesure .card-header{
+  body.theme-spa #page-mesure .card-header{
     margin-bottom:18px;padding-bottom:12px;
     border-bottom:1px dashed rgba(249,247,243,.07);
     align-items:baseline;
   }
-  #page-mesure .card-title{font-size:21px;font-weight:500}
-  #page-mesure .card-title .dot{
+  body.theme-spa #page-mesure .card-title{font-size:21px;font-weight:500}
+  body.theme-spa #page-mesure .card-title .dot{
     width:5px;height:5px;background:var(--shallow);box-shadow:0 0 8px var(--shallow);
   }
 
-  /* === Inputs Mesure : style "papier", grande valeur serif === */
-  #page-mesure .field{margin-bottom:0}
-  #page-mesure label{
+  body.theme-spa #page-mesure .field{margin-bottom:0}
+  body.theme-spa #page-mesure label{
     font-size:10px;color:var(--shallow);letter-spacing:.14em;
     opacity:.95;margin-bottom:8px;font-weight:500;
   }
-  #page-mesure input[type="number"]{
+  body.theme-spa #page-mesure input[type="number"]{
     background:transparent;
     border:none;
     border-bottom:1.5px solid rgba(127,219,218,.22);
@@ -663,85 +662,78 @@
     font-size:32px;font-weight:500;letter-spacing:-.02em;
     font-feature-settings:'tnum';
   }
-  #page-mesure input[type="number"]:focus{
+  body.theme-spa #page-mesure input[type="number"]:focus{
     background:transparent;
     border-bottom-color:var(--coral-warm);
     box-shadow:0 1px 0 0 var(--coral-warm);
   }
-  #page-mesure input[type="number"]::placeholder{
+  body.theme-spa #page-mesure input[type="number"]::placeholder{
     color:rgba(127,219,218,.32);font-weight:400;
   }
-  #page-mesure .input-unit{
+  body.theme-spa #page-mesure .input-unit{
     right:2px;top:auto;bottom:14px;transform:none;
     font-family:'Fraunces',serif;font-style:italic;font-size:13px;
     color:var(--text-faint);letter-spacing:0;
   }
-  #page-mesure select{
+  body.theme-spa #page-mesure select{
     background:rgba(4,29,46,.35);
     border:1px solid var(--border-soft);
     border-radius:12px;padding:12px 38px 12px 14px;
     color:var(--nacre);font-family:'Manrope',sans-serif;font-size:14px;
     font-weight:500;
   }
-  #page-mesure .field-row{gap:18px}
+  body.theme-spa #page-mesure .field-row{gap:18px}
 
-  /* === Details / Mesures avancées : header plus sobre === */
-  #page-mesure details.card > summary{padding:4px 0}
-  #page-mesure details.card[open] > summary{padding-bottom:4px}
+  body.theme-spa #page-mesure details.card > summary{padding:4px 0}
+  body.theme-spa #page-mesure details.card[open] > summary{padding-bottom:4px}
 
-  /* === Sticky Live Preview (desktop seulement) === */
   @media (min-width:1000px){
-    .app{max-width:1180px;padding:32px 40px 0}
-    .page-title{font-size:52px;letter-spacing:-.035em}
-    .page-eyebrow{font-size:14.5px}
-    .page-lede{font-size:15px}
+    body.theme-spa .app{max-width:1180px;padding:32px 40px 0}
+    body.theme-spa .page-title{font-size:52px;letter-spacing:-.035em}
+    body.theme-spa .page-eyebrow{font-size:14.5px}
+    body.theme-spa .page-lede{font-size:15px}
 
-    /* Layout 2 colonnes sur Mesure (desktop spa par défaut) */
-    body:not(.cockpit-view) #page-mesure #mesureLayout{
+    body.theme-spa:not(.cockpit-view) #page-mesure #mesureLayout{
       display:grid;grid-template-columns:minmax(420px, 1fr) minmax(360px, 440px);
       gap:32px;align-items:start;
     }
-    body:not(.cockpit-view) #page-mesure #mesureInputs{display:flex;flex-direction:column;gap:18px}
-    body:not(.cockpit-view) #page-mesure #mesureLivePreview{
+    body.theme-spa:not(.cockpit-view) #page-mesure #mesureInputs{display:flex;flex-direction:column;gap:18px}
+    body.theme-spa:not(.cockpit-view) #page-mesure #mesureLivePreview{
       display:block;position:sticky;top:24px;
       background:linear-gradient(165deg, rgba(127,219,218,.06), rgba(4,29,46,.4));
       border:1px solid var(--border-soft);border-radius:20px;padding:24px;
     }
-    body:not(.cockpit-view) #page-mesure .live-preview-header{
+    body.theme-spa:not(.cockpit-view) #page-mesure .live-preview-header{
       display:flex;align-items:baseline;gap:10px;
       padding-bottom:14px;margin-bottom:14px;
       border-bottom:1px dashed rgba(249,247,243,.07);
     }
-    body:not(.cockpit-view) #page-mesure .live-preview-header strong{
+    body.theme-spa:not(.cockpit-view) #page-mesure .live-preview-header strong{
       font-family:'Fraunces',serif;font-size:20px;font-weight:500;letter-spacing:-.015em;
     }
-    body:not(.cockpit-view) #page-mesure .live-preview-hint{
+    body.theme-spa:not(.cockpit-view) #page-mesure .live-preview-hint{
       font-family:'Fraunces',serif;font-style:italic;font-size:11.5px;
       color:var(--text-faint);margin-left:auto;
     }
 
-    /* Sidebar nav verticale fixée (en plus du bottom tab existant) */
-    /* On ne touche pas la nav.tabs, elle reste bottom partout pour cohérence */
-
-    /* Cards desktop : un peu plus aérées */
-    #page-mesure .card{padding:26px 24px;border-radius:20px}
-    #page-mesure .card-title{font-size:23px}
-    #page-mesure input[type="number"]{font-size:34px}
+    body.theme-spa #page-mesure .card{padding:26px 24px;border-radius:20px}
+    body.theme-spa #page-mesure .card-title{font-size:23px}
+    body.theme-spa #page-mesure input[type="number"]{font-size:34px}
   }
 
-  /* === Mobile polish (< 640px) === */
   @media (max-width:640px){
-    .page-title{font-size:34px}
-    .page-eyebrow{font-size:12.5px}
-    .page-eyebrow::before{width:22px}
-    .page-lede{font-size:14px}
-    #page-mesure .card{padding:20px 18px}
-    #page-mesure .card-title{font-size:19px}
-    #page-mesure input[type="number"]{font-size:28px}
+    body.theme-spa .page-title{font-size:34px}
+    body.theme-spa .page-eyebrow{font-size:12.5px}
+    body.theme-spa .page-eyebrow::before{width:22px}
+    body.theme-spa .page-lede{font-size:14px}
+    body.theme-spa #page-mesure .card{padding:20px 18px}
+    body.theme-spa #page-mesure .card-title{font-size:19px}
+    body.theme-spa #page-mesure input[type="number"]{font-size:28px}
   }
 </style>
 </head>
 <body>
+<script>try{if(localStorage.getItem('cp_theme_mode_v1')==='spa')document.body.classList.add('theme-spa')}catch(e){}</script>
 <div class="caustics"></div>
 
 <div class="app">
@@ -1007,7 +999,7 @@
     </div>
 
     <!-- Mesures avancées : sel, calcium, phosphates, brome, température -->
-    <details class="card" id="advCard">
+    <details class="card" id="advCard" open>
       <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">
         <div class="card-title"><span class="dot" style="background:var(--lemon);box-shadow:0 0 10px var(--lemon)"></span>Mesures avancées</div>
         <span style="font-size:11px;color:var(--shallow);opacity:.7">Sel · TH · PO₄ · Brome · T°</span>
@@ -1346,6 +1338,21 @@
       <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6">
         Active la disposition 2 colonnes sur la page <strong>Mesures</strong> : saisie à gauche, aperçu live des doses à droite. Pour écran d'ordinateur (≥ 1000 px). Sans effet sur mobile.
       </p>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="card-header">
+        <div class="card-title"><span class="dot" style="background:var(--coral-warm);box-shadow:0 0 10px var(--coral-warm)"></span>Apparence</div>
+      </div>
+      <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6;margin-bottom:12px">
+        Choisis l'identité visuelle de l'app. Le redesign <strong>Spa premium</strong> repense la typographie (Fraunces serif), les inputs en style "papier" et ajoute un éveil de date sur chaque page.
+      </p>
+      <div class="field">
+        <select id="themeModeSelect">
+          <option value="standard">Standard — interface compacte (par défaut)</option>
+          <option value="spa">Spa premium — typo serif, valeurs en grand format</option>
+        </select>
+      </div>
     </div>
 
     <div class="reminder-item">
