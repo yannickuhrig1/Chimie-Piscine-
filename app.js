@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.8.1';
+const APP_VERSION = '1.9.0-spa';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -3613,4 +3613,20 @@ document.addEventListener('DOMContentLoaded', ()=>{
       });
     });
   }
+});
+
+// ============== Eyebrow date (redesign spa) ==============
+document.addEventListener('DOMContentLoaded', () => {
+  const eb = document.getElementById('todayEyebrow');
+  if(!eb) return;
+  function refreshEyebrow(){
+    const now = new Date();
+    const days = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+    const day = days[now.getDay()];
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    eb.textContent = `${day} · ${h} h ${m}`;
+  }
+  refreshEyebrow();
+  setInterval(refreshEyebrow, 60_000);
 });

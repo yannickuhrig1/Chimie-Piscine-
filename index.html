@@ -24,14 +24,22 @@
     --shallow:#7fdbda;
     --foam:#e8f9f8;
     --sand:#f4ead5;
+    --nacre:#f9f7f3;
     --coral:#ff6b6b;
+    --coral-warm:#ff8c61;
+    --coral-soft:#ffb38a;
     --lemon:#ffd166;
     --leaf:#06d6a0;
     --ink:#0d2436;
     --glass:rgba(255,255,255,.08);
     --glass-strong:rgba(255,255,255,.14);
+    --glass-soft:rgba(249,247,243,.045);
     --border:rgba(127,219,218,.18);
+    --border-soft:rgba(249,247,243,.1);
     --shadow:0 20px 60px -20px rgba(4,29,46,.6);
+    --shadow-soft:0 8px 24px -8px rgba(4,29,46,.4);
+    --text-muted:rgba(232,249,248,.65);
+    --text-faint:rgba(232,249,248,.4);
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   html{height:100%;overscroll-behavior-y:none}
@@ -579,6 +587,158 @@
     body.cockpit-view #mesureLivePreview::-webkit-scrollbar{width:6px}
     body.cockpit-view #mesureLivePreview::-webkit-scrollbar-thumb{background:rgba(127,219,218,.2);border-radius:3px}
   }
+
+  /* ============================================================
+     REDESIGN SPA — Aquatic Premium (v1.9.0-spa)
+     Refonte typographique et tactile, sans casser les pages existantes
+     ============================================================ */
+
+  /* Background ré-équilibré : moins de bruit, plus de profondeur */
+  body{
+    background-image:
+      radial-gradient(ellipse 70% 50% at 80% -5%, rgba(127,219,218,.18), transparent 60%),
+      radial-gradient(ellipse 60% 40% at 10% 100%, rgba(255,140,97,.10), transparent 60%),
+      linear-gradient(165deg, var(--abyss) 0%, #072a44 35%, #0a3d62 80%);
+  }
+  body::before{opacity:.25}
+  .caustics{opacity:.06}
+
+  /* App container : largeur fluide jusqu'à desktop */
+  .app{max-width:560px}
+
+  /* === Eyebrow (date / context line) === */
+  .page-eyebrow{
+    font-family:'Fraunces',serif;font-style:italic;
+    color:var(--coral-warm);font-size:13.5px;font-weight:400;
+    margin-bottom:8px;display:flex;align-items:center;gap:10px;
+    letter-spacing:.005em;
+  }
+  .page-eyebrow::before{
+    content:'';display:block;width:28px;height:1px;
+    background:var(--coral-warm);opacity:.65;
+  }
+
+  /* === Titres amplifiés === */
+  .page-title{font-size:38px;font-weight:500;letter-spacing:-.03em;line-height:1.02;margin-bottom:8px}
+  .page-title em{color:var(--shallow)}
+  .page-lede{
+    font-size:14.5px;color:var(--text-muted);line-height:1.55;
+    max-width:540px;margin-bottom:24px;
+  }
+
+  /* === Carte Mesure : trait haut + intérieur épuré === */
+  #page-mesure .card{
+    background:var(--glass-soft);
+    border:1px solid var(--border-soft);
+    border-radius:18px;padding:22px 20px;
+    box-shadow:var(--shadow-soft);
+  }
+  #page-mesure .card::before{
+    background:linear-gradient(90deg,transparent,rgba(127,219,218,.5),transparent);
+  }
+  #page-mesure .card-header{
+    margin-bottom:18px;padding-bottom:12px;
+    border-bottom:1px dashed rgba(249,247,243,.07);
+    align-items:baseline;
+  }
+  #page-mesure .card-title{font-size:21px;font-weight:500}
+  #page-mesure .card-title .dot{
+    width:5px;height:5px;background:var(--shallow);box-shadow:0 0 8px var(--shallow);
+  }
+
+  /* === Inputs Mesure : style "papier", grande valeur serif === */
+  #page-mesure .field{margin-bottom:0}
+  #page-mesure label{
+    font-size:10px;color:var(--shallow);letter-spacing:.14em;
+    opacity:.95;margin-bottom:8px;font-weight:500;
+  }
+  #page-mesure input[type="number"]{
+    background:transparent;
+    border:none;
+    border-bottom:1.5px solid rgba(127,219,218,.22);
+    border-radius:0;
+    padding:4px 36px 10px 0;
+    color:var(--nacre);
+    font-family:'Fraunces',serif;
+    font-size:32px;font-weight:500;letter-spacing:-.02em;
+    font-feature-settings:'tnum';
+  }
+  #page-mesure input[type="number"]:focus{
+    background:transparent;
+    border-bottom-color:var(--coral-warm);
+    box-shadow:0 1px 0 0 var(--coral-warm);
+  }
+  #page-mesure input[type="number"]::placeholder{
+    color:rgba(127,219,218,.32);font-weight:400;
+  }
+  #page-mesure .input-unit{
+    right:2px;top:auto;bottom:14px;transform:none;
+    font-family:'Fraunces',serif;font-style:italic;font-size:13px;
+    color:var(--text-faint);letter-spacing:0;
+  }
+  #page-mesure select{
+    background:rgba(4,29,46,.35);
+    border:1px solid var(--border-soft);
+    border-radius:12px;padding:12px 38px 12px 14px;
+    color:var(--nacre);font-family:'Manrope',sans-serif;font-size:14px;
+    font-weight:500;
+  }
+  #page-mesure .field-row{gap:18px}
+
+  /* === Details / Mesures avancées : header plus sobre === */
+  #page-mesure details.card > summary{padding:4px 0}
+  #page-mesure details.card[open] > summary{padding-bottom:4px}
+
+  /* === Sticky Live Preview (desktop seulement) === */
+  @media (min-width:1000px){
+    .app{max-width:1180px;padding:32px 40px 0}
+    .page-title{font-size:52px;letter-spacing:-.035em}
+    .page-eyebrow{font-size:14.5px}
+    .page-lede{font-size:15px}
+
+    /* Layout 2 colonnes sur Mesure (desktop spa par défaut) */
+    body:not(.cockpit-view) #page-mesure #mesureLayout{
+      display:grid;grid-template-columns:minmax(420px, 1fr) minmax(360px, 440px);
+      gap:32px;align-items:start;
+    }
+    body:not(.cockpit-view) #page-mesure #mesureInputs{display:flex;flex-direction:column;gap:18px}
+    body:not(.cockpit-view) #page-mesure #mesureLivePreview{
+      display:block;position:sticky;top:24px;
+      background:linear-gradient(165deg, rgba(127,219,218,.06), rgba(4,29,46,.4));
+      border:1px solid var(--border-soft);border-radius:20px;padding:24px;
+    }
+    body:not(.cockpit-view) #page-mesure .live-preview-header{
+      display:flex;align-items:baseline;gap:10px;
+      padding-bottom:14px;margin-bottom:14px;
+      border-bottom:1px dashed rgba(249,247,243,.07);
+    }
+    body:not(.cockpit-view) #page-mesure .live-preview-header strong{
+      font-family:'Fraunces',serif;font-size:20px;font-weight:500;letter-spacing:-.015em;
+    }
+    body:not(.cockpit-view) #page-mesure .live-preview-hint{
+      font-family:'Fraunces',serif;font-style:italic;font-size:11.5px;
+      color:var(--text-faint);margin-left:auto;
+    }
+
+    /* Sidebar nav verticale fixée (en plus du bottom tab existant) */
+    /* On ne touche pas la nav.tabs, elle reste bottom partout pour cohérence */
+
+    /* Cards desktop : un peu plus aérées */
+    #page-mesure .card{padding:26px 24px;border-radius:20px}
+    #page-mesure .card-title{font-size:23px}
+    #page-mesure input[type="number"]{font-size:34px}
+  }
+
+  /* === Mobile polish (< 640px) === */
+  @media (max-width:640px){
+    .page-title{font-size:34px}
+    .page-eyebrow{font-size:12.5px}
+    .page-eyebrow::before{width:22px}
+    .page-lede{font-size:14px}
+    #page-mesure .card{padding:20px 18px}
+    #page-mesure .card-title{font-size:19px}
+    #page-mesure input[type="number"]{font-size:28px}
+  }
 </style>
 </head>
 <body>
@@ -745,8 +905,9 @@
 
   <!-- =================== MESURE =================== -->
   <div class="page active" id="page-mesure">
+    <div class="page-eyebrow" id="todayEyebrow">Aujourd'hui</div>
     <h1 class="page-title">Mesures <em>du jour</em></h1>
-    <p class="page-sub">Saisis tes relevés pour calculer les corrections</p>
+    <p class="page-lede">Saisis tes relevés. Les corrections se calculent en direct selon ton bassin, ton mode de désinfection et la température.</p>
 
     <div id="mesureLayout">
     <div id="mesureInputs">
