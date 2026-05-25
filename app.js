@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.8.1';
+const APP_VERSION = '1.9.1-spa';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -3613,4 +3613,39 @@ document.addEventListener('DOMContentLoaded', ()=>{
       });
     });
   }
+});
+
+// ============== Theme mode (standard / spa) ==============
+const THEME_MODE_KEY = 'cp_theme_mode_v1';
+function getThemeMode(){
+  const v = localStorage.getItem(THEME_MODE_KEY);
+  return (v === 'spa') ? 'spa' : 'standard';
+}
+function setThemeMode(m){
+  m = (m === 'spa') ? 'spa' : 'standard';
+  localStorage.setItem(THEME_MODE_KEY, m);
+  document.body.classList.toggle('theme-spa', m === 'spa');
+}
+
+// ============== Eyebrow date (mode spa uniquement) ==============
+document.addEventListener('DOMContentLoaded', () => {
+  // Sélecteur de thème dans Rappels → Apparence
+  const sel = document.getElementById('themeModeSelect');
+  if(sel){
+    sel.value = getThemeMode();
+    sel.addEventListener('change', () => setThemeMode(sel.value));
+  }
+  // Eyebrow date (toutes pages — le CSS le masque en mode standard)
+  const eb = document.getElementById('todayEyebrow');
+  if(!eb) return;
+  function refreshEyebrow(){
+    const now = new Date();
+    const days = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+    const day = days[now.getDay()];
+    const h = String(now.getHours()).padStart(2,'0');
+    const m = String(now.getMinutes()).padStart(2,'0');
+    eb.textContent = `${day} · ${h} h ${m}`;
+  }
+  refreshEyebrow();
+  setInterval(refreshEyebrow, 60_000);
 });
