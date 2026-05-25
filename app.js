@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.9.3';
+const APP_VERSION = '1.9.4';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -670,7 +670,7 @@ function loadLastInputs(){
   setVal('thSouhaite','thSouhaite');
   if(last.modeDesinf && $('modeDesinf')) $('modeDesinf').value = last.modeDesinf;
   // Synchronise aussi les champs miroir de la page Rappels
-  ['cfgVolume','cfgPhSouhaite','cfgTacSouhaite','cfgCya','cfgCyaSouhaite','cfgSelSouhaite','cfgThSouhaite'].forEach(id => {
+  ['cfgVolume','cfgPhSouhaite','cfgTacSouhaite','cfgCyaSouhaite','cfgSelSouhaite','cfgThSouhaite'].forEach(id => {
     const el = $(id);
     if(!el) return;
     const key = id.replace('cfg','').replace(/^[A-Z]/, c=>c.toLowerCase());
@@ -713,7 +713,7 @@ function autoSaveBassinParams(){
     if(Object.keys(cfgPatch).length) updateBassin(activeId, {config: cfgPatch});
   }
   // Synchronise les champs miroir de la page Rappels
-  const mirror = {volume:'cfgVolume', phSouhaite:'cfgPhSouhaite', tacSouhaite:'cfgTacSouhaite', cya:'cfgCya', cyaSouhaite:'cfgCyaSouhaite', selSouhaite:'cfgSelSouhaite', thSouhaite:'cfgThSouhaite'};
+  const mirror = {volume:'cfgVolume', phSouhaite:'cfgPhSouhaite', tacSouhaite:'cfgTacSouhaite', cyaSouhaite:'cfgCyaSouhaite', selSouhaite:'cfgSelSouhaite', thSouhaite:'cfgThSouhaite'};
   Object.entries(mirror).forEach(([k, id]) => {
     if(next[k] !== null && $(id)) $(id).value = next[k];
   });
@@ -726,7 +726,6 @@ function saveBassinConfigFromRappels(){
     volume: parseFloat($('cfgVolume').value) || null,
     phSouhaite: parseFloat($('cfgPhSouhaite').value) || null,
     tacSouhaite: parseFloat($('cfgTacSouhaite').value) || null,
-    cya: parseFloat($('cfgCya').value) || null,
     cyaSouhaite: parseFloat($('cfgCyaSouhaite').value) || null,
     selSouhaite: parseFloat($('cfgSelSouhaite').value) || null,
     thSouhaite: parseFloat($('cfgThSouhaite').value) || null,
@@ -775,7 +774,6 @@ function applyBassinConfigToInputs(bassin){
   setVal('cfgVolume', c.volume);
   setVal('cfgPhSouhaite', c.phSouhaite);
   setVal('cfgTacSouhaite', c.tacSouhaite);
-  setVal('cfgCya', c.cya);
   setVal('cfgCyaSouhaite', c.cyaSouhaite);
   setVal('cfgSelSouhaite', c.selSouhaite);
   setVal('cfgThSouhaite', c.thSouhaite);
