@@ -931,6 +931,43 @@
     body.theme-glass .app{max-width:1180px;padding:32px 40px 0}
     body.theme-glass .page-title{font-size:38px}
   }
+
+  /* Mini-menu d'ancres sticky en haut de la page Paramètres */
+  .params-anchors{
+    position:sticky;top:0;z-index:50;
+    display:flex;gap:8px;
+    padding:10px 16px;margin:0 -16px 14px;
+    background:rgba(2,12,26,.78);
+    backdrop-filter:blur(12px) saturate(180%);
+    -webkit-backdrop-filter:blur(12px) saturate(180%);
+    border-bottom:1px solid var(--border);
+    overflow-x:auto;
+    scrollbar-width:none;
+  }
+  .params-anchors::-webkit-scrollbar{display:none}
+  .params-anchors a{
+    flex-shrink:0;
+    padding:6px 12px;font-size:12px;font-weight:500;
+    color:var(--shallow);text-decoration:none;
+    border-radius:99px;
+    background:rgba(255,255,255,.04);
+    border:1px solid transparent;
+    white-space:nowrap;
+    transition:background .15s,color .15s,border-color .15s;
+  }
+  .params-anchors a:hover,.params-anchors a:focus{
+    background:rgba(127,219,218,.14);
+    color:var(--foam);
+    border-color:rgba(127,219,218,.35);
+    outline:none;
+  }
+  .params-anchors a.is-current{
+    background:rgba(127,219,218,.18);
+    color:var(--foam);
+    border-color:rgba(127,219,218,.5);
+  }
+  /* Compense la sticky-bar lors d'un scrollIntoView */
+  #page-parametres [id^="sec-"]{scroll-margin-top:72px}
 </style>
 </head>
 <body>
@@ -1396,23 +1433,23 @@
     <div id="historyList"></div>
   </div>
 
-  <!-- =================== RAPPELS =================== -->
-  <div class="page" id="page-rappels">
-    <h1 class="page-title">Rappels <em>de contrôle</em></h1>
-    <p class="page-sub">Programme tes notifications</p>
+  <!-- =================== APPRENDRE =================== -->
+  <div class="page" id="page-apprendre">
+    <h1 class="page-title">Apprendre <em>la chimie de l'eau</em></h1>
+    <p class="page-sub">Articles courts et fiches imprimables</p>
 
     <div class="card" onclick="openEducation()" style="cursor:pointer;background:linear-gradient(135deg,rgba(127,212,210,.10),rgba(127,212,210,.04));border:1px solid rgba(127,212,210,.25)">
       <div style="display:flex;align-items:center;gap:14px">
         <div style="font-size:32px">📘</div>
         <div style="flex:1">
           <div style="font-weight:600;color:#fff;margin-bottom:4px">Apprendre la chimie de l'eau</div>
-          <div style="font-size:13px;color:var(--shallow);opacity:.85;line-height:1.5">6 articles courts pour comprendre les paramètres, les traitements, les saisons et les urgences.</div>
+          <div style="font-size:13px;color:var(--shallow);opacity:.85;line-height:1.5">7 articles courts pour comprendre les paramètres, les traitements, les saisons et les urgences.</div>
         </div>
         <div style="color:#7fd4d2;font-size:20px">→</div>
       </div>
     </div>
 
-    <a href="fiches.html" style="text-decoration:none;color:inherit;display:block">
+    <a href="fiches.html" style="text-decoration:none;color:inherit;display:block;margin-top:14px">
       <div class="card" style="cursor:pointer;background:linear-gradient(135deg,rgba(34,180,212,.12),rgba(127,212,210,.04));border:1px solid rgba(34,180,212,.28)">
         <div style="display:flex;align-items:center;gap:14px">
           <div style="font-size:32px">📄</div>
@@ -1425,7 +1462,24 @@
       </div>
     </a>
 
-    <div class="divider">Configurer mon bassin</div>
+    <p style="font-size:12px;color:var(--shallow);opacity:.7;line-height:1.6;margin-top:18px;text-align:center">
+      Les notifications et rappels de contrôle se règlent dans <button type="button" class="admin-link" onclick="switchTab('parametres');setTimeout(()=>{const e=document.getElementById('sec-rappels');if(e)e.scrollIntoView({behavior:'smooth'})},100)" style="padding:2px 6px"><strong>Paramètres → Rappels</strong></button>.
+    </p>
+  </div>
+
+  <!-- =================== PARAMÈTRES =================== -->
+  <div class="page" id="page-parametres">
+    <h1 class="page-title">Paramètres <em>&amp; configuration</em></h1>
+    <p class="page-sub">Tout ce qui ne se mesure pas tous les jours</p>
+
+    <nav class="params-anchors" aria-label="Sections des paramètres">
+      <a href="#sec-bassin" onclick="paramScrollTo(event,'sec-bassin')">📌 Bassin</a>
+      <a href="#sec-affichage" onclick="paramScrollTo(event,'sec-affichage')">🎨 Affichage</a>
+      <a href="#sec-rappels" onclick="paramScrollTo(event,'sec-rappels')">🔔 Rappels</a>
+      <a href="#sec-donnees" onclick="paramScrollTo(event,'sec-donnees')">💾 Données</a>
+    </nav>
+
+    <div class="divider" id="sec-bassin">Configurer mon bassin</div>
     <div class="card">
       <div class="card-header">
         <div class="card-title"><span class="dot"></span>Paramètres permanents</div>
@@ -1471,8 +1525,16 @@
           <span class="input-unit">ppm</span>
         </div>
       </div>
+      <div class="field">
+        <label>Mode désinfection par défaut</label>
+        <select id="cfgModeDesinf">
+          <option value="chlore" selected>Chlore</option>
+          <option value="brome">Brome</option>
+          <option value="sel">Électrolyse au sel</option>
+        </select>
+      </div>
       <details style="margin:6px 0 12px">
-        <summary style="cursor:pointer;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--shallow);opacity:.85">Cibles avancées (sel · TH · phosphates)</summary>
+        <summary style="cursor:pointer;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--shallow);opacity:.85">Cibles avancées (sel · TH)</summary>
         <div style="margin-top:10px">
           <div class="field-row">
             <div class="field">
@@ -1490,34 +1552,14 @@
               </div>
             </div>
           </div>
-          <div class="field">
-            <label>Mode désinfection par défaut</label>
-            <select id="cfgModeDesinf">
-              <option value="chlore" selected>Chlore</option>
-              <option value="brome">Brome</option>
-              <option value="sel">Électrolyse au sel</option>
-            </select>
-          </div>
         </div>
       </details>
       <button class="btn-primary" onclick="saveBassinConfigFromRappels()">Configurer mon bassin</button>
     </div>
 
-    <div class="divider">Notifications</div>
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title"><span class="dot"></span>Notifications</div>
-        <div style="display:flex;gap:6px">
-          <button id="enableNotifBtn" class="btn-ghost" style="padding:6px 12px;font-size:11px;width:auto">Activer</button>
-          <button id="testNotifBtn" class="btn-ghost" style="padding:6px 12px;font-size:11px;width:auto;display:none">Tester</button>
-        </div>
-      </div>
-      <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6">
-        Active les notifications du navigateur pour recevoir tes rappels de contrôle directement sur ton appareil.
-      </p>
-    </div>
+    <div class="divider" id="sec-affichage">Affichage</div>
 
-    <div class="card" style="margin-top:14px">
+    <div class="card">
       <div class="card-header">
         <div class="card-title"><span class="dot"></span>Aides contextuelles</div>
         <label class="switch"><input type="checkbox" id="hintsToggle"><span class="switch-slider"></span></label>
@@ -1532,7 +1574,7 @@
         <div class="card-title"><span class="dot"></span>Champs avancés affichés</div>
       </div>
       <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6;margin-bottom:12px">
-        Cache les mesures que tu n'utilises pas pour alléger la saisie.
+        Sel et brome sont auto-masqués selon le <strong>mode désinfection</strong>. Tu peux forcer leur affichage ici.
       </p>
       <div style="display:flex;flex-direction:column;gap:10px">
         <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;cursor:pointer">
@@ -1580,6 +1622,21 @@
       </div>
     </div>
 
+    <div class="divider" id="sec-rappels">Rappels &amp; notifications</div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="dot"></span>Notifications</div>
+        <div style="display:flex;gap:6px">
+          <button id="enableNotifBtn" class="btn-ghost" style="padding:6px 12px;font-size:11px;width:auto">Activer</button>
+          <button id="testNotifBtn" class="btn-ghost" style="padding:6px 12px;font-size:11px;width:auto;display:none">Tester</button>
+        </div>
+      </div>
+      <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6">
+        Active les notifications du navigateur pour recevoir tes rappels de contrôle directement sur ton appareil.
+      </p>
+    </div>
+
     <div class="reminder-item">
       <div class="reminder-icon">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2L4 5v6.09c0 5.05 3.41 9.76 8 10.91 4.59-1.15 8-5.86 8-10.91V5l-8-3z"/></svg>
@@ -1613,9 +1670,10 @@
       <label class="switch"><input type="checkbox" id="reminderFilter"><span class="switch-slider"></span></label>
     </div>
 
-    <div class="divider">Réglages horaires</div>
-
-    <div class="card">
+    <div class="card" style="margin-top:14px">
+      <div class="card-header">
+        <div class="card-title"><span class="dot"></span>Réglages horaires</div>
+      </div>
       <div class="field">
         <label>Heure du rappel quotidien</label>
         <input type="time" id="dailyTime" value="09:00">
@@ -1627,18 +1685,37 @@
       <button class="btn-primary" onclick="saveReminders()">Enregistrer les rappels</button>
     </div>
 
-    <div class="divider">Sauvegarde cloud</div>
+    <div class="divider" id="sec-donnees">Données &amp; sauvegarde</div>
+
     <div class="card">
       <div id="backupContent"></div>
     </div>
 
-    <div class="divider">Données</div>
-    <div class="btn-row">
-      <button class="btn-ghost" onclick="exportData()">Exporter (JSON)</button>
-      <button class="btn-ghost" onclick="document.getElementById('importFile').click()">Importer</button>
+    <div class="card" style="margin-top:14px">
+      <div class="card-header">
+        <div class="card-title"><span class="dot"></span>Export &amp; import</div>
+      </div>
+      <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6;margin-bottom:12px">
+        Sauvegarde manuelle locale ou transfert vers un autre appareil.
+      </p>
+      <div class="btn-row">
+        <button class="btn-ghost" onclick="exportData()">Exporter (JSON)</button>
+        <button class="btn-ghost" onclick="document.getElementById('importFile').click()">Importer</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(event)">
+      <button class="btn-ghost" style="width:100%;margin-top:8px;color:var(--coral)" onclick="confirmReset()">Tout effacer</button>
     </div>
-    <input type="file" id="importFile" accept="application/json" style="display:none" onchange="importData(event)">
-    <button class="btn-ghost" style="width:100%;margin-top:8px;color:var(--coral)" onclick="confirmReset()">Tout effacer</button>
+
+    <div class="card" style="margin-top:14px" onclick="switchTab('contact')" tabindex="0" role="button">
+      <div style="display:flex;align-items:center;gap:14px;cursor:pointer">
+        <div style="font-size:28px">✉️</div>
+        <div style="flex:1">
+          <div style="font-weight:600;color:#fff;margin-bottom:4px">Contacter le support</div>
+          <div style="font-size:13px;color:var(--shallow);opacity:.85;line-height:1.5">Question, bug, suggestion — ou rejoindre SOS Piscine V3.</div>
+        </div>
+        <div style="color:#7fd4d2;font-size:20px">→</div>
+      </div>
+    </div>
   </div>
 
   <!-- =================== CONTACT =================== -->
@@ -1753,13 +1830,13 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
       Historique
     </button>
-    <button class="tab" data-page="rappels" onclick="switchTab('rappels')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
-      Rappels
+    <button class="tab" data-page="apprendre" onclick="switchTab('apprendre')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+      Apprendre
     </button>
-    <button class="tab" data-page="contact" onclick="switchTab('contact')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-      Contact
+    <button class="tab" data-page="parametres" onclick="switchTab('parametres')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+      Paramètres
     </button>
   </div>
 </nav>

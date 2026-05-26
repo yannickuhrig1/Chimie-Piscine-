@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '1.12.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -31,6 +31,38 @@ function applyOptionalFieldsVisibility(){
     const key = el.dataset.optionalField;
     el.style.display = cfg[key] === false ? 'none' : '';
   });
+}
+
+// Sel/Brome auto-masqués selon le mode de désinfection. TH/phosphates inchangés.
+// L'utilisateur peut tout réactiver depuis Paramètres → Champs avancés (override manuel).
+const MODE_FIELD_DEFAULTS = {
+  chlore: {sel: false, brome: false},
+  brome:  {sel: false, brome: true},
+  sel:    {sel: true,  brome: false}
+};
+// Flag : l'utilisateur a-t-il touché les champs avancés manuellement depuis le dernier changement de mode ?
+// Si oui, on respecte ses choix au chargement. Sinon, on suit le mode automatiquement.
+const OPT_MANUAL_KEY = 'cp_optional_fields_manual_v1';
+function applyModeFieldDefaults(mode, opts){
+  opts = opts || {};
+  const cfg = MODE_FIELD_DEFAULTS[mode] || MODE_FIELD_DEFAULTS.chlore;
+  setOptionalField('sel', cfg.sel);
+  setOptionalField('brome', cfg.brome);
+  const s = $('optField_sel'); if(s) s.checked = cfg.sel;
+  const b = $('optField_brome'); if(b) b.checked = cfg.brome;
+  // Un changement de mode (pas un load auto) réinitialise le flag manuel
+  if(!opts.silent) localStorage.removeItem(OPT_MANUAL_KEY);
+}
+function markOptionalFieldsManual(){
+  try{ localStorage.setItem(OPT_MANUAL_KEY, '1'); }catch(e){}
+}
+function getCurrentMode(){
+  const m = $('modeDesinf') && $('modeDesinf').value;
+  if(m) return m;
+  const c = $('cfgModeDesinf') && $('cfgModeDesinf').value;
+  if(c) return c;
+  const last = loadJSON(STORAGE_KEYS.lastInputs, null);
+  return (last && last.modeDesinf) || 'chlore';
 }
 
 // Mode d'affichage desktop (standard vs cockpit/split-view)
@@ -623,11 +655,32 @@ function evaluateStatus(m){
 function switchTab(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  $('page-'+name).classList.add('active');
-  document.querySelector(`.tab[data-page="${name}"]`).classList.add('active');
+  const page = $('page-'+name);
+  if(page) page.classList.add('active');
+  // Certaines pages (ex. contact) sont accessibles via lien et n'ont plus d'onglet dédié
+  const tab = document.querySelector(`.tab[data-page="${name}"]`);
+  if(tab) tab.classList.add('active');
+  else {
+    // Onglet "parent" : pour contact, on garde Paramètres surligné
+    const parent = name === 'contact' ? 'parametres' : null;
+    if(parent){
+      const parentTab = document.querySelector(`.tab[data-page="${parent}"]`);
+      if(parentTab) parentTab.classList.add('active');
+    }
+  }
   if(name==='historique') renderCharts();
   if(name==='correction') renderCorrections();
   window.scrollTo({top:0, behavior:'smooth'});
+}
+
+// Scroll fluide vers une section de la page Paramètres + surligne l'ancre active
+function paramScrollTo(event, sectionId){
+  if(event) event.preventDefault();
+  const target = document.getElementById(sectionId);
+  if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+  document.querySelectorAll('.params-anchors a').forEach(a => a.classList.remove('is-current'));
+  const link = document.querySelector(`.params-anchors a[href="#${sectionId}"]`);
+  if(link) link.classList.add('is-current');
 }
 
 // ============== Saisie & Sauvegarde ==============
@@ -3714,9 +3767,27 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const cb = $('optField_' + k);
     if(!cb) return;
     cb.checked = getOptionalFields()[k] !== false;
-    cb.addEventListener('change', () => setOptionalField(k, cb.checked));
+    cb.addEventListener('change', () => {
+      setOptionalField(k, cb.checked);
+      // Toggle manuel sur sel/brome → mémorise l'override pour ne pas être écrasé au prochain load
+      if(k === 'sel' || k === 'brome') markOptionalFieldsManual();
+    });
   });
   applyOptionalFieldsVisibility();
+
+  // Mode désinfection (Mesure + Paramètres) → masque/affiche sel et brome
+  // Change explicite : applique + reset le flag manuel. Au load (silent) : applique seulement
+  // si pas d'override manuel enregistré.
+  ['modeDesinf','cfgModeDesinf'].forEach(id => {
+    const el = $(id);
+    if(!el) return;
+    el.addEventListener('change', () => applyModeFieldDefaults(el.value));
+  });
+  // Application initiale au chargement — sauf si l'utilisateur a manuellement
+  // toggle un champ avancé depuis le dernier changement de mode.
+  if(localStorage.getItem(OPT_MANUAL_KEY) !== '1'){
+    applyModeFieldDefaults(getCurrentMode(), {silent:true});
+  }
 
   // Toggle "Vue cockpit (PC)"
   const viewToggle = $('viewModeCockpit');
