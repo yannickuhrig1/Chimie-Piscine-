@@ -33,6 +33,22 @@ function applyOptionalFieldsVisibility(){
   });
 }
 
+// Sel/Brome auto-masqués selon le mode de désinfection. TH/phosphates inchangés.
+// L'utilisateur peut tout réactiver depuis Paramètres → Champs avancés.
+const MODE_FIELD_DEFAULTS = {
+  chlore: {sel: false, brome: false},
+  brome:  {sel: false, brome: true},
+  sel:    {sel: true,  brome: false}
+};
+function applyModeFieldDefaults(mode){
+  const cfg = MODE_FIELD_DEFAULTS[mode] || MODE_FIELD_DEFAULTS.chlore;
+  setOptionalField('sel', cfg.sel);
+  setOptionalField('brome', cfg.brome);
+  // Synchronise les toggles UI (s'ils existent)
+  const s = $('optField_sel'); if(s) s.checked = cfg.sel;
+  const b = $('optField_brome'); if(b) b.checked = cfg.brome;
+}
+
 // Mode d'affichage desktop (standard vs cockpit/split-view)
 const VIEW_MODE_KEY = 'cp_desktop_view_v1';
 function getDesktopViewMode(){
@@ -3717,6 +3733,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
     cb.addEventListener('change', () => setOptionalField(k, cb.checked));
   });
   applyOptionalFieldsVisibility();
+
+  // Mode désinfection (Mesure + Paramètres) → masque/affiche sel et brome
+  // Déclenché uniquement sur change explicite — les overrides utilisateur sont préservés au load.
+  ['modeDesinf','cfgModeDesinf'].forEach(id => {
+    const el = $(id);
+    if(!el) return;
+    el.addEventListener('change', () => applyModeFieldDefaults(el.value));
+  });
 
   // Toggle "Vue cockpit (PC)"
   const viewToggle = $('viewModeCockpit');
