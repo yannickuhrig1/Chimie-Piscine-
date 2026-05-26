@@ -34,19 +34,35 @@ function applyOptionalFieldsVisibility(){
 }
 
 // Sel/Brome auto-masqués selon le mode de désinfection. TH/phosphates inchangés.
-// L'utilisateur peut tout réactiver depuis Paramètres → Champs avancés.
+// L'utilisateur peut tout réactiver depuis Paramètres → Champs avancés (override manuel).
 const MODE_FIELD_DEFAULTS = {
   chlore: {sel: false, brome: false},
   brome:  {sel: false, brome: true},
   sel:    {sel: true,  brome: false}
 };
-function applyModeFieldDefaults(mode){
+// Flag : l'utilisateur a-t-il touché les champs avancés manuellement depuis le dernier changement de mode ?
+// Si oui, on respecte ses choix au chargement. Sinon, on suit le mode automatiquement.
+const OPT_MANUAL_KEY = 'cp_optional_fields_manual_v1';
+function applyModeFieldDefaults(mode, opts){
+  opts = opts || {};
   const cfg = MODE_FIELD_DEFAULTS[mode] || MODE_FIELD_DEFAULTS.chlore;
   setOptionalField('sel', cfg.sel);
   setOptionalField('brome', cfg.brome);
-  // Synchronise les toggles UI (s'ils existent)
   const s = $('optField_sel'); if(s) s.checked = cfg.sel;
   const b = $('optField_brome'); if(b) b.checked = cfg.brome;
+  // Un changement de mode (pas un load auto) réinitialise le flag manuel
+  if(!opts.silent) localStorage.removeItem(OPT_MANUAL_KEY);
+}
+function markOptionalFieldsManual(){
+  try{ localStorage.setItem(OPT_MANUAL_KEY, '1'); }catch(e){}
+}
+function getCurrentMode(){
+  const m = $('modeDesinf') && $('modeDesinf').value;
+  if(m) return m;
+  const c = $('cfgModeDesinf') && $('cfgModeDesinf').value;
+  if(c) return c;
+  const last = loadJSON(STORAGE_KEYS.lastInputs, null);
+  return (last && last.modeDesinf) || 'chlore';
 }
 
 // Mode d'affichage desktop (standard vs cockpit/split-view)
@@ -3741,17 +3757,27 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const cb = $('optField_' + k);
     if(!cb) return;
     cb.checked = getOptionalFields()[k] !== false;
-    cb.addEventListener('change', () => setOptionalField(k, cb.checked));
+    cb.addEventListener('change', () => {
+      setOptionalField(k, cb.checked);
+      // Toggle manuel sur sel/brome → mémorise l'override pour ne pas être écrasé au prochain load
+      if(k === 'sel' || k === 'brome') markOptionalFieldsManual();
+    });
   });
   applyOptionalFieldsVisibility();
 
   // Mode désinfection (Mesure + Paramètres) → masque/affiche sel et brome
-  // Déclenché uniquement sur change explicite — les overrides utilisateur sont préservés au load.
+  // Change explicite : applique + reset le flag manuel. Au load (silent) : applique seulement
+  // si pas d'override manuel enregistré.
   ['modeDesinf','cfgModeDesinf'].forEach(id => {
     const el = $(id);
     if(!el) return;
     el.addEventListener('change', () => applyModeFieldDefaults(el.value));
   });
+  // Application initiale au chargement — sauf si l'utilisateur a manuellement
+  // toggle un champ avancé depuis le dernier changement de mode.
+  if(localStorage.getItem(OPT_MANUAL_KEY) !== '1'){
+    applyModeFieldDefaults(getCurrentMode(), {silent:true});
+  }
 
   // Toggle "Vue cockpit (PC)"
   const viewToggle = $('viewModeCockpit');
