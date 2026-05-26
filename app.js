@@ -3175,6 +3175,67 @@ const EDU_ARTICLES = [
       </ul>
       <p>Dans tous les cas : <strong>équilibre l'eau avant</strong> (pH, TAC, TH). Une eau déséquilibrée pendant 5 mois fait beaucoup plus de dégâts qu'une saison entière.</p>
     `
+  },
+  {
+    id: 'filtration',
+    icon: '🔁',
+    title: 'Filtration — combien d\'heures, combien de cycles',
+    summary: 'Règle T°/2, cycles de Gage-Bidwell, entretien filtre et calendrier saisonnier.',
+    body: `
+      <h3>Pourquoi filtrer ?</h3>
+      <p>La filtration sert à mécaniquement retirer les particules <em>et</em> à distribuer le désinfectant uniformément dans le bassin. Sans elle, le chlore ne touche pas toute l'eau et des zones « mortes » développent des algues.</p>
+
+      <h3>Combien d'heures par jour ?</h3>
+      <p>Règle universelle : <strong>temps de filtration (h) = T° eau ÷ 2</strong>.</p>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin:10px 0">
+        <tr style="background:rgba(255,255,255,.05)"><th style="text-align:left;padding:6px">T° eau</th><th style="text-align:left;padding:6px">Heures/jour</th><th style="text-align:left;padding:6px">Phase</th></tr>
+        <tr><td style="padding:6px">&lt; 10 °C</td><td style="padding:6px">1 h (ou arrêt)</td><td style="padding:6px">Hivernage</td></tr>
+        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">10-12 °C</td><td style="padding:6px">2 h</td><td style="padding:6px">Hivernage actif</td></tr>
+        <tr><td style="padding:6px">12-16 °C</td><td style="padding:6px">4-6 h</td><td style="padding:6px">Démarrage / déshivernage</td></tr>
+        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">16-20 °C</td><td style="padding:6px">8-10 h</td><td style="padding:6px">Printemps</td></tr>
+        <tr><td style="padding:6px">20-24 °C</td><td style="padding:6px">10-12 h</td><td style="padding:6px">Été doux</td></tr>
+        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">24-28 °C</td><td style="padding:6px">12-14 h</td><td style="padding:6px">Pleine saison</td></tr>
+        <tr><td style="padding:6px">&gt; 28 °C</td><td style="padding:6px">24 h</td><td style="padding:6px">Canicule (continu)</td></tr>
+      </table>
+      <p><strong>Toujours en journée</strong> (8 h–20 h) : la photosynthèse et la chaleur réveillent les algues le jour, donc c'est le moment où chlore et filtration doivent travailler.</p>
+
+      <h3>1 cycle = 1 volume du bassin filtré</h3>
+      <p>Un « cycle » signifie que la pompe a fait passer un volume d'eau équivalent à tout le bassin dans le filtre.</p>
+      <p><strong>Cycles/jour = (heures de filtration) ÷ (volume ÷ débit pompe)</strong>.</p>
+      <p>Règle pro : un cycle doit durer <strong>≤ 4 h</strong>, donc débit minimum = volume ÷ 4.</p>
+
+      <h3>Loi de Gage-Bidwell — pourquoi viser 3-4 cycles</h3>
+      <p>À cause du mélange, un seul cycle ne renouvelle pas 100 % de l'eau. Le taux théorique de renouvellement après N cycles = <code>1 − e^(−N)</code> :</p>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin:10px 0">
+        <tr style="background:rgba(255,255,255,.05)"><th style="text-align:left;padding:6px">Cycles</th><th style="text-align:left;padding:6px">Renouvellement</th></tr>
+        <tr><td style="padding:6px">1</td><td style="padding:6px">63 %</td></tr>
+        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">2</td><td style="padding:6px">86 %</td></tr>
+        <tr><td style="padding:6px">3</td><td style="padding:6px"><strong>95 %</strong> ← objectif</td></tr>
+        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">4</td><td style="padding:6px"><strong>98 %</strong> ← objectif</td></tr>
+        <tr><td style="padding:6px">6</td><td style="padding:6px">99,7 %</td></tr>
+        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">10</td><td style="padding:6px">~100 %</td></tr>
+      </table>
+      <p>L'objectif standard est donc <strong>3 à 4 cycles complets par jour</strong>.</p>
+
+      <h3>Entretien du filtre</h3>
+      <ul>
+        <li><strong>Filtre à sable</strong> : backwash dès que le manomètre monte de +0,3-0,5 bar au-dessus de la pression propre (env. 1×/mois hors saison, 1×/sem en saison). Procédure : Backwash 3-5 min → Rinçage 1-2 min → Filtration.</li>
+        <li><strong>Filtre à cartouche</strong> : nettoyage au jet tous les 15 jours, remplacement annuel.</li>
+        <li><strong>Sable</strong> à remplacer tous les 5-7 ans, <strong>verre filtrant</strong> tous les 8-10 ans.</li>
+      </ul>
+
+      <h3>Le cycle saisonnier</h3>
+      <ul>
+        <li><strong>Mars-avril (déshivernage)</strong> : démarrer la filtration dès que l'eau atteint 12 °C, T°/2.</li>
+        <li><strong>Été</strong> : suivre la règle, passer en 24/24 au-dessus de 28 °C.</li>
+        <li><strong>Sept-oct</strong> : descendre progressivement avec la T°.</li>
+        <li><strong>Hivernage actif</strong> (climat doux, gel rare) : 2 h/j sur le créneau le plus chaud (ex. 11h-13h) + produit antigel.</li>
+        <li><strong>Hivernage passif</strong> (gel fréquent) : arrêt total, vidange partielle, flotteurs/gizmo.</li>
+      </ul>
+
+      <h3>L'app le calcule pour toi</h3>
+      <p>Quand tu saisis la T° eau sur la page Mesure, une carte « Filtration recommandée » apparaît automatiquement. Renseigne aussi ton débit pompe (Rappels → Configurer mon bassin) pour voir tes cycles/jour et le % de renouvellement.</p>
+    `
   }
 ];
 
