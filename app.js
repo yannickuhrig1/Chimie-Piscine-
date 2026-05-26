@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.9.6';
+const APP_VERSION = '1.10.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -670,7 +670,7 @@ function loadLastInputs(){
   setVal('thSouhaite','thSouhaite');
   if(last.modeDesinf && $('modeDesinf')) $('modeDesinf').value = last.modeDesinf;
   // Synchronise aussi les champs miroir de la page Rappels
-  ['cfgVolume','cfgPhSouhaite','cfgTacSouhaite','cfgCyaSouhaite','cfgSelSouhaite','cfgThSouhaite'].forEach(id => {
+  ['cfgVolume','cfgDebit','cfgPhSouhaite','cfgTacSouhaite','cfgCyaSouhaite','cfgSelSouhaite','cfgThSouhaite'].forEach(id => {
     const el = $(id);
     if(!el) return;
     const key = id.replace('cfg','').replace(/^[A-Z]/, c=>c.toLowerCase());
@@ -691,8 +691,11 @@ function showSavedPill(){
 
 function autoSaveBassinParams(){
   const current = loadJSON(STORAGE_KEYS.lastInputs, {}) || {};
+  const debitEl = $('cfgDebit');
+  const debitVal = debitEl && debitEl.value !== '' ? parseFloat(debitEl.value) : null;
   const next = {
     volume: num('volume'),
+    debit: (debitVal !== null && !isNaN(debitVal)) ? debitVal : null,
     phSouhaite: num('phSouhaite'),
     tacSouhaite: num('tacSouhaite'),
     cya: num('cya'),
@@ -713,7 +716,7 @@ function autoSaveBassinParams(){
     if(Object.keys(cfgPatch).length) updateBassin(activeId, {config: cfgPatch});
   }
   // Synchronise les champs miroir de la page Rappels
-  const mirror = {volume:'cfgVolume', phSouhaite:'cfgPhSouhaite', tacSouhaite:'cfgTacSouhaite', cyaSouhaite:'cfgCyaSouhaite', selSouhaite:'cfgSelSouhaite', thSouhaite:'cfgThSouhaite'};
+  const mirror = {volume:'cfgVolume', debit:'cfgDebit', phSouhaite:'cfgPhSouhaite', tacSouhaite:'cfgTacSouhaite', cyaSouhaite:'cfgCyaSouhaite', selSouhaite:'cfgSelSouhaite', thSouhaite:'cfgThSouhaite'};
   Object.entries(mirror).forEach(([k, id]) => {
     if(next[k] !== null && $(id)) $(id).value = next[k];
   });
@@ -724,6 +727,7 @@ function autoSaveBassinParams(){
 function saveBassinConfigFromRappels(){
   const cfg = {
     volume: parseFloat($('cfgVolume').value) || null,
+    debit: parseFloat($('cfgDebit').value) || null,
     phSouhaite: parseFloat($('cfgPhSouhaite').value) || null,
     tacSouhaite: parseFloat($('cfgTacSouhaite').value) || null,
     cyaSouhaite: parseFloat($('cfgCyaSouhaite').value) || null,
@@ -772,6 +776,7 @@ function applyBassinConfigToInputs(bassin){
   if(c.modeDesinf && $('modeDesinf')) $('modeDesinf').value = c.modeDesinf;
   // Miroir page Rappels
   setVal('cfgVolume', c.volume);
+  setVal('cfgDebit', c.debit);
   setVal('cfgPhSouhaite', c.phSouhaite);
   setVal('cfgTacSouhaite', c.tacSouhaite);
   setVal('cfgCyaSouhaite', c.cyaSouhaite);
@@ -866,6 +871,107 @@ function updateStatus(m){
   const el = $('globalStatus');
   el.className = 'status-pill ' + s.level;
   $('statusText').textContent = s.text;
+}
+
+// ============== Recommandation filtration ==============
+// Heures recommandées selon T° eau (règle T°/2 avec paliers saisonniers)
+function filtrationHoursForTemp(t){
+  if(t === null || t === undefined || isNaN(t)) return null;
+  if(t < 10) return 1;
+  if(t < 12) return 2;
+  if(t > 28) return 24;
+  return Math.max(2, Math.round(t / 2));
+}
+
+// Calcule cycles/jour + Gage-Bidwell + status
+function computeFiltration(temp, volume, debit){
+  const hours = filtrationHoursForTemp(temp);
+  if(hours === null) return null;
+  const out = {hours, temp};
+  if(volume && volume > 0 && debit && debit > 0){
+    const cycleTime = volume / debit; // h/cycle
+    const cycles = hours / cycleTime;
+    const renewal = (1 - Math.exp(-cycles)) * 100;
+    let level = 'danger';
+    if(cycles >= 3) level = 'ok';
+    else if(cycles >= 1.5) level = 'warn';
+    out.cycleTime = cycleTime;
+    out.cycles = cycles;
+    out.renewal = renewal;
+    out.level = level;
+    out.underpowered = cycleTime > 4;
+    out.minDebit = volume / 4;
+  }
+  return out;
+}
+
+function renderFiltration(){
+  const card = $('filtrationCard');
+  if(!card) return;
+  const temp = num('temp');
+  const volume = num('volume');
+  // Le débit vit dans cfgDebit (page Rappels) — lu via storage ou DOM
+  let debit = null;
+  const debitEl = $('cfgDebit');
+  if(debitEl && debitEl.value !== '') debit = parseFloat(debitEl.value);
+  if(debit === null || isNaN(debit)){
+    const last = loadJSON(STORAGE_KEYS.lastInputs, null);
+    if(last && last.debit) debit = last.debit;
+  }
+  const f = computeFiltration(temp, volume, debit);
+  if(!f){ card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const statsEl = $('filtrationStats');
+  const pillEl = $('filtrationPill');
+  const noteEl = $('filtrationNote');
+
+  // Pill
+  if(f.level){
+    const labels = {ok:'Bonne filtration', warn:'À surveiller', danger:'Sous-filtré'};
+    pillEl.className = 'status-pill ' + f.level;
+    pillEl.innerHTML = '<span class="pulse"></span>' + labels[f.level];
+    pillEl.style.display = '';
+  } else {
+    pillEl.style.display = 'none';
+    pillEl.className = 'status-pill';
+    pillEl.textContent = '';
+  }
+
+  // Stats (2 ou 3 items selon dispo)
+  const items = [];
+  items.push(`<div class="item">
+    <div class="result-label">Heures/jour</div>
+    <div class="result-value">${f.hours}<span class="unit">h</span></div>
+  </div>`);
+  if(f.cycles !== undefined){
+    items.push(`<div class="item">
+      <div class="result-label">Cycles/jour</div>
+      <div class="result-value">${f.cycles.toFixed(1)}<span class="unit">×</span></div>
+    </div>`);
+    items.push(`<div class="item">
+      <div class="result-label">Renouvellement</div>
+      <div class="result-value">${Math.round(f.renewal)}<span class="unit">%</span></div>
+    </div>`);
+  }
+  statsEl.innerHTML = items.join('');
+  statsEl.style.gridTemplateColumns = items.length === 3 ? 'repeat(3,1fr)' : 'repeat(2,1fr)';
+
+  // Note explicative
+  const notes = [];
+  if(temp < 10) notes.push('Hivernage : eau froide, 1 h/j suffit (ou arrêt total si gel).');
+  else if(temp > 28) notes.push('Canicule : filtration en continu 24/24 pour éviter le développement d\'algues.');
+  else notes.push(`Règle T°/2 : ${f.temp} °C → ${f.hours} h/j en journée (8 h–20 h).`);
+  if(f.cycles !== undefined){
+    notes.push(`1 cycle = ${f.cycleTime.toFixed(1)} h (volume ${volume} m³ ÷ débit ${debit} m³/h).`);
+    notes.push('Objectif : 3–4 cycles/jour (95–98 % de renouvellement, loi Gage-Bidwell).');
+    if(f.underpowered){
+      notes.push(`⚠ Pompe sous-dimensionnée : 1 cycle &gt; 4 h. Débit minimum recommandé = ${f.minDebit.toFixed(1)} m³/h.`);
+    }
+  } else {
+    notes.push('Renseigne le débit pompe (Rappels → Configurer mon bassin) pour voir les cycles/jour.');
+  }
+  noteEl.innerHTML = notes.join('<br>');
 }
 
 // ============== Rendu Corrections ==============
@@ -3069,6 +3175,67 @@ const EDU_ARTICLES = [
       </ul>
       <p>Dans tous les cas : <strong>équilibre l'eau avant</strong> (pH, TAC, TH). Une eau déséquilibrée pendant 5 mois fait beaucoup plus de dégâts qu'une saison entière.</p>
     `
+  },
+  {
+    id: 'filtration',
+    icon: '🔁',
+    title: 'Filtration — combien d\'heures, combien de cycles',
+    summary: 'Règle T°/2, cycles de Gage-Bidwell, entretien filtre et calendrier saisonnier.',
+    body: `
+      <h3>Pourquoi filtrer ?</h3>
+      <p>La filtration sert à mécaniquement retirer les particules <em>et</em> à distribuer le désinfectant uniformément dans le bassin. Sans elle, le chlore ne touche pas toute l'eau et des zones « mortes » développent des algues.</p>
+
+      <h3>Combien d'heures par jour ?</h3>
+      <p>Règle universelle : <strong>temps de filtration (h) = T° eau ÷ 2</strong>.</p>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin:10px 0">
+        <tr style="background:rgba(255,255,255,.05)"><th style="text-align:left;padding:6px">T° eau</th><th style="text-align:left;padding:6px">Heures/jour</th><th style="text-align:left;padding:6px">Phase</th></tr>
+        <tr><td style="padding:6px">&lt; 10 °C</td><td style="padding:6px">1 h (ou arrêt)</td><td style="padding:6px">Hivernage</td></tr>
+        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">10-12 °C</td><td style="padding:6px">2 h</td><td style="padding:6px">Hivernage actif</td></tr>
+        <tr><td style="padding:6px">12-16 °C</td><td style="padding:6px">4-6 h</td><td style="padding:6px">Démarrage / déshivernage</td></tr>
+        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">16-20 °C</td><td style="padding:6px">8-10 h</td><td style="padding:6px">Printemps</td></tr>
+        <tr><td style="padding:6px">20-24 °C</td><td style="padding:6px">10-12 h</td><td style="padding:6px">Été doux</td></tr>
+        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">24-28 °C</td><td style="padding:6px">12-14 h</td><td style="padding:6px">Pleine saison</td></tr>
+        <tr><td style="padding:6px">&gt; 28 °C</td><td style="padding:6px">24 h</td><td style="padding:6px">Canicule (continu)</td></tr>
+      </table>
+      <p><strong>Toujours en journée</strong> (8 h–20 h) : la photosynthèse et la chaleur réveillent les algues le jour, donc c'est le moment où chlore et filtration doivent travailler.</p>
+
+      <h3>1 cycle = 1 volume du bassin filtré</h3>
+      <p>Un « cycle » signifie que la pompe a fait passer un volume d'eau équivalent à tout le bassin dans le filtre.</p>
+      <p><strong>Cycles/jour = (heures de filtration) ÷ (volume ÷ débit pompe)</strong>.</p>
+      <p>Règle pro : un cycle doit durer <strong>≤ 4 h</strong>, donc débit minimum = volume ÷ 4.</p>
+
+      <h3>Loi de Gage-Bidwell — pourquoi viser 3-4 cycles</h3>
+      <p>À cause du mélange, un seul cycle ne renouvelle pas 100 % de l'eau. Le taux théorique de renouvellement après N cycles = <code>1 − e^(−N)</code> :</p>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;margin:10px 0">
+        <tr style="background:rgba(255,255,255,.05)"><th style="text-align:left;padding:6px">Cycles</th><th style="text-align:left;padding:6px">Renouvellement</th></tr>
+        <tr><td style="padding:6px">1</td><td style="padding:6px">63 %</td></tr>
+        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">2</td><td style="padding:6px">86 %</td></tr>
+        <tr><td style="padding:6px">3</td><td style="padding:6px"><strong>95 %</strong> ← objectif</td></tr>
+        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">4</td><td style="padding:6px"><strong>98 %</strong> ← objectif</td></tr>
+        <tr><td style="padding:6px">6</td><td style="padding:6px">99,7 %</td></tr>
+        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">10</td><td style="padding:6px">~100 %</td></tr>
+      </table>
+      <p>L'objectif standard est donc <strong>3 à 4 cycles complets par jour</strong>.</p>
+
+      <h3>Entretien du filtre</h3>
+      <ul>
+        <li><strong>Filtre à sable</strong> : backwash dès que le manomètre monte de +0,3-0,5 bar au-dessus de la pression propre (env. 1×/mois hors saison, 1×/sem en saison). Procédure : Backwash 3-5 min → Rinçage 1-2 min → Filtration.</li>
+        <li><strong>Filtre à cartouche</strong> : nettoyage au jet tous les 15 jours, remplacement annuel.</li>
+        <li><strong>Sable</strong> à remplacer tous les 5-7 ans, <strong>verre filtrant</strong> tous les 8-10 ans.</li>
+      </ul>
+
+      <h3>Le cycle saisonnier</h3>
+      <ul>
+        <li><strong>Mars-avril (déshivernage)</strong> : démarrer la filtration dès que l'eau atteint 12 °C, T°/2.</li>
+        <li><strong>Été</strong> : suivre la règle, passer en 24/24 au-dessus de 28 °C.</li>
+        <li><strong>Sept-oct</strong> : descendre progressivement avec la T°.</li>
+        <li><strong>Hivernage actif</strong> (climat doux, gel rare) : 2 h/j sur le créneau le plus chaud (ex. 11h-13h) + produit antigel.</li>
+        <li><strong>Hivernage passif</strong> (gel fréquent) : arrêt total, vidange partielle, flotteurs/gizmo.</li>
+      </ul>
+
+      <h3>L'app le calcule pour toi</h3>
+      <p>Quand tu saisis la T° eau sur la page Mesure, une carte « Filtration recommandée » apparaît automatiquement. Renseigne aussi ton débit pompe (Rappels → Configurer mon bassin) pour voir tes cycles/jour et le % de renouvellement.</p>
+    `
   }
 ];
 
@@ -3589,6 +3756,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if(el.tagName === 'SELECT') el.addEventListener('change', scheduleLivePreview);
       }
     });
+  // Filtration : rafraîchi par T°, volume, débit (et au chargement)
+  ['temp','volume'].forEach(id => {
+    const el = $(id);
+    if(el) el.addEventListener('input', renderFiltration);
+  });
+  renderFiltration();
   // Render initial si données pré-saisies
   if(window.matchMedia && window.matchMedia('(min-width: 1000px)').matches){
     scheduleLivePreview();
@@ -3605,6 +3778,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if($('cfgModeDesinf')) $('cfgModeDesinf').addEventListener('change', () => {
     if($('modeDesinf')) $('modeDesinf').value = $('cfgModeDesinf').value;
     autoSaveBassinParams();
+  });
+  // cfgDebit n'a pas de miroir Mesure : déclenche juste la sauvegarde + live preview + filtration
+  if($('cfgDebit')) $('cfgDebit').addEventListener('input', () => {
+    autoSaveBassinParams();
+    if(typeof scheduleLivePreview === 'function') scheduleLivePreview();
+    if(typeof renderFiltration === 'function') renderFiltration();
   });
 
   // Vérifier permission notifications
