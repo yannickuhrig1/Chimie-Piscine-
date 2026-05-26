@@ -284,7 +284,7 @@
 
   @media (max-width:900px){
     .fiche{
-      width:100%;max-width:794px;padding:32px 24px 60px;
+      width:100%;max-width:794px;padding:32px 24px 70px;
     }
     .titles h1{font-size:36px}
     .range-chip{min-width:130px;padding:10px 12px}
@@ -292,6 +292,30 @@
     .split{grid-template-columns:1fr}
     .checklist{grid-template-columns:1fr}
     .fiche-foot{left:24px;right:24px}
+  }
+
+  /* Smartphone : chip "Plage idéale" passe sous le titre pour éviter la superposition */
+  @media (max-width:620px){
+    .fiche{padding:28px 20px 80px}
+    .fiche-head{flex-direction:column;align-items:stretch;gap:14px}
+    .head-left{width:100%}
+    .icon-badge{width:58px;height:58px;border-radius:16px}
+    .icon-badge svg{width:30px;height:30px}
+    .titles h1{font-size:32px;word-wrap:break-word}
+    .titles .subtitle{font-size:15px}
+    .range-chip{
+      min-width:0;width:100%;text-align:left;
+      display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+      padding:10px 14px;
+    }
+    .range-chip .lbl{margin-bottom:0;flex-shrink:0}
+    .range-chip .val{font-size:18px;line-height:1}
+    .range-chip .ideal{margin-top:0;margin-left:auto}
+    .fiche-foot{left:20px;right:20px;font-size:9px;flex-wrap:wrap;gap:6px}
+    .toolbar{padding:10px 12px;gap:8px}
+    .toolbar .title{font-size:14px}
+    .toolbar button,.toolbar .btn{padding:8px 12px;font-size:12px}
+    .toolbar select{padding:8px 26px 8px 10px;font-size:12px}
   }
 </style>
 </head>
