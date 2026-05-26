@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '1.11.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -639,8 +639,19 @@ function evaluateStatus(m){
 function switchTab(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  $('page-'+name).classList.add('active');
-  document.querySelector(`.tab[data-page="${name}"]`).classList.add('active');
+  const page = $('page-'+name);
+  if(page) page.classList.add('active');
+  // Certaines pages (ex. contact) sont accessibles via lien et n'ont plus d'onglet dédié
+  const tab = document.querySelector(`.tab[data-page="${name}"]`);
+  if(tab) tab.classList.add('active');
+  else {
+    // Onglet "parent" : pour contact, on garde Paramètres surligné
+    const parent = name === 'contact' ? 'parametres' : null;
+    if(parent){
+      const parentTab = document.querySelector(`.tab[data-page="${parent}"]`);
+      if(parentTab) parentTab.classList.add('active');
+    }
+  }
   if(name==='historique') renderCharts();
   if(name==='correction') renderCorrections();
   window.scrollTo({top:0, behavior:'smooth'});
