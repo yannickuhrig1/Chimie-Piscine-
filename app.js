@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.12.0';
+const APP_VERSION = '1.12.1';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -3483,7 +3483,12 @@ function getActionsTextList(m){
   return out;
 }
 
-function shareControl(measurement){
+function shareControl(measurement, opts){
+  opts = opts || {};
+  const view = opts.view || 'both'; // 'measures' | 'actions' | 'both'
+  const showMeasures = view === 'measures' || view === 'both';
+  const showActions  = view === 'actions'  || view === 'both';
+
   const list = loadActiveMeasurements();
   if(list.length === 0 && !measurement){ toast('Aucune mesure à partager','warn'); return; }
   const m = measurement || list[list.length-1];
@@ -3502,11 +3507,13 @@ function shareControl(measurement){
   ];
   const actions = getActionsTextList(m).slice(0, 6);
   const measuresStart = 400, measuresRowH = 95;
-  const measuresEnd = measuresStart + items.length * measuresRowH;
-  const actionsHeaderY = measuresEnd + 30;
+  const measuresEnd = showMeasures ? measuresStart + items.length * measuresRowH : measuresStart;
+  const actionsHeaderY = showActions ? measuresEnd + (showMeasures ? 30 : 0) : measuresEnd;
   const actionsItemH = 70;
   const actionsCount = Math.max(actions.length, 1);
-  const H = actionsHeaderY + 60 + actionsCount * actionsItemH + 100;
+  const H = showActions
+    ? actionsHeaderY + 60 + actionsCount * actionsItemH + 100
+    : measuresEnd + 100;
 
   const canvas = document.createElement('canvas');
   canvas.width = W; canvas.height = H;
@@ -3566,43 +3573,47 @@ function shareControl(measurement){
   ctx.font = '600 28px "Manrope", sans-serif';
   ctx.fillText('● ' + st.text, 80, 305);
 
-  items.forEach((it, i) => {
-    const y = measuresStart + i*measuresRowH;
-    ctx.fillStyle = 'rgba(255,255,255,.05)';
-    ctx.beginPath(); ctx.roundRect(80, y, W - 160, measuresRowH - 15, 16); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,.6)';
-    ctx.font = '500 22px "Manrope", sans-serif';
-    ctx.fillText(it.label.toUpperCase(), 110, y + 32);
-    ctx.fillStyle = '#fff';
-    ctx.font = '600 38px "JetBrains Mono", monospace';
-    ctx.textAlign = 'right';
-    ctx.fillText(it.value, W - 110, y + 50);
-    ctx.textAlign = 'left';
-  });
-
-  ctx.fillStyle = '#7fd4d2';
-  ctx.font = 'italic 600 40px "Fraunces", serif';
-  ctx.fillText('Actions à suivre', 80, actionsHeaderY + 20);
-
-  const actionsStart = actionsHeaderY + 50;
-  if(actions.length === 0){
-    ctx.fillStyle = 'rgba(127, 212, 168, .12)';
-    ctx.beginPath(); ctx.roundRect(80, actionsStart, W - 160, actionsItemH - 10, 14); ctx.fill();
-    ctx.fillStyle = '#7fd4a8';
-    ctx.font = '600 26px "Manrope", sans-serif';
-    ctx.fillText('✓  Aucune action requise', 110, actionsStart + 40);
-  } else {
-    actions.forEach((txt, i) => {
-      const y = actionsStart + i * actionsItemH;
+  if(showMeasures){
+    items.forEach((it, i) => {
+      const y = measuresStart + i*measuresRowH;
       ctx.fillStyle = 'rgba(255,255,255,.05)';
-      ctx.beginPath(); ctx.roundRect(80, y, W - 160, actionsItemH - 10, 14); ctx.fill();
-      ctx.fillStyle = '#ffd76e';
-      ctx.font = '600 28px "Manrope", sans-serif';
-      ctx.fillText('•', 110, y + 40);
+      ctx.beginPath(); ctx.roundRect(80, y, W - 160, measuresRowH - 15, 16); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.6)';
+      ctx.font = '500 22px "Manrope", sans-serif';
+      ctx.fillText(it.label.toUpperCase(), 110, y + 32);
       ctx.fillStyle = '#fff';
-      ctx.font = '500 24px "Manrope", sans-serif';
-      ctx.fillText(txt, 140, y + 40);
+      ctx.font = '600 38px "JetBrains Mono", monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(it.value, W - 110, y + 50);
+      ctx.textAlign = 'left';
     });
+  }
+
+  if(showActions){
+    ctx.fillStyle = '#7fd4d2';
+    ctx.font = 'italic 600 40px "Fraunces", serif';
+    ctx.fillText('Actions à suivre', 80, actionsHeaderY + 20);
+
+    const actionsStart = actionsHeaderY + 50;
+    if(actions.length === 0){
+      ctx.fillStyle = 'rgba(127, 212, 168, .12)';
+      ctx.beginPath(); ctx.roundRect(80, actionsStart, W - 160, actionsItemH - 10, 14); ctx.fill();
+      ctx.fillStyle = '#7fd4a8';
+      ctx.font = '600 26px "Manrope", sans-serif';
+      ctx.fillText('✓  Aucune action requise', 110, actionsStart + 40);
+    } else {
+      actions.forEach((txt, i) => {
+        const y = actionsStart + i * actionsItemH;
+        ctx.fillStyle = 'rgba(255,255,255,.05)';
+        ctx.beginPath(); ctx.roundRect(80, y, W - 160, actionsItemH - 10, 14); ctx.fill();
+        ctx.fillStyle = '#ffd76e';
+        ctx.font = '600 28px "Manrope", sans-serif';
+        ctx.fillText('•', 110, y + 40);
+        ctx.fillStyle = '#fff';
+        ctx.font = '500 24px "Manrope", sans-serif';
+        ctx.fillText(txt, 140, y + 40);
+      });
+    }
   }
 
   ctx.fillStyle = 'rgba(255,255,255,.5)';
@@ -3690,7 +3701,10 @@ function shareHistEntry(){
   if(__histDetailIdx === null) return;
   const list = loadActiveMeasurements();
   const m = list[__histDetailIdx];
-  if(m) shareControl(m);
+  if(!m) return;
+  // Détecte l'onglet visible dans la modale pour ne partager que ce qui est à l'écran
+  const measureVisible = $('histDetailMeasure') && $('histDetailMeasure').style.display !== 'none';
+  shareControl(m, {view: measureVisible ? 'measures' : 'actions'});
 }
 
 function reloadHistEntry(){
