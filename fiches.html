@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fiches — Chimie de l'eau</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Manrope:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root{
+    --abyss:#041d2e;
+    --deep:#0a3d62;
+    --mid:#1c6b8c;
+    --water:#22b4d4;
+    --shallow:#7fdbda;
+    --foam:#e8f9f8;
+    --sand:#f4ead5;
+    --cream:#fbf6ea;
+    --coral:#ff6b6b;
+    --lemon:#ffd166;
+    --leaf:#06d6a0;
+    --ink:#0d2436;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#0a1f33;color:var(--foam);font-family:'Manrope',sans-serif;min-height:100vh}
+  a{color:var(--shallow)}
+
+  .toolbar{
+    position:sticky;top:0;z-index:50;
+    display:flex;gap:10px;align-items:center;justify-content:space-between;
+    padding:14px 18px;background:rgba(4,29,46,.92);backdrop-filter:blur(10px);
+    border-bottom:1px solid rgba(127,219,218,.2);
+    flex-wrap:wrap;
+  }
+  .toolbar-left{display:flex;gap:14px;align-items:center;min-width:0}
+  .toolbar .home{
+    width:34px;height:34px;border-radius:10px;
+    background:linear-gradient(135deg,var(--water),var(--shallow));
+    display:grid;place-items:center;text-decoration:none;color:white;font-size:18px;
+    flex-shrink:0;
+  }
+  .toolbar .title{font-family:'Fraunces',serif;font-size:17px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .toolbar .title em{font-style:italic;color:var(--shallow);font-weight:400}
+  .toolbar-right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .toolbar button, .toolbar .btn{
+    appearance:none;border:none;cursor:pointer;
+    background:linear-gradient(135deg,var(--water),var(--mid));color:white;
+    padding:10px 16px;border-radius:12px;font-weight:600;font-size:13px;
+    font-family:'Manrope',sans-serif;letter-spacing:.02em;
+    box-shadow:0 6px 18px -6px rgba(34,180,212,.6);
+    text-decoration:none;display:inline-flex;align-items:center;gap:6px;
+  }
+  .toolbar button.ghost{
+    background:rgba(255,255,255,.06);box-shadow:none;
+    border:1px solid rgba(127,219,218,.25);
+  }
+  .toolbar button:active{transform:scale(.97)}
+  .toolbar select{
+    appearance:none;background:rgba(255,255,255,.08);color:var(--foam);
+    border:1px solid rgba(127,219,218,.25);border-radius:10px;
+    padding:9px 30px 9px 12px;font-family:'Manrope',sans-serif;font-size:13px;font-weight:500;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%237fdbda' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 10px center;cursor:pointer;
+  }
+
+  /* Index gallery */
+  .gallery{
+    max-width:1100px;margin:0 auto;padding:36px 20px 20px;
+  }
+  .gallery-title{font-family:'Fraunces',serif;font-size:28px;font-weight:500;letter-spacing:-.02em;margin-bottom:6px}
+  .gallery-title em{font-style:italic;color:var(--shallow);font-weight:400}
+  .gallery-sub{font-size:13px;color:var(--shallow);opacity:.75;margin-bottom:24px}
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(200px,1fr));
+    gap:14px;
+  }
+  .grid-card{
+    background:rgba(255,255,255,.05);
+    border:1px solid rgba(127,219,218,.18);
+    border-radius:18px;padding:18px;cursor:pointer;
+    transition:transform .15s,background .15s,border-color .15s;
+    text-align:left;font-family:inherit;color:inherit;
+    display:flex;flex-direction:column;gap:10px;align-items:flex-start;
+  }
+  .grid-card:hover{transform:translateY(-2px);background:rgba(255,255,255,.08);border-color:var(--accent,var(--water))}
+  .grid-card .num{font-size:10px;letter-spacing:.2em;color:var(--accent,var(--shallow));font-weight:700;opacity:.7}
+  .grid-card .gicon{
+    width:46px;height:46px;border-radius:13px;
+    background:linear-gradient(135deg,var(--accent,var(--water)),var(--accent2,var(--shallow)));
+    display:grid;place-items:center;color:white;
+  }
+  .grid-card .gtitle{font-family:'Fraunces',serif;font-size:20px;font-weight:500;letter-spacing:-.01em;color:var(--foam)}
+  .grid-card .gsub{font-size:12px;color:var(--shallow);opacity:.85;line-height:1.4}
+
+  .stage{padding:24px 16px 60px;display:flex;justify-content:center}
+
+  /* ============= FICHE A4 ============= */
+  .fiche{
+    width:794px;
+    min-height:1123px;
+    background:var(--cream);
+    color:var(--ink);
+    border-radius:6px;
+    box-shadow:0 30px 80px -20px rgba(0,0,0,.5);
+    padding:50px 54px 80px;
+    position:relative;
+    overflow:hidden;
+    font-family:'Manrope',sans-serif;
+    display:flex;flex-direction:column;
+  }
+  .fiche::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:10px;
+    background:linear-gradient(90deg,var(--accent,var(--water)),var(--accent2,var(--shallow)));
+  }
+  .fiche::after{
+    content:'';position:absolute;top:-80px;right:-80px;width:280px;height:280px;
+    background:radial-gradient(circle,var(--accent,var(--water)) 0%,transparent 70%);
+    opacity:.08;border-radius:50%;
+  }
+
+  .fiche-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:26px;position:relative;gap:18px}
+  .head-left{display:flex;gap:18px;align-items:flex-start;min-width:0;flex:1}
+  .icon-badge{
+    width:72px;height:72px;border-radius:20px;
+    background:linear-gradient(135deg,var(--accent,var(--water)),var(--accent2,var(--shallow)));
+    display:grid;place-items:center;color:white;flex-shrink:0;
+    box-shadow:0 10px 24px -6px rgba(34,180,212,.45);
+  }
+  .icon-badge svg{width:38px;height:38px}
+  .titles{min-width:0}
+  .titles .eyebrow{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--mid);opacity:.7;font-weight:600;margin-bottom:6px}
+  .titles h1{font-family:'Fraunces',serif;font-size:44px;font-weight:500;letter-spacing:-.025em;line-height:1;color:var(--abyss)}
+  .titles .subtitle{font-family:'Fraunces',serif;font-style:italic;font-size:17px;color:var(--mid);margin-top:6px;font-weight:400;line-height:1.3}
+
+  .range-chip{
+    background:white;border:2px solid var(--accent,var(--water));
+    border-radius:18px;padding:12px 16px;text-align:right;min-width:160px;
+    box-shadow:0 8px 20px -8px rgba(34,180,212,.3);flex-shrink:0;
+  }
+  .range-chip .lbl{font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;color:var(--mid);opacity:.75;font-weight:700;margin-bottom:4px}
+  .range-chip .val{font-family:'Fraunces',serif;font-size:22px;font-weight:600;color:var(--abyss);letter-spacing:-.02em;line-height:1.1}
+  .range-chip .ideal{font-size:11px;color:var(--accent,var(--mid));font-weight:600;margin-top:3px}
+
+  .section{margin-bottom:20px;position:relative}
+  .section-label{
+    display:inline-block;font-size:10px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--accent,var(--mid));font-weight:700;
+    background:rgba(34,180,212,.08);padding:5px 11px;border-radius:99px;margin-bottom:10px;
+  }
+
+  .define{
+    background:linear-gradient(135deg,rgba(34,180,212,.06),rgba(127,219,218,.03));
+    border-left:3px solid var(--accent,var(--water));
+    border-radius:0 14px 14px 0;padding:15px 18px;margin-bottom:18px;
+  }
+  .define p{font-size:13.5px;line-height:1.6;color:#2b465a}
+  .define p + p{margin-top:8px}
+
+  /* Split trop bas / trop haut */
+  .split{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+  .split-col{
+    background:white;border-radius:18px;padding:18px;
+    border:1px solid rgba(13,36,54,.08);
+    box-shadow:0 4px 16px -8px rgba(13,36,54,.15);
+    position:relative;overflow:hidden;
+  }
+  .split-col::before{content:'';position:absolute;top:0;left:0;right:0;height:4px}
+  .split-col.low::before{background:var(--coral)}
+  .split-col.high::before{background:var(--lemon)}
+  .split-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .split-head .arrow{
+    width:32px;height:32px;border-radius:10px;display:grid;place-items:center;
+    font-weight:700;font-size:18px;color:white;
+  }
+  .split-col.low .arrow{background:var(--coral)}
+  .split-col.high .arrow{background:var(--lemon);color:#7c5400}
+  .split-head .label{font-family:'Fraunces',serif;font-size:16px;font-weight:600;color:var(--abyss)}
+  .split-head .threshold{margin-left:auto;font-family:'Manrope',sans-serif;font-size:11px;font-weight:700;color:var(--mid);opacity:.7;letter-spacing:.05em}
+  .split-list{list-style:none;padding:0;margin-bottom:12px}
+  .split-list li{font-size:12.5px;color:#3c5870;padding:3px 0 3px 14px;position:relative;line-height:1.45}
+  .split-list li::before{content:'';position:absolute;left:0;top:10px;width:6px;height:6px;border-radius:50%;background:var(--accent,var(--water));opacity:.5}
+  .split-action{
+    background:rgba(34,180,212,.08);border-radius:10px;padding:9px 12px;font-size:12px;color:var(--abyss);
+  }
+  .split-action strong{color:var(--mid);font-weight:700;display:block;font-size:10px;letter-spacing:.15em;text-transform:uppercase;margin-bottom:2px;opacity:.8}
+  .split-action .product{font-family:'Fraunces',serif;font-size:15px;font-weight:600}
+
+  /* Étapes (pour fiches diagnostic / procédure) */
+  .steps{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}
+  .step{
+    background:white;border-radius:14px;padding:14px 16px;
+    border:1px solid rgba(13,36,54,.08);display:flex;gap:14px;align-items:flex-start;
+    box-shadow:0 4px 12px -8px rgba(13,36,54,.15);
+  }
+  .step .num{
+    width:32px;height:32px;border-radius:10px;flex-shrink:0;
+    background:linear-gradient(135deg,var(--accent,var(--water)),var(--accent2,var(--shallow)));
+    display:grid;place-items:center;color:white;font-family:'Fraunces',serif;font-weight:600;font-size:15px;
+  }
+  .step-body{flex:1}
+  .step-body .step-title{font-family:'Fraunces',serif;font-size:15px;font-weight:600;color:var(--abyss);margin-bottom:3px}
+  .step-body p{font-size:12.5px;color:#3c5870;line-height:1.5}
+
+  /* Checklist (pour hivernage etc.) */
+  .checklist{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;margin-bottom:18px}
+  .check-item{
+    background:white;border-radius:10px;padding:10px 12px;
+    border:1px solid rgba(13,36,54,.08);
+    display:flex;gap:10px;align-items:flex-start;font-size:12.5px;color:#2b465a;line-height:1.4;
+  }
+  .check-item::before{
+    content:'';width:14px;height:14px;border-radius:4px;flex-shrink:0;margin-top:2px;
+    border:2px solid var(--accent,var(--water));background:white;
+  }
+
+  /* Tip */
+  .tip{
+    background:linear-gradient(135deg,var(--abyss),var(--deep));
+    color:var(--foam);border-radius:18px;padding:18px 20px;
+    display:flex;gap:14px;align-items:flex-start;margin-top:auto;
+    position:relative;overflow:hidden;
+  }
+  .tip::before{
+    content:'';position:absolute;top:0;right:0;width:120px;height:120px;
+    background:radial-gradient(circle,var(--accent,var(--water)) 0%,transparent 70%);
+    opacity:.25;border-radius:50%;
+  }
+  .tip-icon{
+    width:38px;height:38px;border-radius:12px;
+    background:linear-gradient(135deg,var(--accent,var(--water)),var(--accent2,var(--shallow)));
+    display:grid;place-items:center;flex-shrink:0;color:white;font-size:18px;
+    box-shadow:0 6px 14px -4px rgba(34,180,212,.5);
+  }
+  .tip-body{flex:1;position:relative;z-index:1}
+  .tip-body .lbl{font-size:10px;letter-spacing:.22em;text-transform:uppercase;color:var(--shallow);opacity:.85;font-weight:700;margin-bottom:4px}
+  .tip-body p{font-size:13px;line-height:1.55;color:var(--foam)}
+
+  .fiche-foot{
+    position:absolute;bottom:18px;left:54px;right:54px;
+    display:flex;justify-content:space-between;align-items:center;
+    font-size:10px;color:var(--mid);opacity:.6;letter-spacing:.1em;text-transform:uppercase;font-weight:600;
+    padding-top:12px;border-top:1px solid rgba(13,36,54,.08);
+  }
+
+  /* Theme accents per fiche */
+  .fiche[data-theme="ph"]        { --accent:#22b4d4; --accent2:#7fdbda }
+  .fiche[data-theme="chlore"]    { --accent:#f0b840; --accent2:#ffd166 }
+  .fiche[data-theme="tac"]       { --accent:#06d6a0; --accent2:#9be7d0 }
+  .fiche[data-theme="cya"]       { --accent:#9b6dff; --accent2:#c5a7ff }
+  .fiche[data-theme="th"]        { --accent:#e87651; --accent2:#f4a78a }
+  .fiche[data-theme="sel"]       { --accent:#22b4d4; --accent2:#7fdbda }
+  .fiche[data-theme="filtration"]{ --accent:#1c6b8c; --accent2:#5fa0bb }
+  .fiche[data-theme="algues"]    { --accent:#06b380; --accent2:#7fdbda }
+  .fiche[data-theme="trouble"]   { --accent:#7a8e9f; --accent2:#bcc5cf }
+  .fiche[data-theme="hivernage"] { --accent:#4f8fb0; --accent2:#a8cfe0 }
+
+  /* gallery card accents share */
+  .grid-card[data-theme="ph"]        { --accent:#22b4d4; --accent2:#7fdbda }
+  .grid-card[data-theme="chlore"]    { --accent:#f0b840; --accent2:#ffd166 }
+  .grid-card[data-theme="tac"]       { --accent:#06d6a0; --accent2:#9be7d0 }
+  .grid-card[data-theme="cya"]       { --accent:#9b6dff; --accent2:#c5a7ff }
+  .grid-card[data-theme="th"]        { --accent:#e87651; --accent2:#f4a78a }
+  .grid-card[data-theme="sel"]       { --accent:#22b4d4; --accent2:#7fdbda }
+  .grid-card[data-theme="filtration"]{ --accent:#1c6b8c; --accent2:#5fa0bb }
+  .grid-card[data-theme="algues"]    { --accent:#06b380; --accent2:#7fdbda }
+  .grid-card[data-theme="trouble"]   { --accent:#7a8e9f; --accent2:#bcc5cf }
+  .grid-card[data-theme="hivernage"] { --accent:#4f8fb0; --accent2:#a8cfe0 }
+
+  .progress-bar{
+    position:fixed;top:0;left:0;height:3px;background:var(--water);width:0%;
+    z-index:200;transition:width .25s;pointer-events:none;
+  }
+
+  @media print{
+    body{background:white}
+    .toolbar,.gallery{display:none}
+    .stage{padding:0}
+    .fiche{box-shadow:none;border-radius:0;page-break-after:always}
+  }
+
+  @media (max-width:900px){
+    .fiche{
+      width:100%;max-width:794px;padding:32px 24px 60px;
+    }
+    .titles h1{font-size:36px}
+    .range-chip{min-width:130px;padding:10px 12px}
+    .range-chip .val{font-size:18px}
+    .split{grid-template-columns:1fr}
+    .checklist{grid-template-columns:1fr}
+    .fiche-foot{left:24px;right:24px}
+  }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progressBar"></div>
+
+<div class="toolbar">
+  <div class="toolbar-left">
+    <a href="/" class="home" title="Retour à l'app">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+    </a>
+    <div class="title" id="toolbarTitle">Fiches <em>— Chimie de l'eau</em></div>
+  </div>
+  <div class="toolbar-right">
+    <select id="ficheSelect" onchange="loadFiche(this.value)"></select>
+    <button class="ghost" onclick="showGallery()" title="Voir toutes les fiches">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Toutes
+    </button>
+    <button onclick="downloadCurrent()" id="dlBtn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      PDF
+    </button>
+    <button onclick="downloadAllZip()" id="zipBtn" title="Pack des 10 fiches">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
+      Pack ZIP
+    </button>
+  </div>
+</div>
+
+<!-- Galerie (index) -->
+<div class="gallery" id="gallery">
+  <h1 class="gallery-title">Apprendre <em>la chimie de l'eau</em></h1>
+  <p class="gallery-sub">10 fiches synthétiques · Téléchargeables en PDF · Format A4</p>
+  <div class="grid" id="galleryGrid"></div>
+</div>
+
+<!-- Stage (fiche unique) -->
+<div class="stage" id="stage" style="display:none">
+  <article class="fiche" id="ficheContainer"></article>
+</div>
+
+<script>
+// ============== ICONS ==============
+const ICONS = {
+  drop: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5c-3 4-6 7.5-6 11a6 6 0 0 0 12 0c0-3.5-3-7-6-11z"/><path d="M9.5 14.5c.6 1 1.5 1.5 2.5 1.5"/></svg>',
+  shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L4 6v6c0 5 3.5 8.5 8 10 4.5-1.5 8-5 8-10V6l-8-4z"/><path d="M9 12l2 2 4-4"/></svg>',
+  balance: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5 21h14"/><path d="M3 8l4-3 4 3-4 8z"/><path d="M13 8l4-3 4 3-4 8z"/></svg>',
+  sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>',
+  rock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l4-8 5 3 4-6 5 11z"/><path d="M3 17h18"/></svg>',
+  salt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21V9l5-4 5 4v12"/><path d="M5 21h14M10 14h4M10 18h4"/></svg>',
+  pump: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M7 12h10M9 9l6 6M15 9l-6 6"/></svg>',
+  leaf: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21c0-9 5-14 14-14 0 9-5 14-14 14z"/><path d="M7 21c0-4 3-9 9-11"/></svg>',
+  fog: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9h18M3 14h13M3 19h18"/></svg>',
+  snow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg>'
+};
+
+// ============== DATA — 10 fiches ==============
+const FICHES = {
+  ph: {
+    n:'01', icon:'drop',
+    title:'pH', subtitle:'la balance acide / base',
+    range:{lbl:'Plage idéale', val:'6.8 — 7.4', ideal:'cible 7.2'},
+    short:'Le paramètre maître. Sans lui, rien d\'autre ne fonctionne.',
+    define:[
+      "Le pH mesure l'acidité de ton eau sur une échelle de <strong>0 (acide) à 14 (basique)</strong>, avec <strong>7 = neutre</strong>. C'est <em>le paramètre maître</em> : un pH déréglé rend le chlore inefficace, irrite la peau et les yeux, et abîme le bassin.",
+      "<strong>Tu l'ajustes toujours avant le chlore.</strong>"
+    ],
+    low:{threshold:'< 6.8', items:[
+      'Eau corrosive (joints, métal, liner)',
+      'Yeux qui piquent, peau qui tire',
+      'TAC qui chute en parallèle',
+      'Goût acide marqué'
+    ], product:'pH+ (carbonate de sodium)'},
+    high:{threshold:'> 7.4', items:[
+      'Chlore désactivé à 50% ou +',
+      'Eau trouble, voile blanchâtre',
+      'Dépôts calcaires sur parois',
+      'Risque d\'allergie / démangeaisons'
+    ], product:'pH− (bisulfate ou acide)'},
+    tip:'<strong>Si le pH dérive en permanence</strong>, le problème vient du <strong>TAC</strong> (l\'alcalinité tampon). Vérifie-le et corrige-le avant de t\'acharner sur le pH. Et n\'ajoute jamais plusieurs produits en même temps : un seul à la fois, filtration en marche.'
+  },
+
+  chlore: {
+    n:'02', icon:'shield',
+    title:'Chlore', subtitle:'le désinfectant principal',
+    range:{lbl:'Plage idéale', val:'≈ 10% du CYA', ideal:'max 5 ppm (ARS France)'},
+    short:'Le gardien de l\'eau. Tue bactéries et algues. Désactivé par pH élevé et UV.',
+    define:[
+      "Le chlore <strong>libre (Fcl)</strong> est la fraction active qui désinfecte. Le chlore <strong>combiné (chloramines)</strong> = chlore déjà utilisé pour neutraliser pollution — c'est lui qui sent et qui irrite, pas le chlore tout court.",
+      "Cible : <strong>chlore libre ≈ 10% du CYA</strong> (ex : CYA 20 → Fcl ~2 ppm). Sans CYA, vise 1–3 ppm. Combiné toujours <strong>&lt; 0.6 ppm</strong>."
+    ],
+    low:{threshold:'< cible', items:[
+      'Eau verte, début d\'algues',
+      'Odeur de chlore marquée (paradoxal !)',
+      'Yeux rouges après baignade',
+      'Eau légèrement laiteuse'
+    ], product:'Chlore choc (hypochlorite) ou galets lents'},
+    high:{threshold:'> 5 ppm', items:[
+      'Irritation peau, muqueuses',
+      'Risque pour le liner / joints',
+      'Décoloration des maillots',
+      'Eau sur-traitée, déséquilibrée'
+    ], product:'Stop : attendre + filtrer 24h'},
+    tip:'<strong>Le chlore combiné supérieur à 0.6 ppm</strong> = il faut faire un <strong>traitement choc</strong> (multiplier le chlore libre par 10× pour casser les chloramines). C\'est ce qu\'on appelle "atteindre le breakpoint chlorination".'
+  },
+
+  tac: {
+    n:'03', icon:'balance',
+    title:'TAC', subtitle:'alcalinité, le tampon du pH',
+    range:{lbl:'Plage indicative', val:'80 — 150 ppm', ideal:'pas de valeur absolue'},
+    short:'Le stabilisateur du pH. Sans lui, le pH danse en permanence.',
+    define:[
+      "Le TAC (Titre Alcalimétrique Complet) mesure les <strong>bicarbonates et carbonates</strong>. Son rôle : <strong>tamponner</strong> le pH pour qu'il reste stable malgré les ajouts de produits, la pluie, la baignade.",
+      "Le Guide SOS Piscine V3 <em>ne donne pas de plage absolue</em> : <strong>chaque bassin a son TAC d'équilibre</strong>. Tu le repères par le comportement du pH."
+    ],
+    low:{threshold:'pH instable, baisse', items:[
+      'pH chute après chaque ajout',
+      'Yo-yo permanent du pH',
+      'Eau agressive même avec bon pH',
+      'Le pH ne tient pas 2 jours'
+    ], product:'TAC+ (bicarbonate de sodium)'},
+    high:{threshold:'pH bloqué, dépôts', items:[
+      'pH remonte sans cesse vers 8+',
+      'Eau trouble, voile calcaire',
+      'Difficulté à faire descendre le pH',
+      'Dépôts blancs sur les parois'
+    ], product:'TAC− (acide chlorhydrique, doux)'},
+    tip:'<strong>Règle simple</strong> : si tu ajustes le pH sans arrêt, c\'est le TAC le coupable. Augmente le TAC pour stabiliser le pH bas — diminue-le pour stabiliser le pH haut. Ne touche au pH qu\'<strong>après</strong> avoir réglé le TAC.'
+  },
+
+  cya: {
+    n:'04', icon:'sun',
+    title:'CYA', subtitle:'stabilisant, le bouclier UV du chlore',
+    range:{lbl:'Plage idéale', val:'15 — 20 ppm', ideal:'max 40 — vidange au-delà'},
+    short:'Crème solaire du chlore. Trop = chlore inefficace. Pas assez = chlore brûlé.',
+    define:[
+      "Le CYA (acide cyanurique) protège le chlore libre contre la <strong>destruction par les UV du soleil</strong>. Sans CYA, ton chlore disparaît en 2 heures de plein soleil.",
+      "Mais <strong>trop de CYA bloque l'action désinfectante du chlore</strong>. C'est un compromis : 15–20 ppm = sweet spot. Au-dessus de 40 ppm = le chlore devient quasi inutile, <strong>vidange partielle obligatoire</strong>."
+    ],
+    low:{threshold:'< 15 ppm', items:[
+      'Chlore qui disparaît en quelques heures',
+      'Surconsommation de produits',
+      'Algues récurrentes l\'été',
+      'Eau verte malgré le chlorage'
+    ], product:'Stabilisant en poudre (lente dissolution)'},
+    high:{threshold:'> 40 ppm', items:[
+      'Chlore présent mais inefficace',
+      'Eau trouble, algues malgré Fcl OK',
+      'Plus aucune action désinfectante',
+      'Effet "lock-out" du chlore'
+    ], product:'⚠ Vidange partielle (le seul moyen)'},
+    tip:'<strong>Le CYA ne disparaît pas tout seul</strong>. Il s\'accumule à chaque utilisation de galets stabilisés (TCT). Pour le diminuer : <strong>renouveler une partie de l\'eau</strong>. Pour éviter qu\'il monte : alterner galets et chlore non stabilisé (hypochlorite).'
+  },
+
+  th: {
+    n:'05', icon:'rock',
+    title:'TH', subtitle:'dureté, le calcaire dans l\'eau',
+    range:{lbl:'Plage idéale', val:'150 — 250 ppm', ideal:'15 – 25 °f'},
+    short:'Le calcium dissous. Trop dure = entartrage. Trop douce = eau agressive.',
+    define:[
+      "Le TH (Titre Hydrotimétrique) mesure la <strong>concentration en calcium et magnésium</strong>. C'est ce qui fait que l'eau est dure ou douce. 1 °f (degré français) = 10 ppm de CaCO₃.",
+      "Une eau trop douce attaque le bassin et déstabilise tous les autres paramètres. Une eau trop dure entartre l'équipement et trouble l'eau."
+    ],
+    low:{threshold:'< 100 ppm', items:[
+      'Eau agressive, corrosive',
+      'Liner / béton attaqués',
+      'pH instable malgré bon TAC',
+      'Picotements peau et yeux'
+    ], product:'Chlorure de calcium'},
+    high:{threshold:'> 350 ppm', items:[
+      'Voile calcaire, eau trouble',
+      'Entartrage filtre / électrolyseur',
+      'Dépôts blancs en ligne d\'eau',
+      'Plaques calcaires au fond'
+    ], product:'Séquestrant calcaire + vidange'},
+    tip:'<strong>Le TH bouge peu</strong> : il dépend surtout de l\'eau de remplissage. Mesure-le 2× par saison. En région calcaire (TH eau du robinet &gt; 30 °f), utilise un <strong>séquestrant</strong> en début de saison pour éviter les dépôts.'
+  },
+
+  sel: {
+    n:'06', icon:'salt',
+    title:'Sel', subtitle:'pour piscine à électrolyse',
+    range:{lbl:'Plage idéale', val:'3 — 5 g/L', ideal:'lire la doc électrolyseur'},
+    short:'Le carburant de l\'électrolyseur. Trop bas = panne. Trop haut = corrosion.',
+    define:[
+      "L'électrolyseur transforme le <strong>sel (NaCl)</strong> en <strong>chlore actif</strong> par électrolyse, puis le chlore se recombine en sel après désinfection. C'est un cycle : tu n'en consommes qu'un peu (par fuite, débordement, vidange).",
+      "<strong>Chaque modèle a sa plage</strong> (vérifie la notice). Plage courante : 3000–5000 ppm (= 3 à 5 g/L). En-dessous : l'électrode ne produit plus. Au-dessus : risque de corrosion."
+    ],
+    low:{threshold:'< 2.5 g/L', items:[
+      'Voyant "manque de sel" allumé',
+      'Production de chlore en baisse',
+      'Eau qui verdit l\'été',
+      'Cellule qui s\'arrête'
+    ], product:'Sel spécial piscine (pastilles ou granulés)'},
+    high:{threshold:'> 6 g/L', items:[
+      'Goût salé désagréable',
+      'Corrosion des parties métalliques',
+      'Usure prématurée de la cellule',
+      'Risque pour échelles inox'
+    ], product:'Vidange partielle pour diluer'},
+    tip:'<strong>Pense à inverser la polarité</strong> de la cellule régulièrement (auto sur la plupart des appareils) pour éviter l\'entartrage. Et nettoie la cellule à l\'acide dilué (10%) <strong>1× par an</strong> si l\'eau est calcaire — sinon la production chute.'
+  },
+
+  filtration: {
+    n:'07', icon:'pump',
+    title:'Filtration', subtitle:'la mécanique invisible',
+    range:{lbl:'Règle de base', val:'T° eau / 2', ideal:'heures par jour'},
+    short:'Filtrer assez = bassin sain. La règle T°/2 simplifie tout.',
+    define:[
+      "La filtration capture les particules et homogénéise les produits. Un <strong>cycle</strong> = tout le volume du bassin passé une fois dans le filtre. Selon la loi de Gage-Bidwell : <strong>1 cycle ne nettoie que 63%</strong> de l'eau, il faut 4 cycles pour atteindre 98%.",
+      "Règle de base : <strong>heures de filtration ≈ T° eau ÷ 2</strong>. À 24°C → 12 h. À 28°C → 14 h. Canicule (&gt;28°C) → 24h/24."
+    ],
+    low:{threshold:'sous-filtration', items:[
+      'Eau qui verdit malgré le chlore',
+      'Particules visibles en suspension',
+      'Algues qui réapparaissent',
+      'Produits qui ne se diffusent pas'
+    ], product:'Augmenter heures + filtration en journée'},
+    high:{threshold:'sur-filtration', items:[
+      'Consommation électrique excessive',
+      'Usure prématurée pompe / filtre',
+      'Aucun bénéfice supplémentaire',
+      'Bruit inutile'
+    ], product:'Réduire après les pics d\'usage'},
+    tip:'<strong>Filtre toujours pendant les heures les plus chaudes</strong> (UV max + baigneurs = pollution max). Évite la filtration de nuit qui ne sert pas à grand chose. Et lave le filtre (contre-lavage) <strong>quand la pression monte de 0,3 bar</strong> au-dessus de la normale.'
+  },
+
+  algues: {
+    n:'08', icon:'leaf',
+    title:'Eau verte', subtitle:'diagnostic et traitement choc',
+    range:{lbl:'Action', val:'choc + brossage', ideal:'filtration 24/24'},
+    short:'Algues = le chlore a perdu la bataille. Choc obligatoire.',
+    define:[
+      "L'eau verte est causée par la prolifération d'<strong>algues microscopiques</strong>. Elle survient quand le chlore est devenu inefficace (CYA trop haut, pH trop haut, sous-dosé, ou filtration insuffisante).",
+      "Le traitement se fait en <strong>3 étapes</strong> : choc chloré → brossage → filtration intensive. Pas de raccourci."
+    ],
+    low:{threshold:'eau vert clair', items:[
+      'Algues en suspension récentes',
+      'Eau trouble, légère teinte verte',
+      'Chlore consommé trop vite',
+      'Récupérable en 24-48h'
+    ], product:'Chlore choc 1× dose normale'},
+    high:{threshold:'eau vert foncé', items:[
+      'Algues bien installées (parois)',
+      'Visibilité fond ≤ 50 cm',
+      'Couleur émeraude prononcée',
+      'Récupération 3-7 jours'
+    ], product:'Choc × 3 + anti-algues + brossage'},
+    tip:'<strong>Avant tout choc</strong> : (1) descendre le pH à 7.0–7.2 pour que le chlore soit max actif, (2) brosser parois + fond, (3) filtration 24/24, (4) ajouter le chlore choc le soir. Tester chaque jour. Floculant le 2e jour si l\'eau reste laiteuse.'
+  },
+
+  trouble: {
+    n:'09', icon:'fog',
+    title:'Eau trouble', subtitle:'arbre de diagnostic',
+    range:{lbl:'Étapes', val:'4 vérifs', ideal:'dans l\'ordre'},
+    short:'Eau qui n\'est plus limpide. Suis les étapes, dans l\'ordre.',
+    define:[
+      "Une eau trouble (laiteuse, voilée, blanchâtre) n'est pas une eau verte. Les causes sont <strong>multiples</strong> et le diagnostic se fait par <strong>élimination</strong>.",
+      "Suis les 4 vérifications ci-dessous dans l'ordre. Ne saute pas d'étape."
+    ],
+    steps:[
+      {title:'1. Vérifier le pH', body:'pH > 7.6 → eau trouble par précipité calcaire. Corrige le pH d\'abord, ça peut suffire.'},
+      {title:'2. Vérifier le chlore libre', body:'Fcl trop bas → début d\'algues invisibles. Procéder à un chlore choc.'},
+      {title:'3. Vérifier la filtration', body:'Filtre encrassé ? Pression haute ? Temps de filtration insuffisant ? Contre-lave et passe à 24/24 pendant 48h.'},
+      {title:'4. Sinon : floculant', body:'Si pH OK, Cl OK, filtration OK → l\'eau a des micro-particules. Floculant (chaussette ou liquide) + filtration continue.'}
+    ],
+    tip:'<strong>Eau "marbrée" laiteuse après chlore choc</strong> = c\'est normal et bon signe. C\'est l\'oxydation des matières organiques. Filtration 24h + ça redevient limpide. Pas besoin d\'autre traitement.'
+  },
+
+  hivernage: {
+    n:'10', icon:'snow',
+    title:'Hivernage', subtitle:'mise en sommeil & réveil',
+    range:{lbl:'Démarrage', val:'< 12 °C', ideal:'eau encore propre'},
+    short:'Bassin protégé l\'hiver = saison qui démarre vite au printemps.',
+    define:[
+      "L'hivernage <strong>passif</strong> (eau au repos) est le standard pour les bassins enterrés. Il se déclenche quand l'eau passe <strong>sous 12°C de manière stable</strong>, généralement courant novembre.",
+      "L'objectif : protéger le bassin du gel, limiter le développement d\'algues, et préparer un redémarrage facile au printemps."
+    ],
+    checklist:[
+      'Nettoyer le bassin (parois + fond)',
+      'Équilibrer pH à 7.4 et TAC',
+      'Chlore choc (1.5× dose normale)',
+      'Stopper l\'électrolyseur',
+      'Vider filtre + skimmers',
+      'Abaisser niveau d\'eau (sous skimmers)',
+      'Ajouter produit d\'hivernage',
+      'Installer flotteurs anti-gel',
+      'Démonter / vider tuyauterie',
+      'Bâche d\'hivernage opaque'
+    ],
+    tip:'<strong>Au printemps</strong>, ne vidange jamais l\'eau hivernée même si elle est verte ! Filtre 24/24, choc chloré, brossage. En 3-5 jours l\'eau redevient claire — bien moins cher qu\'une remise à niveau complète. Démarre dès que l\'eau dépasse 12°C.'
+  }
+};
+
+const ORDER = ['ph','chlore','tac','cya','th','sel','filtration','algues','trouble','hivernage'];
+
+// ============== RENDER ==============
+function renderFiche(slug){
+  const f = FICHES[slug];
+  if(!f) return '';
+  let body = `
+    <header class="fiche-head">
+      <div class="head-left">
+        <div class="icon-badge">${ICONS[f.icon]}</div>
+        <div class="titles">
+          <div class="eyebrow">Fiche · ${f.n}</div>
+          <h1>${f.title}</h1>
+          <div class="subtitle">${f.subtitle}</div>
+        </div>
+      </div>
+      <div class="range-chip">
+        <div class="lbl">${f.range.lbl}</div>
+        <div class="val">${f.range.val}</div>
+        <div class="ideal">${f.range.ideal}</div>
+      </div>
+    </header>
+
+    <div class="section">
+      <span class="section-label">C'est quoi ?</span>
+      <div class="define">${f.define.map(p=>`<p>${p}</p>`).join('')}</div>
+    </div>`;
+
+  if(f.steps){
+    body += `
+    <div class="section">
+      <span class="section-label">Diagnostic — dans l'ordre</span>
+      <div class="steps">
+        ${f.steps.map((s,i)=>`
+          <div class="step">
+            <div class="num">${i+1}</div>
+            <div class="step-body">
+              <div class="step-title">${s.title}</div>
+              <p>${s.body}</p>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  } else if(f.checklist){
+    body += `
+    <div class="section">
+      <span class="section-label">Checklist — hivernage</span>
+      <div class="checklist">
+        ${f.checklist.map(c=>`<div class="check-item">${c}</div>`).join('')}
+      </div>
+    </div>`;
+  } else if(f.low && f.high){
+    body += `
+    <div class="section">
+      <span class="section-label">Symptômes & corrections</span>
+    </div>
+    <div class="split">
+      <div class="split-col low">
+        <div class="split-head"><div class="arrow">↓</div><div class="label">Trop bas</div><div class="threshold">${f.low.threshold}</div></div>
+        <ul class="split-list">${f.low.items.map(i=>`<li>${i}</li>`).join('')}</ul>
+        <div class="split-action"><strong>Produit</strong><span class="product">${f.low.product}</span></div>
+      </div>
+      <div class="split-col high">
+        <div class="split-head"><div class="arrow">↑</div><div class="label">Trop haut</div><div class="threshold">${f.high.threshold}</div></div>
+        <ul class="split-list">${f.high.items.map(i=>`<li>${i}</li>`).join('')}</ul>
+        <div class="split-action"><strong>Produit</strong><span class="product">${f.high.product}</span></div>
+      </div>
+    </div>`;
+  }
+
+  body += `
+    <div class="tip">
+      <div class="tip-icon">💡</div>
+      <div class="tip-body">
+        <div class="lbl">À retenir</div>
+        <p>${f.tip}</p>
+      </div>
+    </div>
+
+    <div class="fiche-foot">
+      <span>chimie-piscine · fiche n°${f.n}</span>
+      <span>Source : Guide SOS Piscine V3</span>
+    </div>`;
+  return body;
+}
+
+// ============== UI ==============
+function buildSelect(){
+  const sel = document.getElementById('ficheSelect');
+  sel.innerHTML = ORDER.map(s=>`<option value="${s}">${FICHES[s].n} · ${FICHES[s].title}</option>`).join('');
+}
+
+function buildGallery(){
+  const g = document.getElementById('galleryGrid');
+  g.innerHTML = ORDER.map(s=>{
+    const f = FICHES[s];
+    return `<button class="grid-card" data-theme="${s}" onclick="loadFiche('${s}')">
+      <div class="num">FICHE ${f.n}</div>
+      <div class="gicon">${ICONS[f.icon]}</div>
+      <div class="gtitle">${f.title}</div>
+      <div class="gsub">${f.short}</div>
+    </button>`;
+  }).join('');
+}
+
+function loadFiche(slug){
+  if(!FICHES[slug]) return;
+  document.getElementById('gallery').style.display = 'none';
+  document.getElementById('stage').style.display = 'flex';
+  const el = document.getElementById('ficheContainer');
+  el.setAttribute('data-theme', slug);
+  el.innerHTML = renderFiche(slug);
+  document.getElementById('ficheSelect').value = slug;
+  document.getElementById('toolbarTitle').innerHTML = `Fiche ${FICHES[slug].n} <em>— ${FICHES[slug].title}</em>`;
+  window.scrollTo({top:0,behavior:'smooth'});
+  history.replaceState(null,'',`?f=${slug}`);
+}
+
+function showGallery(){
+  document.getElementById('gallery').style.display = 'block';
+  document.getElementById('stage').style.display = 'none';
+  document.getElementById('toolbarTitle').innerHTML = `Fiches <em>— Chimie de l'eau</em>`;
+  window.scrollTo({top:0,behavior:'smooth'});
+  history.replaceState(null,'','');
+}
+
+// ============== DOWNLOAD ==============
+function pdfOptions(slug){
+  const f = FICHES[slug];
+  return {
+    margin: 0,
+    filename: `chimie-piscine_${f.n}_${slug}.pdf`,
+    image: { type:'jpeg', quality:0.96 },
+    html2canvas: { scale:2, useCORS:true, backgroundColor:'#fbf6ea' },
+    jsPDF: { unit:'mm', format:'a4', orientation:'portrait' }
+  };
+}
+
+async function downloadCurrent(){
+  const slug = document.getElementById('ficheSelect').value;
+  if(document.getElementById('stage').style.display==='none'){
+    // si on est sur la galerie, on charge d'abord
+    loadFiche(slug);
+    await new Promise(r=>setTimeout(r,300));
+  }
+  const el = document.getElementById('ficheContainer');
+  await html2pdf().set(pdfOptions(slug)).from(el).save();
+}
+
+async function downloadAllZip(){
+  const btn = document.getElementById('zipBtn');
+  btn.disabled = true;
+  const original = btn.innerHTML;
+  const zip = new JSZip();
+  const folder = zip.folder('chimie-piscine-fiches');
+  const progressBar = document.getElementById('progressBar');
+
+  // Élément temporaire offscreen pour rendre chaque fiche
+  const temp = document.createElement('article');
+  temp.className = 'fiche';
+  temp.style.position = 'fixed';
+  temp.style.left = '-99999px';
+  temp.style.top = '0';
+  document.body.appendChild(temp);
+
+  try {
+    for(let i=0; i<ORDER.length; i++){
+      const slug = ORDER[i];
+      btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9" stroke-dasharray="${(i/ORDER.length)*56} 56"/></svg> ${i+1}/${ORDER.length}`;
+      progressBar.style.width = `${(i/ORDER.length)*100}%`;
+
+      temp.setAttribute('data-theme', slug);
+      temp.innerHTML = renderFiche(slug);
+      // attendre le rendu/fonts
+      await new Promise(r=>setTimeout(r,150));
+
+      const blob = await html2pdf().set(pdfOptions(slug)).from(temp).outputPdf('blob');
+      folder.file(`${FICHES[slug].n}_${slug}.pdf`, blob);
+    }
+    progressBar.style.width = '100%';
+    btn.innerHTML = '⏳ Compression…';
+    const zipBlob = await zip.generateAsync({ type:'blob' });
+
+    const url = URL.createObjectURL(zipBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'chimie-piscine-fiches.zip';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(e) {
+    console.error(e);
+    alert('Erreur pendant la génération du ZIP : ' + e.message);
+  } finally {
+    document.body.removeChild(temp);
+    btn.disabled = false;
+    btn.innerHTML = original;
+    setTimeout(()=>{ progressBar.style.width = '0%'; }, 600);
+  }
+}
+
+// ============== INIT ==============
+buildSelect();
+buildGallery();
+const params = new URLSearchParams(location.search);
+const initial = params.get('f');
+if(initial && FICHES[initial]) loadFiche(initial);
+</script>
+
+</body>
+</html>
