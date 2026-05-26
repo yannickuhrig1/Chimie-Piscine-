@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.9.6';
+const APP_VERSION = '1.10.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -871,6 +871,107 @@ function updateStatus(m){
   const el = $('globalStatus');
   el.className = 'status-pill ' + s.level;
   $('statusText').textContent = s.text;
+}
+
+// ============== Recommandation filtration ==============
+// Heures recommandées selon T° eau (règle T°/2 avec paliers saisonniers)
+function filtrationHoursForTemp(t){
+  if(t === null || t === undefined || isNaN(t)) return null;
+  if(t < 10) return 1;
+  if(t < 12) return 2;
+  if(t > 28) return 24;
+  return Math.max(2, Math.round(t / 2));
+}
+
+// Calcule cycles/jour + Gage-Bidwell + status
+function computeFiltration(temp, volume, debit){
+  const hours = filtrationHoursForTemp(temp);
+  if(hours === null) return null;
+  const out = {hours, temp};
+  if(volume && volume > 0 && debit && debit > 0){
+    const cycleTime = volume / debit; // h/cycle
+    const cycles = hours / cycleTime;
+    const renewal = (1 - Math.exp(-cycles)) * 100;
+    let level = 'danger';
+    if(cycles >= 3) level = 'ok';
+    else if(cycles >= 1.5) level = 'warn';
+    out.cycleTime = cycleTime;
+    out.cycles = cycles;
+    out.renewal = renewal;
+    out.level = level;
+    out.underpowered = cycleTime > 4;
+    out.minDebit = volume / 4;
+  }
+  return out;
+}
+
+function renderFiltration(){
+  const card = $('filtrationCard');
+  if(!card) return;
+  const temp = num('temp');
+  const volume = num('volume');
+  // Le débit vit dans cfgDebit (page Rappels) — lu via storage ou DOM
+  let debit = null;
+  const debitEl = $('cfgDebit');
+  if(debitEl && debitEl.value !== '') debit = parseFloat(debitEl.value);
+  if(debit === null || isNaN(debit)){
+    const last = loadJSON(STORAGE_KEYS.lastInputs, null);
+    if(last && last.debit) debit = last.debit;
+  }
+  const f = computeFiltration(temp, volume, debit);
+  if(!f){ card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const statsEl = $('filtrationStats');
+  const pillEl = $('filtrationPill');
+  const noteEl = $('filtrationNote');
+
+  // Pill
+  if(f.level){
+    const labels = {ok:'Bonne filtration', warn:'À surveiller', danger:'Sous-filtré'};
+    pillEl.className = 'status-pill ' + f.level;
+    pillEl.innerHTML = '<span class="pulse"></span>' + labels[f.level];
+    pillEl.style.display = '';
+  } else {
+    pillEl.style.display = 'none';
+    pillEl.className = 'status-pill';
+    pillEl.textContent = '';
+  }
+
+  // Stats (2 ou 3 items selon dispo)
+  const items = [];
+  items.push(`<div class="item">
+    <div class="result-label">Heures/jour</div>
+    <div class="result-value">${f.hours}<span class="unit">h</span></div>
+  </div>`);
+  if(f.cycles !== undefined){
+    items.push(`<div class="item">
+      <div class="result-label">Cycles/jour</div>
+      <div class="result-value">${f.cycles.toFixed(1)}<span class="unit">×</span></div>
+    </div>`);
+    items.push(`<div class="item">
+      <div class="result-label">Renouvellement</div>
+      <div class="result-value">${Math.round(f.renewal)}<span class="unit">%</span></div>
+    </div>`);
+  }
+  statsEl.innerHTML = items.join('');
+  statsEl.style.gridTemplateColumns = items.length === 3 ? 'repeat(3,1fr)' : 'repeat(2,1fr)';
+
+  // Note explicative
+  const notes = [];
+  if(temp < 10) notes.push('Hivernage : eau froide, 1 h/j suffit (ou arrêt total si gel).');
+  else if(temp > 28) notes.push('Canicule : filtration en continu 24/24 pour éviter le développement d\'algues.');
+  else notes.push(`Règle T°/2 : ${f.temp} °C → ${f.hours} h/j en journée (8 h–20 h).`);
+  if(f.cycles !== undefined){
+    notes.push(`1 cycle = ${f.cycleTime.toFixed(1)} h (volume ${volume} m³ ÷ débit ${debit} m³/h).`);
+    notes.push('Objectif : 3–4 cycles/jour (95–98 % de renouvellement, loi Gage-Bidwell).');
+    if(f.underpowered){
+      notes.push(`⚠ Pompe sous-dimensionnée : 1 cycle &gt; 4 h. Débit minimum recommandé = ${f.minDebit.toFixed(1)} m³/h.`);
+    }
+  } else {
+    notes.push('Renseigne le débit pompe (Rappels → Configurer mon bassin) pour voir les cycles/jour.');
+  }
+  noteEl.innerHTML = notes.join('<br>');
 }
 
 // ============== Rendu Corrections ==============
@@ -3594,6 +3695,12 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if(el.tagName === 'SELECT') el.addEventListener('change', scheduleLivePreview);
       }
     });
+  // Filtration : rafraîchi par T°, volume, débit (et au chargement)
+  ['temp','volume'].forEach(id => {
+    const el = $(id);
+    if(el) el.addEventListener('input', renderFiltration);
+  });
+  renderFiltration();
   // Render initial si données pré-saisies
   if(window.matchMedia && window.matchMedia('(min-width: 1000px)').matches){
     scheduleLivePreview();
@@ -3611,10 +3718,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if($('modeDesinf')) $('modeDesinf').value = $('cfgModeDesinf').value;
     autoSaveBassinParams();
   });
-  // cfgDebit n'a pas de miroir Mesure : déclenche juste la sauvegarde + live preview
+  // cfgDebit n'a pas de miroir Mesure : déclenche juste la sauvegarde + live preview + filtration
   if($('cfgDebit')) $('cfgDebit').addEventListener('input', () => {
     autoSaveBassinParams();
     if(typeof scheduleLivePreview === 'function') scheduleLivePreview();
+    if(typeof renderFiltration === 'function') renderFiltration();
   });
 
   // Vérifier permission notifications
