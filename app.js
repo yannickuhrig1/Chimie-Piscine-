@@ -3315,37 +3315,8 @@ function showEduScreen(articleId){
     detail.style.display = 'block';
     $('eduBack').style.display = 'inline-block';
     $('eduTitle').textContent = `${a.icon} ${a.title}`;
-    detail.dataset.articleId = a.id;
-    detail.innerHTML = `
-      <div class="edu-print-actions" style="display:flex;justify-content:flex-end;margin-bottom:14px">
-        <button class="btn-ghost" style="padding:6px 14px;font-size:12px;width:auto" onclick="printArticle('${a.id}')">
-          📄 Sauvegarder en PDF
-        </button>
-      </div>
-      <div class="edu-print-target">
-        <h1 class="edu-print-title">${a.icon} ${escapeHtml(a.title)}</h1>
-        ${a.body}
-      </div>`;
+    detail.innerHTML = a.body;
   }
-}
-
-// Sauvegarde de l'article courant en PDF via la boîte d'impression du navigateur.
-// La feuille de style print (@media print) masque toute l'app sauf le contenu de l'article.
-function printArticle(articleId){
-  const a = EDU_ARTICLES.find(x => x.id === articleId);
-  if(!a) return;
-  document.body.classList.add('printing-edu-article');
-  // Le titre du document devient le nom du fichier PDF par défaut
-  const originalTitle = document.title;
-  document.title = `Chimie Piscine — ${a.title}`;
-  const cleanup = () => {
-    document.body.classList.remove('printing-edu-article');
-    document.title = originalTitle;
-    window.removeEventListener('afterprint', cleanup);
-  };
-  window.addEventListener('afterprint', cleanup);
-  // Petit délai pour que le DOM applique la classe avant l'ouverture du dialog
-  setTimeout(() => window.print(), 50);
 }
 
 // ============== Wizard premier lancement ==============

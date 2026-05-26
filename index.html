@@ -931,51 +931,6 @@
     body.theme-glass .app{max-width:1180px;padding:32px 40px 0}
     body.theme-glass .page-title{font-size:38px}
   }
-
-  /* ============== Print : sauvegarde PDF d'une fiche Apprendre ============== */
-  @media print {
-    body.printing-edu-article{background:#fff !important;color:#1a1a1a !important;font-family:'Manrope','Inter',sans-serif !important}
-    body.printing-edu-article > *:not(#eduOverlay){display:none !important}
-    body.printing-edu-article .caustics{display:none !important}
-    body.printing-edu-article #eduOverlay{
-      position:static !important;display:block !important;background:#fff !important;
-      backdrop-filter:none !important;padding:0 !important;inset:auto !important;overflow:visible !important
-    }
-    body.printing-edu-article #eduOverlay > div{
-      background:#fff !important;border:none !important;padding:0 !important;max-width:none !important;
-      margin:0 !important;color:#1a1a1a !important;border-radius:0 !important;box-shadow:none !important
-    }
-    body.printing-edu-article #eduOverlay > div > div:first-child{display:none !important}
-    body.printing-edu-article #eduList{display:none !important}
-    body.printing-edu-article .edu-print-actions{display:none !important}
-    body.printing-edu-article #eduDetail{display:block !important;background:#fff !important;color:#1a1a1a !important;padding:0 !important}
-    body.printing-edu-article .edu-print-title{
-      font-family:'Fraunces',serif !important;font-size:24px !important;font-weight:600 !important;
-      color:#0c4a6e !important;margin:0 0 18px;padding-bottom:8px;border-bottom:2px solid #0c4a6e
-    }
-    body.printing-edu-article #eduDetail h3{color:#0c4a6e !important;font-size:15px !important;margin:18px 0 6px;font-weight:600}
-    body.printing-edu-article #eduDetail p,
-    body.printing-edu-article #eduDetail li{color:#1a1a1a !important;line-height:1.55;font-size:12px}
-    body.printing-edu-article #eduDetail strong,
-    body.printing-edu-article #eduDetail em{color:#000 !important}
-    body.printing-edu-article #eduDetail table{width:100% !important;border-collapse:collapse;font-size:11px;margin:8px 0;page-break-inside:avoid}
-    body.printing-edu-article #eduDetail table th,
-    body.printing-edu-article #eduDetail table td{border:1px solid #d0d0d0;padding:4px 6px;color:#1a1a1a !important;background:#fff !important;text-align:left}
-    body.printing-edu-article #eduDetail table tr[style*="background"]{background:#f3f7fa !important}
-    body.printing-edu-article #eduDetail table tr[style*="background"] td{background:#f3f7fa !important}
-    body.printing-edu-article #eduDetail ul,
-    body.printing-edu-article #eduDetail ol{padding-left:22px}
-    body.printing-edu-article #eduDetail code{background:#f3f4f6;color:#0c4a6e;padding:1px 5px;border-radius:4px;font-size:11px}
-    body.printing-edu-article #toast,
-    body.printing-edu-article nav.tabs,
-    body.printing-edu-article .bassin-saved-pill{display:none !important}
-    /* Pied de page imprimé */
-    body.printing-edu-article #eduDetail::after{
-      content:"chimie-piscine.vercel.app — Fiche imprimée";display:block;margin-top:22px;
-      padding-top:8px;border-top:1px solid #d0d0d0;font-size:10px;color:#666;text-align:center
-    }
-    @page{margin:14mm}
-  }
 </style>
 </head>
 <body>
