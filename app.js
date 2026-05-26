@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.11.1';
+const APP_VERSION = '1.12.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -671,6 +671,16 @@ function switchTab(name){
   if(name==='historique') renderCharts();
   if(name==='correction') renderCorrections();
   window.scrollTo({top:0, behavior:'smooth'});
+}
+
+// Scroll fluide vers une section de la page Paramètres + surligne l'ancre active
+function paramScrollTo(event, sectionId){
+  if(event) event.preventDefault();
+  const target = document.getElementById(sectionId);
+  if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+  document.querySelectorAll('.params-anchors a').forEach(a => a.classList.remove('is-current'));
+  const link = document.querySelector(`.params-anchors a[href="#${sectionId}"]`);
+  if(link) link.classList.add('is-current');
 }
 
 // ============== Saisie & Sauvegarde ==============
