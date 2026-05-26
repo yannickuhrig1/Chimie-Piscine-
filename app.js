@@ -670,7 +670,7 @@ function loadLastInputs(){
   setVal('thSouhaite','thSouhaite');
   if(last.modeDesinf && $('modeDesinf')) $('modeDesinf').value = last.modeDesinf;
   // Synchronise aussi les champs miroir de la page Rappels
-  ['cfgVolume','cfgPhSouhaite','cfgTacSouhaite','cfgCyaSouhaite','cfgSelSouhaite','cfgThSouhaite'].forEach(id => {
+  ['cfgVolume','cfgDebit','cfgPhSouhaite','cfgTacSouhaite','cfgCyaSouhaite','cfgSelSouhaite','cfgThSouhaite'].forEach(id => {
     const el = $(id);
     if(!el) return;
     const key = id.replace('cfg','').replace(/^[A-Z]/, c=>c.toLowerCase());
@@ -691,8 +691,11 @@ function showSavedPill(){
 
 function autoSaveBassinParams(){
   const current = loadJSON(STORAGE_KEYS.lastInputs, {}) || {};
+  const debitEl = $('cfgDebit');
+  const debitVal = debitEl && debitEl.value !== '' ? parseFloat(debitEl.value) : null;
   const next = {
     volume: num('volume'),
+    debit: (debitVal !== null && !isNaN(debitVal)) ? debitVal : null,
     phSouhaite: num('phSouhaite'),
     tacSouhaite: num('tacSouhaite'),
     cya: num('cya'),
@@ -713,7 +716,7 @@ function autoSaveBassinParams(){
     if(Object.keys(cfgPatch).length) updateBassin(activeId, {config: cfgPatch});
   }
   // Synchronise les champs miroir de la page Rappels
-  const mirror = {volume:'cfgVolume', phSouhaite:'cfgPhSouhaite', tacSouhaite:'cfgTacSouhaite', cyaSouhaite:'cfgCyaSouhaite', selSouhaite:'cfgSelSouhaite', thSouhaite:'cfgThSouhaite'};
+  const mirror = {volume:'cfgVolume', debit:'cfgDebit', phSouhaite:'cfgPhSouhaite', tacSouhaite:'cfgTacSouhaite', cyaSouhaite:'cfgCyaSouhaite', selSouhaite:'cfgSelSouhaite', thSouhaite:'cfgThSouhaite'};
   Object.entries(mirror).forEach(([k, id]) => {
     if(next[k] !== null && $(id)) $(id).value = next[k];
   });
@@ -724,6 +727,7 @@ function autoSaveBassinParams(){
 function saveBassinConfigFromRappels(){
   const cfg = {
     volume: parseFloat($('cfgVolume').value) || null,
+    debit: parseFloat($('cfgDebit').value) || null,
     phSouhaite: parseFloat($('cfgPhSouhaite').value) || null,
     tacSouhaite: parseFloat($('cfgTacSouhaite').value) || null,
     cyaSouhaite: parseFloat($('cfgCyaSouhaite').value) || null,
@@ -772,6 +776,7 @@ function applyBassinConfigToInputs(bassin){
   if(c.modeDesinf && $('modeDesinf')) $('modeDesinf').value = c.modeDesinf;
   // Miroir page Rappels
   setVal('cfgVolume', c.volume);
+  setVal('cfgDebit', c.debit);
   setVal('cfgPhSouhaite', c.phSouhaite);
   setVal('cfgTacSouhaite', c.tacSouhaite);
   setVal('cfgCyaSouhaite', c.cyaSouhaite);
@@ -3605,6 +3610,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if($('cfgModeDesinf')) $('cfgModeDesinf').addEventListener('change', () => {
     if($('modeDesinf')) $('modeDesinf').value = $('cfgModeDesinf').value;
     autoSaveBassinParams();
+  });
+  // cfgDebit n'a pas de miroir Mesure : déclenche juste la sauvegarde + live preview
+  if($('cfgDebit')) $('cfgDebit').addEventListener('input', () => {
+    autoSaveBassinParams();
+    if(typeof scheduleLivePreview === 'function') scheduleLivePreview();
   });
 
   // Vérifier permission notifications
