@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.12.1';
+const APP_VERSION = '1.13.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -1562,6 +1562,116 @@ function deleteMeasurement(idx){
 // ============== Graphiques ==============
 let chartPh = null, chartTac = null, chartDesinf = null;
 
+const HIST_METRICS_KEY = 'cp_hist_metrics_v1';
+const HIST_METRICS_DEFAULT = {chart1: ['ph','tac'], chart2: ['fcl','cya']};
+const HIST_METRICS = {
+  ph:  {label:'pH',           short:'pH',     color:'#22b4d4', field:'ph'},
+  fcl: {label:'Chlore (ppm)', short:'Chlore', color:'#7fdbda', field:'fcl'},
+  tac: {label:'TAC (ppm)',    short:'TAC',    color:'#ffd166', field:'tac'},
+  cya: {label:'CYA (ppm)',    short:'CYA',    color:'#06d6a0', field:'cya'}
+};
+
+function loadHistMetrics(){
+  const s = loadJSON(HIST_METRICS_KEY, null);
+  const ok = arr => Array.isArray(arr) && arr.length > 0 && arr.every(k => HIST_METRICS[k]);
+  return {
+    chart1: (s && ok(s.chart1)) ? s.chart1.slice() : HIST_METRICS_DEFAULT.chart1.slice(),
+    chart2: (s && ok(s.chart2)) ? s.chart2.slice() : HIST_METRICS_DEFAULT.chart2.slice()
+  };
+}
+
+function toggleHistMetric(chartId, metricKey){
+  if(!HIST_METRICS[metricKey]) return;
+  const state = loadHistMetrics();
+  const arr = state[chartId] || [];
+  const idx = arr.indexOf(metricKey);
+  if(idx >= 0){
+    if(arr.length > 1) arr.splice(idx, 1);
+  } else {
+    arr.push(metricKey);
+  }
+  state[chartId] = arr;
+  saveJSON(HIST_METRICS_KEY, state);
+  renderHistMetricChips();
+  renderCharts();
+}
+
+function renderHistMetricChips(){
+  const state = loadHistMetrics();
+  ['chart1','chart2'].forEach(chartId => {
+    const container = document.getElementById('chips-' + chartId);
+    if(!container) return;
+    const selected = state[chartId];
+    container.querySelectorAll('.metric-chip').forEach(chip => {
+      chip.classList.toggle('is-active', selected.includes(chip.dataset.metric));
+    });
+  });
+  const t1 = document.getElementById('title-chart1');
+  const t2 = document.getElementById('title-chart2');
+  if(t1) t1.textContent = histChartTitle(state.chart1);
+  if(t2) t2.textContent = histChartTitle(state.chart2);
+}
+
+function histChartTitle(keys){
+  const parts = keys.map(k => HIST_METRICS[k].short);
+  if(parts.length <= 2) return parts.join(' & ');
+  return parts.slice(0, -1).join(', ') + ' & ' + parts[parts.length - 1];
+}
+
+function hexA(hex, a){
+  const h = hex.replace('#','');
+  const n = parseInt(h.length === 3 ? h.split('').map(c=>c+c).join('') : h, 16);
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
+
+function buildHistChart(canvasId, list, labels, baseConfig, selectedKeys){
+  const ctx = $(canvasId);
+  if(!ctx) return null;
+  const hasPh    = selectedKeys.includes('ph');
+  const ppmKeys  = selectedKeys.filter(k => k !== 'ph');
+  // pH a sa propre échelle (axe droit) dès qu'il y a au moins une métrique ppm
+  const splitPh  = hasPh && ppmKeys.length > 0;
+  // Si exactement 2 ppm sans pH, on garde le double axe gauche/droite pour lisibilité
+  const dualPpm  = !hasPh && ppmKeys.length === 2;
+
+  const axisFor = (k, i) => {
+    if(splitPh) return k === 'ph' ? 'y1' : 'y';
+    if(dualPpm) return i === 0 ? 'y' : 'y1';
+    return 'y';
+  };
+
+  const datasets = selectedKeys.map((k, i) => {
+    const cfg = HIST_METRICS[k];
+    return {
+      label: cfg.label,
+      data: list.map(m => m[cfg.field]),
+      borderColor: cfg.color,
+      backgroundColor: hexA(cfg.color, .1),
+      tension: .35, pointRadius: 3, pointHoverRadius: 5,
+      spanGaps: true,
+      yAxisID: axisFor(k, i)
+    };
+  });
+
+  const titleFor = id => {
+    if(splitPh) return id === 'y1' ? 'pH' : 'ppm';
+    if(dualPpm) return HIST_METRICS[selectedKeys[id === 'y' ? 0 : 1]].short;
+    return selectedKeys.length === 1 ? HIST_METRICS[selectedKeys[0]].short : 'valeur';
+  };
+
+  const scales = {x: baseConfig.scales.x};
+  scales.y = {...baseConfig.scales.y, position:'left', title:{display:true, text:titleFor('y'), color:'#7fdbda', font:{family:'Manrope', size:10}}};
+  if(splitPh || dualPpm){
+    scales.y1 = {...baseConfig.scales.y, position:'right', grid:{drawOnChartArea:false}, title:{display:true, text:titleFor('y1'), color:'#7fdbda', font:{family:'Manrope', size:10}}};
+  }
+
+  return new Chart(ctx.getContext('2d'), {
+    type: 'line',
+    data: {labels, datasets},
+    options: {...baseConfig, scales}
+  });
+}
+
 function renderCharts(){
   renderHistory();
   renderTrends();
@@ -1605,70 +1715,15 @@ function renderCharts(){
     }
   };
 
-  // Chart pH & Chlore
-  const ctxPh = $('chartPh').getContext('2d');
-  if(chartPh) chartPh.destroy();
-  chartPh = new Chart(ctxPh, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label:'pH',
-          data: list.map(m => m.ph),
-          borderColor:'#22b4d4',
-          backgroundColor:'rgba(34,180,212,.1)',
-          tension:.35, pointRadius:3, pointHoverRadius:5,
-          spanGaps:true, yAxisID:'y'
-        },
-        {
-          label:'Chlore libre (ppm)',
-          data: list.map(m => m.fcl),
-          borderColor:'#7fdbda',
-          backgroundColor:'rgba(127,219,218,.1)',
-          tension:.35, pointRadius:3, pointHoverRadius:5,
-          spanGaps:true, yAxisID:'y1'
-        }
-      ]
-    },
-    options: {
-      ...baseConfig,
-      scales: {
-        x: baseConfig.scales.x,
-        y: {...baseConfig.scales.y, position:'left', title:{display:true, text:'pH', color:'#7fdbda', font:{family:'Manrope', size:10}}},
-        y1: {...baseConfig.scales.y, position:'right', grid:{drawOnChartArea:false}, title:{display:true, text:'Cl libre', color:'#7fdbda', font:{family:'Manrope', size:10}}}
-      }
-    }
-  });
+  // Charts personnalisables (chart1 + chart2)
+  const histState = loadHistMetrics();
+  renderHistMetricChips();
 
-  // Chart TAC & CYA
-  const ctxTac = $('chartTac').getContext('2d');
+  if(chartPh) chartPh.destroy();
+  chartPh = buildHistChart('chartPh', list, labels, baseConfig, histState.chart1);
+
   if(chartTac) chartTac.destroy();
-  chartTac = new Chart(ctxTac, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [
-        {
-          label:'TAC (ppm)',
-          data: list.map(m => m.tac),
-          borderColor:'#ffd166',
-          backgroundColor:'rgba(255,209,102,.1)',
-          tension:.35, pointRadius:3, pointHoverRadius:5,
-          spanGaps:true, fill:true
-        },
-        {
-          label:'CYA (ppm)',
-          data: list.map(m => m.cya),
-          borderColor:'#06d6a0',
-          backgroundColor:'rgba(6,214,160,.1)',
-          tension:.35, pointRadius:3, pointHoverRadius:5,
-          spanGaps:true
-        }
-      ]
-    },
-    options: baseConfig
-  });
+  chartTac = buildHistChart('chartTac', list, labels, baseConfig, histState.chart2);
 
   // Chart Désinfection — style PoolLab : Fcl mesuré + zones CYA-dépendantes
   const ctxDesinf = $('chartDesinf');

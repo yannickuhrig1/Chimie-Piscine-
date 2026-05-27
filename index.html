@@ -298,6 +298,25 @@
   /* Chart container */
   .chart-wrap{height:220px;margin-top:8px}
 
+  /* Sélecteur de métriques pour les charts historique */
+  .metric-chips{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 4px}
+  .metric-chip{
+    background:rgba(255,255,255,.04);
+    border:1px solid rgba(127,219,218,.22);
+    color:var(--shallow);
+    padding:5px 12px;border-radius:999px;
+    font-size:11px;font-weight:500;letter-spacing:.02em;
+    cursor:pointer;transition:background .15s, border-color .15s, color .15s;
+    font-family:'JetBrains Mono',monospace;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .metric-chip:hover{background:rgba(127,219,218,.08);border-color:rgba(127,219,218,.45)}
+  .metric-chip.is-active{background:rgba(127,219,218,.18);border-color:rgba(127,219,218,.65);color:#e8f9f8}
+  .metric-chip[data-metric="ph"].is-active{border-color:rgba(34,180,212,.7);background:rgba(34,180,212,.16);color:#cdeaf7}
+  .metric-chip[data-metric="fcl"].is-active{border-color:rgba(127,219,218,.7);background:rgba(127,219,218,.18);color:#e0fafa}
+  .metric-chip[data-metric="tac"].is-active{border-color:rgba(255,209,102,.7);background:rgba(255,209,102,.15);color:#fff1c2}
+  .metric-chip[data-metric="cya"].is-active{border-color:rgba(6,214,160,.7);background:rgba(6,214,160,.15);color:#caf5e3}
+
   /* Toast */
   .toast{
     position:fixed;bottom:120px;left:50%;transform:translateX(-50%) translateY(20px);
@@ -1397,7 +1416,7 @@
 
     <div class="card">
       <div class="card-header">
-        <div class="card-title"><span class="dot"></span>pH &amp; Chlore</div>
+        <div class="card-title"><span class="dot"></span><span id="title-chart1">pH &amp; TAC</span></div>
         <select id="chartRange" onchange="renderCharts()" style="padding:6px 30px 6px 10px;font-size:11px;width:auto">
           <option value="7">7 jours</option>
           <option value="30" selected>30 jours</option>
@@ -1405,12 +1424,24 @@
           <option value="365">Tout</option>
         </select>
       </div>
+      <div class="metric-chips" id="chips-chart1">
+        <button type="button" class="metric-chip" data-metric="ph"  onclick="toggleHistMetric('chart1','ph')">pH</button>
+        <button type="button" class="metric-chip" data-metric="fcl" onclick="toggleHistMetric('chart1','fcl')">Chlore</button>
+        <button type="button" class="metric-chip" data-metric="tac" onclick="toggleHistMetric('chart1','tac')">TAC</button>
+        <button type="button" class="metric-chip" data-metric="cya" onclick="toggleHistMetric('chart1','cya')">CYA</button>
+      </div>
       <div class="chart-wrap"><canvas id="chartPh"></canvas></div>
     </div>
 
     <div class="card">
       <div class="card-header">
-        <div class="card-title"><span class="dot"></span>TAC &amp; CYA</div>
+        <div class="card-title"><span class="dot"></span><span id="title-chart2">Chlore &amp; CYA</span></div>
+      </div>
+      <div class="metric-chips" id="chips-chart2">
+        <button type="button" class="metric-chip" data-metric="ph"  onclick="toggleHistMetric('chart2','ph')">pH</button>
+        <button type="button" class="metric-chip" data-metric="fcl" onclick="toggleHistMetric('chart2','fcl')">Chlore</button>
+        <button type="button" class="metric-chip" data-metric="tac" onclick="toggleHistMetric('chart2','tac')">TAC</button>
+        <button type="button" class="metric-chip" data-metric="cya" onclick="toggleHistMetric('chart2','cya')">CYA</button>
       </div>
       <div class="chart-wrap"><canvas id="chartTac"></canvas></div>
     </div>
