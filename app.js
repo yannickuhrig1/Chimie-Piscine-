@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.14.0';
+const APP_VERSION = '1.15.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -322,6 +322,31 @@ function calcJavelChloration(volume, fcl, cya){
   const fclVise = calcFclVise(cya);
   const litres = (fclVise - fcl) * volume / 100;
   return {fclVise, litres: Math.max(0, litres)};
+}
+
+/**
+ * Dose d'entretien quotidienne — compense la consommation naturelle de chlore.
+ * Même quand Fcl est dans la cible, le chlore se dégrade : UV (≈40-75 %/jour
+ * sans CYA, ≈10-30 % avec CYA 30-50 ppm), oxydation organique, baigneurs.
+ *
+ * Modèle simplifié :
+ *   loss_ppm_jour ≈ (base + soleil) × protection_CYA
+ *     base = 0.3 ppm/jour (organiques + baigneurs estimés)
+ *     soleil = max(0, (T - 15) / 10) — 0 à ≤15°C, 1 à 25°C, 1.5 à 30°C, 2 à 35°C
+ *     protection_CYA = max(0.25, 1 - CYA/100)
+ *
+ * Retourne : ppmPerDay (perte estimée), javelL (dose quotidienne en L de Javel 9.6°).
+ * Renvoie null si pas de température (on n'extrapole pas).
+ */
+function calcChloreMaintenance(volume, temperature, cya){
+  if(volume == null || temperature == null) return null;
+  const cyaSafe = (cya == null || cya < 0) ? 0 : cya;
+  const sun = Math.max(0, (temperature - 15) / 10);
+  const cyaProtect = Math.max(0.25, 1 - cyaSafe / 100);
+  const ppmPerDay = (0.3 + sun) * cyaProtect;
+  // Javel 9.6° : 1 ppm sur 1 m³ ≈ 0.01 L
+  const javelL = (ppmPerDay * volume) / 100;
+  return {ppmPerDay, javelL, javelLWeek: javelL * 7};
 }
 
 /**
@@ -1107,13 +1132,33 @@ function renderCorrections(measurement, targetContainer){
         </div>
       </div>`;
     } else {
-      html += `<div class="card">
-        <div class="card-header"><div class="card-title"><span class="dot"></span>Chloration</div></div>
-        <div class="result ok">
-          <div class="result-label">Niveau correct</div>
-          <div class="result-note">Fcl mesuré (${fmt(m.fcl,2)} ppm) ≥ cible (CYA/10 = ${fmt(chl.fclVise, 2)} ppm). Aucune chloration journalière à apporter.</div>
-        </div>
-      </div>`;
+      // Niveau correct → propose une dose d'entretien préventive pour compenser
+      // la consommation continue (UV, baigneurs, oxydation). En mode chlore
+      // uniquement — sel auto-régule, brome a son propre cycle.
+      const maint = (m.modeDesinf === 'chlore' || !m.modeDesinf)
+        ? calcChloreMaintenance(m.volume, m.temp, m.cya)
+        : null;
+      if(maint && maint.javelL >= 0.05){
+        html += `<div class="card">
+          <div class="card-header">
+            <div class="card-title"><span class="dot"></span>Chloration · entretien</div>
+            <span class="status-pill ok">Fcl ${fmt(m.fcl,2)} ppm</span>
+          </div>
+          <div class="result ok">
+            <div class="result-label">Dose d'entretien quotidienne</div>
+            <div class="result-value">${fmt(maint.javelL, 2)}<span class="unit">L</span></div>
+            <div class="result-note">Javel 9.6° à ajouter ce soir pour compenser la perte estimée de <strong>${fmt(maint.ppmPerDay, 2)} ppm/jour</strong> (T° ${fmt(m.temp,1)} °C, CYA ${fmt(m.cya || 0, 0)} ppm). Sur 7 j ≈ ${fmt(maint.javelLWeek, 1)} L. Sans cet apport, le Fcl chutera sous la cible en 1-2 jours par temps chaud.</div>
+          </div>
+        </div>`;
+      } else {
+        html += `<div class="card">
+          <div class="card-header"><div class="card-title"><span class="dot"></span>Chloration</div></div>
+          <div class="result ok">
+            <div class="result-label">Niveau correct</div>
+            <div class="result-note">Fcl mesuré (${fmt(m.fcl,2)} ppm) ≥ cible (CYA/10 = ${fmt(chl.fclVise, 2)} ppm).${m.temp == null ? " Renseigne la température pour estimer la dose d'entretien quotidienne." : ' Aucune chloration à apporter.'}</div>
+          </div>
+        </div>`;
+      }
     }
   }
 
