@@ -1627,7 +1627,19 @@ function hexA(hex, a){
 function buildHistChart(canvasId, list, labels, baseConfig, selectedKeys){
   const ctx = $(canvasId);
   if(!ctx) return null;
-  const useDual = selectedKeys.length === 2;
+  const hasPh    = selectedKeys.includes('ph');
+  const ppmKeys  = selectedKeys.filter(k => k !== 'ph');
+  // pH a sa propre échelle (axe droit) dès qu'il y a au moins une métrique ppm
+  const splitPh  = hasPh && ppmKeys.length > 0;
+  // Si exactement 2 ppm sans pH, on garde le double axe gauche/droite pour lisibilité
+  const dualPpm  = !hasPh && ppmKeys.length === 2;
+
+  const axisFor = (k, i) => {
+    if(splitPh) return k === 'ph' ? 'y1' : 'y';
+    if(dualPpm) return i === 0 ? 'y' : 'y1';
+    return 'y';
+  };
+
   const datasets = selectedKeys.map((k, i) => {
     const cfg = HIST_METRICS[k];
     return {
@@ -1637,17 +1649,22 @@ function buildHistChart(canvasId, list, labels, baseConfig, selectedKeys){
       backgroundColor: hexA(cfg.color, .1),
       tension: .35, pointRadius: 3, pointHoverRadius: 5,
       spanGaps: true,
-      yAxisID: useDual ? (i === 0 ? 'y' : 'y1') : 'y'
+      yAxisID: axisFor(k, i)
     };
   });
-  const scales = useDual ? {
-    x: baseConfig.scales.x,
-    y:  {...baseConfig.scales.y, position:'left',  title:{display:true, text:HIST_METRICS[selectedKeys[0]].short, color:'#7fdbda', font:{family:'Manrope', size:10}}},
-    y1: {...baseConfig.scales.y, position:'right', grid:{drawOnChartArea:false}, title:{display:true, text:HIST_METRICS[selectedKeys[1]].short, color:'#7fdbda', font:{family:'Manrope', size:10}}}
-  } : {
-    x: baseConfig.scales.x,
-    y:  {...baseConfig.scales.y, position:'left', title:{display:true, text:HIST_METRICS[selectedKeys[0]].short, color:'#7fdbda', font:{family:'Manrope', size:10}}}
+
+  const titleFor = id => {
+    if(splitPh) return id === 'y1' ? 'pH' : 'ppm';
+    if(dualPpm) return HIST_METRICS[selectedKeys[id === 'y' ? 0 : 1]].short;
+    return selectedKeys.length === 1 ? HIST_METRICS[selectedKeys[0]].short : 'valeur';
   };
+
+  const scales = {x: baseConfig.scales.x};
+  scales.y = {...baseConfig.scales.y, position:'left', title:{display:true, text:titleFor('y'), color:'#7fdbda', font:{family:'Manrope', size:10}}};
+  if(splitPh || dualPpm){
+    scales.y1 = {...baseConfig.scales.y, position:'right', grid:{drawOnChartArea:false}, title:{display:true, text:titleFor('y1'), color:'#7fdbda', font:{family:'Manrope', size:10}}};
+  }
+
   return new Chart(ctx.getContext('2d'), {
     type: 'line',
     data: {labels, datasets},
