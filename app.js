@@ -2239,7 +2239,7 @@ const SUPABASE_KEY = 'sb_publishable_BYHvWjbjIXYdt3OkSQtXXQ_luaxs3PI';
 
 // Chatwoot self-hosted — API publique du channel "Formulaire site Chimie Piscine"
 const CHATWOOT_URL = 'https://tickets.yannick-uhrig.com';
-const CHATWOOT_INBOX = 'Gfo9k3TpUWvG2saqmhz5ynzr';
+const CHATWOOT_INBOX = 'socZ7ZeDiw7qvGVs3UYPZXVh';
 
 async function sendToChatwoot(nom, email, sujet, message){
   try{
