@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.16.2';
+const APP_VERSION = '1.17.1';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -270,6 +270,21 @@ const PH_TABLE = {
   7.2: {8.2:45, 8.1:43, 8.0:40, 7.9:38, 7.8:36, 7.7:34, 7.6:31, 7.5:28, 7.4:23, 7.3:14},
   7.0: {8.2:70, 8.1:67, 8.0:64, 7.9:62, 7.8:60, 7.7:58, 7.6:55, 7.5:52, 7.4:47, 7.3:37, 7.2:30}
 };
+/**
+ * Correction pH+ par carbonate de sodium (Na2CO3) quand pH < pH visé.
+ * Référence empirique : ~14 g/m³ de carbonate de sodium relève le pH de 0.3
+ * pour un TAC moyen autour de 80 ppm.
+ * Retourne null si pas de delta positif.
+ */
+function calcPhPlus(volume, phMesure, phSouhaite){
+  if(volume == null || phMesure == null || phSouhaite == null) return null;
+  const delta = phSouhaite - phMesure;
+  if(delta <= 0.05) return null;
+  const gPerM3 = (delta / 0.3) * 14;
+  const totalG = gPerM3 * volume;
+  return {gPerM3, totalG, delta};
+}
+
 function calcPhPoudre(volume, phMesure, phSouhaite){
   // Trouver la cible la plus proche dans la table
   const cibles = Object.keys(PH_TABLE).map(Number).sort((a,b)=>b-a);
@@ -1104,12 +1119,45 @@ function renderCorrections(measurement, targetContainer){
       }
     }
     html += `</div>`;
+  } else if(m.ph !== null && m.phSouhaite !== null && m.ph < m.phSouhaite - 0.05){
+    // pH sous la cible → recommander pH+ (carbonate de sodium)
+    const phPlus = calcPhPlus(m.volume, m.ph, m.phSouhaite);
+    if(phPlus){
+      const splitNote = phPlus.delta > 0.6
+        ? "⚠️ Écart important — applique en 2 fois, séparées de 24 h, en remesurant entre."
+        : "⚠️ Applique 1/2 dose, mesure le lendemain, complète au besoin.";
+      html += `<div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="dot"></span>Correction pH+</div>
+          <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">Δ +${fmt(phPlus.delta, 2)}</span>
+        </div>
+        <div class="result-multi">
+          <div class="item">
+            <div class="result-label">Carbonate de sodium</div>
+            <div class="result-value">${fmt(phPlus.totalG, 0)}<span class="unit">g</span></div>
+          </div>
+        </div>
+        <div class="result-note">${splitNote}</div>`;
+      if(m.th !== null && m.tac !== null && m.temp !== null){
+        const lsiAvant = calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel');
+        const lsiApres = calcLSI(m.phSouhaite, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel');
+        if(lsiAvant != null && lsiApres != null){
+          const stAvant = lsiStatus(lsiAvant), stApres = lsiStatus(lsiApres);
+          html += `<div class="result-note" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--depth-line)">
+            📊 LSI passera de <strong style="color:${stAvant.tone==='ok'?'var(--leaf)':stAvant.tone==='warn'?'var(--lemon)':'var(--coral)'}">${lsiAvant>=0?'+':''}${fmt(lsiAvant,2)}</strong>
+            → <strong style="color:${stApres.tone==='ok'?'var(--leaf)':stApres.tone==='warn'?'var(--lemon)':'var(--coral)'}">${lsiApres>=0?'+':''}${fmt(lsiApres,2)}</strong>
+            <span style="opacity:.7">(${stApres.text.toLowerCase()})</span>
+          </div>`;
+        }
+      }
+      html += `</div>`;
+    }
   } else if(m.ph !== null && m.phSouhaite !== null){
     html += `<div class="card">
       <div class="card-header"><div class="card-title"><span class="dot"></span>pH</div></div>
       <div class="result ok">
-        <div class="result-label">Aucune correction nécessaire</div>
-        <div class="result-note">pH mesuré (${fmt(m.ph,1)}) déjà ≤ pH souhaité (${fmt(m.phSouhaite,1)})</div>
+        <div class="result-label">Niveau correct</div>
+        <div class="result-note">pH mesuré (${fmt(m.ph,1)}) aligné avec ta cible (${fmt(m.phSouhaite,1)}).</div>
       </div>
     </div>`;
   }
@@ -2869,6 +2917,164 @@ function renderWeatherCard(){
   });
 }
 
+// ============== Projection conso chlore (chimie × météo × historique) ==============
+const CHLORE_PROJECTION_ENABLED_KEY = 'cp_chlore_projection_enabled_v1';
+function isChloreProjectionEnabled(){
+  const v = localStorage.getItem(CHLORE_PROJECTION_ENABLED_KEY);
+  return v === null ? true : v === '1';
+}
+
+/**
+ * Estime la vitesse de consommation Cl quotidienne (ppm/jour) à partir de
+ * l'historique. On retient les paires de mesures consécutives où Fcl a baissé
+ * (= chlore consommé, pas un ajout). Renvoie null si pas assez de données.
+ */
+function estimateChloreRateFromHistory(measurements){
+  const sorted = measurements
+    .filter(m => m && m.fcl != null && m.date)
+    .sort((a, b) => new Date(a.date) - new Date(b.date));
+  if(sorted.length < 2) return null;
+  const cutoff = Date.now() - 14 * 86400000;
+  const rates = [];
+  for(let i = 1; i < sorted.length; i++){
+    const prev = sorted[i-1];
+    const cur = sorted[i];
+    if(new Date(cur.date).getTime() < cutoff) continue;
+    if(cur.fcl >= prev.fcl) continue; // ajout de chlore, on ignore
+    const hours = (new Date(cur.date) - new Date(prev.date)) / 3600000;
+    if(hours < 6 || hours > 72) continue; // < 6h trop bruité, > 72h trop incertain
+    const ppmPerDay = (prev.fcl - cur.fcl) / (hours / 24);
+    if(ppmPerDay > 0 && ppmPerDay < 5) rates.push(ppmPerDay); // garde-fous outliers
+  }
+  if(rates.length < 2) return null;
+  rates.sort((a, b) => a - b);
+  // Médiane pour robustesse aux outliers
+  return rates.length % 2 ? rates[(rates.length-1)/2] : (rates[rates.length/2 - 1] + rates[rates.length/2]) / 2;
+}
+
+/**
+ * Facteur multiplicateur quotidien basé sur la météo prévisionnelle.
+ * Référence : journée tempérée, T° 22°C, UV 5, pas de pluie → 1.0
+ */
+function weatherConsumptionFactor(tempMax, uvMax, rainMm){
+  const tempF = Math.max(0.5, 1 + (tempMax - 22) * 0.045); // +4.5%/°C au-dessus 22
+  const uvF = Math.max(0.7, 1 + (uvMax - 5) * 0.05);       // +5%/UV au-dessus 5
+  const rainF = rainMm >= 20 ? 1.25 : rainMm >= 10 ? 1.10 : 1.0; // dilution + photolyse
+  return tempF * uvF * rainF;
+}
+
+/**
+ * Projette l'évolution de Fcl sur 3 jours.
+ * Retourne null si données insuffisantes.
+ */
+function projectChloreEvolution(currentFcl, baseRate, weather, cyaTarget){
+  if(currentFcl == null || baseRate == null || !weather || !weather.daily) return null;
+  const d = weather.daily;
+  if(!d.temperature_2m_max || d.temperature_2m_max.length < 3) return null;
+  const target = cyaTarget && cyaTarget > 0 ? cyaTarget / 10 : 1.5;
+  const minSafe = Math.max(0.5, target * 0.8);
+  let fcl = currentFcl;
+  const days = [];
+  for(let i = 0; i < 3; i++){
+    const factor = weatherConsumptionFactor(d.temperature_2m_max[i], d.uv_index_max[i], d.precipitation_sum[i]);
+    const loss = baseRate * factor;
+    fcl = Math.max(0, fcl - loss);
+    let status = 'ok';
+    if(fcl < minSafe) status = 'danger';
+    else if(fcl < target) status = 'warn';
+    days.push({
+      label: ['Auj.', 'Demain', 'Après-d.'][i],
+      tempMax: d.temperature_2m_max[i],
+      uvMax: d.uv_index_max[i],
+      rain: d.precipitation_sum[i],
+      factor,
+      loss,
+      projectedFcl: fcl,
+      status,
+    });
+  }
+  return {target, minSafe, days, baseRate};
+}
+
+function renderChloreProjectionCard(){
+  const wrap = document.getElementById('chloreProjectionCard');
+  if(!wrap) return;
+  if(!isChloreProjectionEnabled()){ wrap.style.display = 'none'; return; }
+  const b = getActiveBassin();
+  if(!b || !b.config || !b.config.geo){ wrap.style.display = 'none'; return; }
+  const cfg = b.config;
+  const mode = (loadJSON(STORAGE_KEYS.lastInputs, {}) || {}).modeDesinf || cfg.modeDesinf || 'chlore';
+  if(mode !== 'chlore'){ wrap.style.display = 'none'; return; } // pas pertinent en mode brome/sel
+  const measurements = loadActiveMeasurements();
+  const latest = measurements.slice(-1)[0];
+  if(!latest || latest.fcl == null){ wrap.style.display = 'none'; return; }
+  const volume = (latest && latest.volume) || cfg.volume;
+  const cyaSouhaite = cfg.cyaSouhaite || 30;
+  const cya = (latest && latest.cya) || cyaSouhaite;
+  // Vitesse de conso : historique en priorité, sinon modèle théorique calcChloreMaintenance
+  let baseRate = estimateChloreRateFromHistory(measurements);
+  let rateSource = 'historique';
+  if(baseRate == null){
+    const temp = latest.temp || 22;
+    const maint = calcChloreMaintenance(volume, temp, cya);
+    if(maint) { baseRate = maint.ppmPerDay; rateSource = 'théorique'; }
+  }
+  if(baseRate == null){ wrap.style.display = 'none'; return; }
+
+  wrap.style.display = 'block';
+  wrap.innerHTML = `<div class="card-header">
+    <div class="card-title"><span class="dot" style="background:#a78bfa;box-shadow:0 0 10px #a78bfa"></span>Projection chlore</div>
+    <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">3 jours · ${rateSource}</span>
+  </div>
+  <div id="chloreProjectionContent" style="color:var(--shallow);font-size:13px;padding:8px 0">Calcul…</div>`;
+
+  fetchWeatherForBassin(b).then(weather => {
+    const content = document.getElementById('chloreProjectionContent');
+    if(!content) return;
+    const proj = projectChloreEvolution(latest.fcl, baseRate, weather, cyaSouhaite);
+    if(!proj){
+      content.innerHTML = '<div style="opacity:.7">Pas assez de données pour projeter.</div>';
+      return;
+    }
+    const colorMap = {ok:'#5eead4', warn:'#fbbf24', danger:'#f87171'};
+    const iconMap = {ok:'✓', warn:'⚠', danger:'🚨'};
+    const cols = proj.days.map(day => `
+      <div style="flex:1;text-align:center;padding:12px 8px;background:rgba(255,255,255,.04);border-radius:10px;border:1px solid ${colorMap[day.status]}33">
+        <div style="font-size:11px;color:var(--shallow);opacity:.7;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${day.label}</div>
+        <div style="font-size:18px;font-weight:600;color:${colorMap[day.status]}">${iconMap[day.status]} ${fmt(day.projectedFcl, 1)}</div>
+        <div style="font-size:10px;color:var(--shallow);opacity:.65;margin-top:4px;font-family:'JetBrains Mono',monospace">ppm Fcl</div>
+        <div style="font-size:10px;color:var(--shallow);opacity:.55;margin-top:6px;line-height:1.3">${fmt(day.tempMax,0)}°C · UV${fmt(day.uvMax,0)}${day.rain>=5?` · ${fmt(day.rain,0)}mm`:''}</div>
+      </div>`).join('');
+    // Recommandation : si un jour passe sous la cible, calcule la dose préventive à ajouter maintenant
+    const firstDrop = proj.days.find(d => d.status !== 'ok');
+    let action;
+    if(firstDrop){
+      // Combien faut-il ajouter pour tenir 3 jours au-dessus de target ?
+      const totalLoss3d = proj.days.reduce((s, d) => s + d.loss, 0);
+      const need = Math.max(0, (proj.target + 0.2) - latest.fcl + totalLoss3d);
+      const javelMl = volume ? Math.round((need * volume / 100) * 1000) : null;
+      action = `<div style="margin-top:14px;padding:12px;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.25);border-radius:10px;font-size:13px;line-height:1.55;color:#e4d9ff">
+        <strong>💡 ${firstDrop.label === 'Auj.' ? "Aujourd'hui" : firstDrop.label.replace('.', '')}</strong> ton chlore va passer sous ${fmt(proj.target,1)} ppm (cible CYA/10).<br>
+        ${javelMl ? `Ajoute <strong>~${javelMl} mL de Javel 9.6°</strong> maintenant pour tenir 3 jours.` : 'Ajoute du chlore préventif.'}
+      </div>`;
+    } else {
+      action = `<div style="margin-top:14px;color:var(--leaf);font-size:13px">✓ Niveau Fcl tient les 3 prochains jours sans ajout préventif.</div>`;
+    }
+    const baseRateHint = `<div style="margin-top:10px;font-size:11px;color:var(--shallow);opacity:.55;line-height:1.45">Conso ${rateSource} : ~${fmt(proj.baseRate,2)} ppm/jour · cible CYA/10 = ${fmt(proj.target,1)} ppm</div>`;
+    content.innerHTML = `<div style="display:flex;gap:8px">${cols}</div>${action}${baseRateHint}`;
+  }).catch(err => {
+    const content = document.getElementById('chloreProjectionContent');
+    if(content) content.innerHTML = '<div style="opacity:.7">Météo indisponible, projection impossible.</div>';
+  });
+}
+
+// Chaîne le rendu de la projection chlore après chaque update météo
+const _origRenderWeatherCard = renderWeatherCard;
+window.renderWeatherCard = function(){
+  _origRenderWeatherCard();
+  try{ renderChloreProjectionCard(); }catch(e){ console.warn('Projection render failed', e); }
+};
+
 // Géolocalisation rapide pour une carte de bassin
 async function setBassinGeoFromBrowser(bassinId){
   if(!navigator.geolocation){ toast('Géolocalisation indisponible', 'warn'); return null; }
@@ -3948,6 +4154,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
   }
   applyDesktopViewMode();
 
+  // Toggle "Projection chlore"
+  const projToggle = $('chloreProjectionToggle');
+  if(projToggle){
+    projToggle.checked = isChloreProjectionEnabled();
+    projToggle.addEventListener('change', () => {
+      localStorage.setItem(CHLORE_PROJECTION_ENABLED_KEY, projToggle.checked ? '1' : '0');
+      renderChloreProjectionCard();
+    });
+  }
+
   // Auto-save sur les paramètres bassin (debounced via input event)
   ['volume','phSouhaite','tacSouhaite','cya','cyaSouhaite','selSouhaite','thSouhaite'].forEach(id => {
     const el = $(id);
@@ -4112,6 +4328,7 @@ const SYNCABLE_KEYS = new Set([
   'cp_theme_mode_v1',
   'cp_hist_metrics_v1',
   'cp_desktop_view_v1',
+  'cp_chlore_projection_enabled_v1',
 ]);
 
 let _supa = null;
@@ -4255,6 +4472,7 @@ function collectPrefsPayload(){
     hist_metrics: loadJSON('cp_hist_metrics_v1', null),
     desktop_view: localStorage.getItem('cp_desktop_view_v1') || null,
     optional_fields: loadJSON(STORAGE_KEYS.optionalFields, null),
+    chlore_projection_enabled: localStorage.getItem('cp_chlore_projection_enabled_v1'),
   };
 }
 
@@ -4317,6 +4535,7 @@ async function syncPullAll(){
       if(d.hist_metrics) _rawSetItem('cp_hist_metrics_v1', JSON.stringify(d.hist_metrics));
       if(d.desktop_view) _rawSetItem('cp_desktop_view_v1', d.desktop_view);
       if(d.optional_fields) _rawSetItem(STORAGE_KEYS.optionalFields, JSON.stringify(d.optional_fields));
+      if(d.chlore_projection_enabled === '0' || d.chlore_projection_enabled === '1') _rawSetItem('cp_chlore_projection_enabled_v1', d.chlore_projection_enabled);
     }
     if(rem.data && rem.data.data && Object.keys(rem.data.data).length){
       _rawSetItem(STORAGE_KEYS.reminders, JSON.stringify(rem.data.data));
@@ -4428,10 +4647,28 @@ async function handleFirstLogin(){
       await syncPushAll();
       await syncPullAll();
     } else {
+      // Backup des données locales irréversibles (geo des bassins) avant écrasement
+      const geoBackup = {};
+      localBassins.forEach(b => { if(b && b.id && b.config && b.config.geo) geoBackup[b.id] = b.config.geo; });
       [STORAGE_KEYS.measurements, STORAGE_KEYS.bassins, STORAGE_KEYS.activeBassin, STORAGE_KEYS.reminders,
        STORAGE_KEYS.optionalFields, STORAGE_KEYS.lastInputs, 'cp_theme_mode_v1', 'cp_hist_metrics_v1',
        'cp_desktop_view_v1'].forEach(k => _rawRemoveItem(k));
       await syncPullAll();
+      // Restaure le geo pour les bassins qui matchent par id (le cloud les a peut-être sans geo)
+      if(Object.keys(geoBackup).length){
+        const newBassins = loadJSON(STORAGE_KEYS.bassins, []);
+        let restored = false;
+        newBassins.forEach(b => {
+          if(b && b.id && geoBackup[b.id] && (!b.config.geo)){
+            b.config.geo = geoBackup[b.id];
+            restored = true;
+          }
+        });
+        if(restored){
+          _rawSetItem(STORAGE_KEYS.bassins, JSON.stringify(newBassins));
+          await syncPushAll();
+        }
+      }
       _initialSyncDone = true;
     }
   } else if(hasLocal && !hasCloud){
