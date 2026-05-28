@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.16.0';
+const APP_VERSION = '1.16.1';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -4455,4 +4455,44 @@ document.addEventListener('DOMContentLoaded', async () => {
       toast('Connecté en tant que ' + _authUser.email, 'ok');
     }
   });
+
+  // Popup d'info sync (one-shot, opt-out persistant)
+  setTimeout(maybeShowSyncPromo, 2500);
 });
+
+// ============== Popup promo création de compte ==============
+const SYNC_PROMO_KEY = 'cp_sync_promo_dismissed_v1';
+
+function maybeShowSyncPromo(){
+  if(_authUser) return;                                              // déjà connecté
+  if(localStorage.getItem(SYNC_PROMO_KEY) === '1') return;           // déjà dismissé
+  const wizard = document.getElementById('wizardOverlay');
+  if(wizard && wizard.style.display !== 'none' && wizard.offsetParent !== null) return; // wizard en cours
+  if(getBassins().length === 0) return;                              // brand new user, focus sur le setup
+  openSyncPromo();
+}
+
+window.openSyncPromo = function(){
+  const ov = document.getElementById('syncPromoOverlay');
+  if(ov) ov.style.display = 'flex';
+};
+
+window.closeSyncPromo = function(){
+  const cb = document.getElementById('syncPromoNeverShow');
+  if(cb && cb.checked){
+    try{ _rawSetItem(SYNC_PROMO_KEY, '1'); }catch(e){}
+  }
+  const ov = document.getElementById('syncPromoOverlay');
+  if(ov) ov.style.display = 'none';
+};
+
+window.syncPromoCreateAccount = function(){
+  // Si la coche est activée, on respecte aussi (pas re-popup si l'utilisateur se déconnecte ensuite)
+  const cb = document.getElementById('syncPromoNeverShow');
+  if(cb && cb.checked){
+    try{ _rawSetItem(SYNC_PROMO_KEY, '1'); }catch(e){}
+  }
+  const ov = document.getElementById('syncPromoOverlay');
+  if(ov) ov.style.display = 'none';
+  openAccountLogin();
+};
