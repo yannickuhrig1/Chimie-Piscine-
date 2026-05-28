@@ -1991,6 +1991,24 @@
   </div>
 </div>
 
+<div id="syncPromoOverlay" class="account-modal-overlay" style="display:none" onclick="if(event.target===this)closeSyncPromo()">
+  <div class="account-modal" role="dialog" aria-labelledby="syncPromoTitle" aria-modal="true">
+    <button type="button" class="account-modal-close" onclick="closeSyncPromo()" aria-label="Fermer">×</button>
+    <div class="account-modal-icon" style="background:linear-gradient(135deg,#5eead4,#22c4a6)">☁️</div>
+    <h2 id="syncPromoTitle" class="account-modal-title">Sync entre vos appareils</h2>
+    <p class="account-modal-sub">Tu peux désormais créer un compte (gratuit, lien magique par email — aucun mot de passe) pour <strong>retrouver ton bassin et ton historique sur tous tes appareils</strong> : téléphone, tablette, ordinateur.</p>
+    <p style="margin:14px 0 0;font-size:12px;color:var(--shallow);opacity:.8;line-height:1.6;text-align:center">L'app reste utilisable <strong>sans compte</strong> comme aujourd'hui — tes données restent stockées localement.</p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:20px">
+      <button class="btn-primary" onclick="syncPromoCreateAccount()">Créer mon compte</button>
+      <button class="btn-ghost" onclick="closeSyncPromo()">Plus tard</button>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:16px;padding:10px;border-radius:10px;background:rgba(255,255,255,.04);cursor:pointer;font-size:12px;color:var(--shallow)">
+      <input type="checkbox" id="syncPromoNeverShow" style="width:16px;height:16px;cursor:pointer;accent-color:#5eead4">
+      <span>Ne plus afficher ce message</span>
+    </label>
+  </div>
+</div>
+
 <div id="accountMergeOverlay" class="account-modal-overlay" style="display:none">
   <div class="account-modal" role="dialog" aria-labelledby="accountMergeTitle" aria-modal="true">
     <div class="account-modal-icon" style="background:linear-gradient(135deg,#fbbf24,#f59e0b)">🔄</div>
