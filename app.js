@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.17.0';
+const APP_VERSION = '1.17.1';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -270,6 +270,21 @@ const PH_TABLE = {
   7.2: {8.2:45, 8.1:43, 8.0:40, 7.9:38, 7.8:36, 7.7:34, 7.6:31, 7.5:28, 7.4:23, 7.3:14},
   7.0: {8.2:70, 8.1:67, 8.0:64, 7.9:62, 7.8:60, 7.7:58, 7.6:55, 7.5:52, 7.4:47, 7.3:37, 7.2:30}
 };
+/**
+ * Correction pH+ par carbonate de sodium (Na2CO3) quand pH < pH visé.
+ * Référence empirique : ~14 g/m³ de carbonate de sodium relève le pH de 0.3
+ * pour un TAC moyen autour de 80 ppm.
+ * Retourne null si pas de delta positif.
+ */
+function calcPhPlus(volume, phMesure, phSouhaite){
+  if(volume == null || phMesure == null || phSouhaite == null) return null;
+  const delta = phSouhaite - phMesure;
+  if(delta <= 0.05) return null;
+  const gPerM3 = (delta / 0.3) * 14;
+  const totalG = gPerM3 * volume;
+  return {gPerM3, totalG, delta};
+}
+
 function calcPhPoudre(volume, phMesure, phSouhaite){
   // Trouver la cible la plus proche dans la table
   const cibles = Object.keys(PH_TABLE).map(Number).sort((a,b)=>b-a);
@@ -1104,12 +1119,45 @@ function renderCorrections(measurement, targetContainer){
       }
     }
     html += `</div>`;
+  } else if(m.ph !== null && m.phSouhaite !== null && m.ph < m.phSouhaite - 0.05){
+    // pH sous la cible → recommander pH+ (carbonate de sodium)
+    const phPlus = calcPhPlus(m.volume, m.ph, m.phSouhaite);
+    if(phPlus){
+      const splitNote = phPlus.delta > 0.6
+        ? "⚠️ Écart important — applique en 2 fois, séparées de 24 h, en remesurant entre."
+        : "⚠️ Applique 1/2 dose, mesure le lendemain, complète au besoin.";
+      html += `<div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="dot"></span>Correction pH+</div>
+          <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">Δ +${fmt(phPlus.delta, 2)}</span>
+        </div>
+        <div class="result-multi">
+          <div class="item">
+            <div class="result-label">Carbonate de sodium</div>
+            <div class="result-value">${fmt(phPlus.totalG, 0)}<span class="unit">g</span></div>
+          </div>
+        </div>
+        <div class="result-note">${splitNote}</div>`;
+      if(m.th !== null && m.tac !== null && m.temp !== null){
+        const lsiAvant = calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel');
+        const lsiApres = calcLSI(m.phSouhaite, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel');
+        if(lsiAvant != null && lsiApres != null){
+          const stAvant = lsiStatus(lsiAvant), stApres = lsiStatus(lsiApres);
+          html += `<div class="result-note" style="margin-top:6px;padding-top:6px;border-top:1px solid var(--depth-line)">
+            📊 LSI passera de <strong style="color:${stAvant.tone==='ok'?'var(--leaf)':stAvant.tone==='warn'?'var(--lemon)':'var(--coral)'}">${lsiAvant>=0?'+':''}${fmt(lsiAvant,2)}</strong>
+            → <strong style="color:${stApres.tone==='ok'?'var(--leaf)':stApres.tone==='warn'?'var(--lemon)':'var(--coral)'}">${lsiApres>=0?'+':''}${fmt(lsiApres,2)}</strong>
+            <span style="opacity:.7">(${stApres.text.toLowerCase()})</span>
+          </div>`;
+        }
+      }
+      html += `</div>`;
+    }
   } else if(m.ph !== null && m.phSouhaite !== null){
     html += `<div class="card">
       <div class="card-header"><div class="card-title"><span class="dot"></span>pH</div></div>
       <div class="result ok">
-        <div class="result-label">Aucune correction nécessaire</div>
-        <div class="result-note">pH mesuré (${fmt(m.ph,1)}) déjà ≤ pH souhaité (${fmt(m.phSouhaite,1)})</div>
+        <div class="result-label">Niveau correct</div>
+        <div class="result-note">pH mesuré (${fmt(m.ph,1)}) aligné avec ta cible (${fmt(m.phSouhaite,1)}).</div>
       </div>
     </div>`;
   }
@@ -4599,10 +4647,28 @@ async function handleFirstLogin(){
       await syncPushAll();
       await syncPullAll();
     } else {
+      // Backup des données locales irréversibles (geo des bassins) avant écrasement
+      const geoBackup = {};
+      localBassins.forEach(b => { if(b && b.id && b.config && b.config.geo) geoBackup[b.id] = b.config.geo; });
       [STORAGE_KEYS.measurements, STORAGE_KEYS.bassins, STORAGE_KEYS.activeBassin, STORAGE_KEYS.reminders,
        STORAGE_KEYS.optionalFields, STORAGE_KEYS.lastInputs, 'cp_theme_mode_v1', 'cp_hist_metrics_v1',
        'cp_desktop_view_v1'].forEach(k => _rawRemoveItem(k));
       await syncPullAll();
+      // Restaure le geo pour les bassins qui matchent par id (le cloud les a peut-être sans geo)
+      if(Object.keys(geoBackup).length){
+        const newBassins = loadJSON(STORAGE_KEYS.bassins, []);
+        let restored = false;
+        newBassins.forEach(b => {
+          if(b && b.id && geoBackup[b.id] && (!b.config.geo)){
+            b.config.geo = geoBackup[b.id];
+            restored = true;
+          }
+        });
+        if(restored){
+          _rawSetItem(STORAGE_KEYS.bassins, JSON.stringify(newBassins));
+          await syncPushAll();
+        }
+      }
       _initialSyncDone = true;
     }
   } else if(hasLocal && !hasCloud){
