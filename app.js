@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.15.0';
+const APP_VERSION = '1.16.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -4093,4 +4093,366 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   refreshEyebrow();
   setInterval(refreshEyebrow, 60_000);
+});
+
+// ============== Compte & sync multi-appareils (Supabase Auth) ==============
+// Sans compte : app 100% locale (comportement historique inchangé).
+// Avec compte : config piscine + historique + rappels + préférences synchronisés via Supabase.
+const SYNC_DEBOUNCE_MS = 1500;
+const ACCOUNT_LAST_PULL_KEY = 'cp_last_pull_v1';
+const SUPA_AUTH_STORAGE_KEY = 'cp_sb_auth_v1';
+
+const SYNCABLE_KEYS = new Set([
+  STORAGE_KEYS.measurements,
+  STORAGE_KEYS.bassins,
+  STORAGE_KEYS.activeBassin,
+  STORAGE_KEYS.reminders,
+  STORAGE_KEYS.optionalFields,
+  STORAGE_KEYS.lastInputs,
+  'cp_theme_mode_v1',
+  'cp_hist_metrics_v1',
+  'cp_desktop_view_v1',
+]);
+
+let _supa = null;
+let _authUser = null;
+let _syncTimer = null;
+let _isPulling = false;
+let _initialSyncDone = false;
+// Refs aux setters originaux capturés AVANT patching pour les écritures internes
+const _rawSetItem = localStorage.setItem.bind(localStorage);
+const _rawRemoveItem = localStorage.removeItem.bind(localStorage);
+const _rawSaveJSON = saveJSON;
+
+function getSupa(){
+  if(_supa) return _supa;
+  if(!window.supabase || !window.supabase.createClient) return null;
+  _supa = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: {
+      persistSession: true,
+      detectSessionInUrl: true,
+      autoRefreshToken: true,
+      storageKey: SUPA_AUTH_STORAGE_KEY,
+    }
+  });
+  return _supa;
+}
+
+function updateSyncBadge(state){
+  const badge = document.getElementById('accountSyncBadge');
+  if(!badge) return;
+  if(!state){ badge.style.display = 'none'; return; }
+  badge.style.display = 'inline-flex';
+  badge.className = 'sync-badge' + (state === 'syncing' ? ' syncing' : state === 'error' ? ' error' : '');
+  badge.textContent = state === 'syncing' ? 'Sync…' : state === 'error' ? 'Erreur' : 'À jour';
+}
+
+function updateAccountUI(){
+  const out = document.getElementById('accountLoggedOut');
+  const panel = document.getElementById('accountLoggedIn');
+  if(!out || !panel) return;
+  if(_authUser){
+    out.style.display = 'none';
+    panel.style.display = '';
+    const emailEl = document.getElementById('accountEmail');
+    if(emailEl) emailEl.textContent = _authUser.email || '';
+    const av = document.getElementById('accountAvatar');
+    if(av) av.textContent = (_authUser.email || '?').slice(0,1).toUpperCase();
+    const last = localStorage.getItem(ACCOUNT_LAST_PULL_KEY);
+    const status = document.getElementById('accountSyncStatus');
+    if(status){
+      status.textContent = last
+        ? `Dernière synchro : ${relativeTime(last)}`
+        : 'Synchronisation initiale en cours…';
+    }
+  } else {
+    out.style.display = '';
+    panel.style.display = 'none';
+    updateSyncBadge(null);
+  }
+}
+
+// === Handlers UI ===
+window.openAccountLogin = function(){
+  const ov = document.getElementById('accountLoginOverlay');
+  if(!ov) return;
+  ov.style.display = 'flex';
+  document.getElementById('accountLoginStep1').style.display = '';
+  document.getElementById('accountLoginStep2').style.display = 'none';
+  const inp = document.getElementById('accountLoginEmail');
+  if(inp) setTimeout(()=>inp.focus(), 50);
+};
+window.closeAccountLogin = function(){
+  const ov = document.getElementById('accountLoginOverlay');
+  if(ov) ov.style.display = 'none';
+};
+
+window.sendMagicLink = async function(){
+  const inp = document.getElementById('accountLoginEmail');
+  const btn = document.getElementById('accountLoginSubmit');
+  if(!inp || !btn) return;
+  const email = inp.value.trim();
+  if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    toast('Email invalide', 'warn');
+    return;
+  }
+  btn.disabled = true;
+  btn.textContent = 'Envoi…';
+  try{
+    const supa = getSupa();
+    if(!supa) throw new Error('Supabase SDK non chargé');
+    const { error } = await supa.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin + window.location.pathname }
+    });
+    if(error) throw error;
+    document.getElementById('accountLoginStep1').style.display = 'none';
+    document.getElementById('accountLoginStep2').style.display = '';
+  }catch(err){
+    console.warn('Magic link failed', err);
+    toast("Impossible d'envoyer le lien : " + (err.message || 'erreur réseau'), 'err', 3500);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = 'Recevoir le lien magique';
+  }
+};
+
+window.accountLogout = async function(){
+  if(!confirm('Te déconnecter ? Tes données restent sur cet appareil.')) return;
+  const supa = getSupa();
+  if(supa){ try{ await supa.auth.signOut(); }catch(e){} }
+  _authUser = null;
+  _initialSyncDone = false;
+  _rawRemoveItem(ACCOUNT_LAST_PULL_KEY);
+  updateAccountUI();
+  toast('Déconnecté', 'ok');
+};
+
+window.forceSyncNow = async function(){
+  if(!_authUser){ toast("Connecte-toi d'abord", 'warn'); return; }
+  await syncPushAll();
+  await syncPullAll();
+  toast('Synchronisation terminée', 'ok');
+};
+
+// === Sync layer ===
+function scheduleSyncPush(){
+  if(!_authUser || !_initialSyncDone || _isPulling) return;
+  if(_syncTimer) clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(() => { syncPushAll().catch(()=>{}); }, SYNC_DEBOUNCE_MS);
+}
+
+function collectConfigPayload(){
+  return {
+    bassins: loadJSON(STORAGE_KEYS.bassins, []),
+    active_bassin_id: localStorage.getItem(STORAGE_KEYS.activeBassin) || null,
+    last_inputs: loadJSON(STORAGE_KEYS.lastInputs, null),
+  };
+}
+function collectPrefsPayload(){
+  return {
+    theme: localStorage.getItem('cp_theme_mode_v1') || null,
+    hist_metrics: loadJSON('cp_hist_metrics_v1', null),
+    desktop_view: localStorage.getItem('cp_desktop_view_v1') || null,
+    optional_fields: loadJSON(STORAGE_KEYS.optionalFields, null),
+  };
+}
+
+async function syncPushAll(){
+  if(!_authUser) return;
+  const supa = getSupa();
+  if(!supa) return;
+  updateSyncBadge('syncing');
+  try{
+    const uid = _authUser.id;
+    const nowIso = new Date().toISOString();
+    await supa.from('cp_pool_config').upsert({ user_id: uid, data: collectConfigPayload(), updated_at: nowIso });
+    await supa.from('cp_preferences').upsert({ user_id: uid, data: collectPrefsPayload(), updated_at: nowIso });
+    await supa.from('cp_reminders').upsert({ user_id: uid, data: loadJSON(STORAGE_KEYS.reminders, {}), updated_at: nowIso });
+    const localMeasures = loadJSON(STORAGE_KEYS.measurements, []);
+    if(localMeasures.length){
+      const rows = localMeasures.filter(m => m && m.date).map(m => ({
+        user_id: uid,
+        measured_at: m.date,
+        data: m,
+        updated_at: nowIso,
+      }));
+      for(let i=0; i<rows.length; i+=100){
+        const { error } = await supa.from('cp_measurements').upsert(rows.slice(i, i+100), { onConflict: 'user_id,measured_at' });
+        if(error) throw error;
+      }
+    }
+    _rawSetItem(ACCOUNT_LAST_PULL_KEY, nowIso);
+    updateSyncBadge('ok');
+    updateAccountUI();
+  }catch(err){
+    console.warn('Sync push failed', err);
+    updateSyncBadge('error');
+  }
+}
+
+async function syncPullAll(){
+  if(!_authUser) return;
+  const supa = getSupa();
+  if(!supa) return;
+  _isPulling = true;
+  updateSyncBadge('syncing');
+  try{
+    const uid = _authUser.id;
+    const [cfg, prefs, rem, meas] = await Promise.all([
+      supa.from('cp_pool_config').select('data, updated_at').eq('user_id', uid).maybeSingle(),
+      supa.from('cp_preferences').select('data, updated_at').eq('user_id', uid).maybeSingle(),
+      supa.from('cp_reminders').select('data, updated_at').eq('user_id', uid).maybeSingle(),
+      supa.from('cp_measurements').select('measured_at, data, updated_at').eq('user_id', uid),
+    ]);
+    if(cfg.data && cfg.data.data){
+      const d = cfg.data.data;
+      if(Array.isArray(d.bassins)) _rawSetItem(STORAGE_KEYS.bassins, JSON.stringify(d.bassins));
+      if(d.active_bassin_id) _rawSetItem(STORAGE_KEYS.activeBassin, d.active_bassin_id);
+      if(d.last_inputs) _rawSetItem(STORAGE_KEYS.lastInputs, JSON.stringify(d.last_inputs));
+    }
+    if(prefs.data && prefs.data.data){
+      const d = prefs.data.data;
+      if(d.theme){ _rawSetItem('cp_theme_mode_v1', d.theme); if(typeof setThemeMode === 'function') setThemeMode(d.theme); }
+      if(d.hist_metrics) _rawSetItem('cp_hist_metrics_v1', JSON.stringify(d.hist_metrics));
+      if(d.desktop_view) _rawSetItem('cp_desktop_view_v1', d.desktop_view);
+      if(d.optional_fields) _rawSetItem(STORAGE_KEYS.optionalFields, JSON.stringify(d.optional_fields));
+    }
+    if(rem.data && rem.data.data && Object.keys(rem.data.data).length){
+      _rawSetItem(STORAGE_KEYS.reminders, JSON.stringify(rem.data.data));
+    }
+    if(meas.data && meas.data.length){
+      // Merge dédupliqué par date (cloud gagne pour mêmes dates)
+      const local = loadJSON(STORAGE_KEYS.measurements, []);
+      const byKey = new Map();
+      local.forEach(m => { if(m && m.date) byKey.set(m.date, m); });
+      meas.data.forEach(row => {
+        const m = row.data;
+        const k = (m && m.date) || row.measured_at;
+        if(k) byKey.set(k, m);
+      });
+      const merged = Array.from(byKey.values()).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      _rawSetItem(STORAGE_KEYS.measurements, JSON.stringify(merged));
+    }
+    const nowIso = new Date().toISOString();
+    _rawSetItem(ACCOUNT_LAST_PULL_KEY, nowIso);
+    updateSyncBadge('ok');
+    updateAccountUI();
+    // Re-render des vues qui dépendent des données rechargées
+    try{ if(typeof loadLastInputs === 'function') loadLastInputs(); }catch(e){}
+    try{ if(typeof renderHistory === 'function') renderHistory(); }catch(e){}
+    try{ if(typeof renderCharts === 'function') renderCharts(); }catch(e){}
+    try{ if(typeof applyOptionalFieldsVisibility === 'function') applyOptionalFieldsVisibility(); }catch(e){}
+  }catch(err){
+    console.warn('Sync pull failed', err);
+    updateSyncBadge('error');
+  }finally{
+    _isPulling = false;
+  }
+}
+
+// === Wrappers d'écriture : déclenchent push après chaque save syncable ===
+window.saveJSON = function(key, val){
+  _rawSaveJSON(key, val);
+  if(SYNCABLE_KEYS.has(key)) scheduleSyncPush();
+};
+localStorage.setItem = function(key, val){
+  _rawSetItem(key, val);
+  if(SYNCABLE_KEYS.has(key)) scheduleSyncPush();
+};
+localStorage.removeItem = function(key){
+  _rawRemoveItem(key);
+  if(SYNCABLE_KEYS.has(key)) scheduleSyncPush();
+};
+
+// === Modale premier login (merge ou écrase) ===
+let _pendingMergeResolve = null;
+function showMergeModal(stats){
+  const ov = document.getElementById('accountMergeOverlay');
+  const box = document.getElementById('accountMergeStats');
+  if(box){
+    const lines = [
+      `${stats.measurements} mesure${stats.measurements>1?'s':''} dans l'historique`,
+      `${stats.bassins} bassin${stats.bassins>1?'s':''} configuré${stats.bassins>1?'s':''}`,
+      stats.hasReminders ? 'Rappels configurés' : 'Pas de rappels',
+    ];
+    box.innerHTML = '<strong>Sur cet appareil :</strong><br>• ' + lines.join('<br>• ');
+  }
+  if(ov) ov.style.display = 'flex';
+  return new Promise(res => { _pendingMergeResolve = res; });
+}
+window.resolveMergeChoice = function(choice){
+  const ov = document.getElementById('accountMergeOverlay');
+  if(ov) ov.style.display = 'none';
+  if(_pendingMergeResolve){ _pendingMergeResolve(choice); _pendingMergeResolve = null; }
+};
+
+async function handleFirstLogin(){
+  const supa = getSupa();
+  if(!supa) return;
+  const uid = _authUser.id;
+  const localMeasures = loadJSON(STORAGE_KEYS.measurements, []);
+  const localBassins = loadJSON(STORAGE_KEYS.bassins, []);
+  const localReminders = loadJSON(STORAGE_KEYS.reminders, null);
+  const hasLocal = (localMeasures && localMeasures.length > 0) || (localBassins && localBassins.length > 0);
+  let hasCloud = false;
+  try{
+    const { count } = await supa.from('cp_measurements').select('*', { count: 'exact', head: true }).eq('user_id', uid);
+    if(count && count > 0) hasCloud = true;
+    if(!hasCloud){
+      const { data: cfg } = await supa.from('cp_pool_config').select('data').eq('user_id', uid).maybeSingle();
+      if(cfg && cfg.data && Array.isArray(cfg.data.bassins) && cfg.data.bassins.length) hasCloud = true;
+    }
+  }catch(err){ console.warn('Cloud probe failed', err); }
+  if(hasLocal && hasCloud){
+    const choice = await showMergeModal({
+      measurements: localMeasures.length,
+      bassins: localBassins.length,
+      hasReminders: !!localReminders,
+    });
+    if(choice === 'import'){
+      _initialSyncDone = true;
+      await syncPushAll();
+      await syncPullAll();
+    } else {
+      [STORAGE_KEYS.measurements, STORAGE_KEYS.bassins, STORAGE_KEYS.activeBassin, STORAGE_KEYS.reminders,
+       STORAGE_KEYS.optionalFields, STORAGE_KEYS.lastInputs, 'cp_theme_mode_v1', 'cp_hist_metrics_v1',
+       'cp_desktop_view_v1'].forEach(k => _rawRemoveItem(k));
+      await syncPullAll();
+      _initialSyncDone = true;
+    }
+  } else if(hasLocal && !hasCloud){
+    _initialSyncDone = true;
+    await syncPushAll();
+  } else {
+    await syncPullAll();
+    _initialSyncDone = true;
+  }
+}
+
+// === Bootstrap session au chargement ===
+document.addEventListener('DOMContentLoaded', async () => {
+  const supa = getSupa();
+  if(!supa){ console.warn('Supabase SDK indisponible — sync désactivé'); return; }
+  try{
+    const { data: { session } } = await supa.auth.getSession();
+    if(session && session.user){
+      _authUser = session.user;
+      updateAccountUI();
+      handleFirstLogin().catch(err => console.warn('First-login failed', err));
+    } else {
+      updateAccountUI();
+    }
+  }catch(e){ console.warn('getSession failed', e); }
+
+  supa.auth.onAuthStateChange((event, session) => {
+    const wasLoggedIn = !!_authUser;
+    _authUser = (session && session.user) || null;
+    updateAccountUI();
+    if(_authUser && !wasLoggedIn){
+      handleFirstLogin().catch(err => console.warn('First-login failed', err));
+      closeAccountLogin();
+      toast('Connecté en tant que ' + _authUser.email, 'ok');
+    }
+  });
 });

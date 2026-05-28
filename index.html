@@ -14,6 +14,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
 <script defer src="https://stats.yannick-uhrig.com/script.js" data-website-id="fb5a5547-d8d5-4b8a-8f27-4a9c519b113c"></script>
 <style>
   :root{
@@ -477,6 +478,55 @@
     color:var(--shallow);font-weight:600;
   }
   .bassin-chip-add:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.35)}
+
+  /* Modale compte (sync) */
+  .account-modal-overlay{
+    position:fixed;inset:0;background:rgba(2,12,26,.85);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:9999;padding:20px;
+    align-items:center;justify-content:center;display:none;
+  }
+  .account-modal-overlay[style*="display: flex"],
+  .account-modal-overlay[style*="display:flex"]{display:flex !important}
+  .account-modal{
+    position:relative;background:linear-gradient(135deg,rgba(20,60,90,.96),rgba(10,40,70,.96));
+    border:1px solid rgba(255,255,255,.12);border-radius:20px;padding:26px 22px;
+    max-width:420px;width:100%;color:#fff;
+    max-height:calc(100dvh - 140px);overflow-y:auto;
+    box-shadow:0 12px 40px rgba(0,0,0,.5);
+  }
+  .account-modal-close{
+    position:absolute;top:10px;right:12px;background:transparent;border:none;
+    color:var(--shallow);font-size:24px;line-height:1;cursor:pointer;padding:6px 10px;
+    border-radius:8px;transition:background .12s;
+  }
+  .account-modal-close:hover{background:rgba(255,255,255,.08);color:#fff}
+  .account-modal-icon{
+    width:54px;height:54px;border-radius:50%;
+    background:linear-gradient(135deg,#a78bfa,#7c3aed);
+    display:flex;align-items:center;justify-content:center;
+    font-size:26px;margin:0 auto 14px;
+    box-shadow:0 4px 16px rgba(124,58,237,.35);
+  }
+  .account-modal-title{
+    font-family:'Fraunces',serif;font-size:20px;font-weight:600;
+    text-align:center;margin:0 0 8px;color:#fff;
+  }
+  .account-modal-sub{
+    font-size:13px;color:var(--shallow);line-height:1.6;
+    text-align:center;margin:0;opacity:.9;
+  }
+  .sync-badge{
+    display:inline-flex;align-items:center;gap:4px;
+    padding:3px 9px;border-radius:999px;font-size:10px;font-weight:600;
+    text-transform:uppercase;letter-spacing:.08em;
+    background:rgba(94,234,212,.16);color:#5eead4;border:1px solid rgba(94,234,212,.3);
+  }
+  .sync-badge.syncing{
+    background:rgba(251,191,36,.18);color:#fbbf24;border-color:rgba(251,191,36,.35);
+  }
+  .sync-badge.error{
+    background:rgba(248,113,113,.18);color:#f87171;border-color:rgba(248,113,113,.35);
+  }
 
   /* Modale bassin */
   .bassin-modal-overlay{
@@ -1507,6 +1557,7 @@
       <a href="#sec-bassin" onclick="paramScrollTo(event,'sec-bassin')">📌 Bassin</a>
       <a href="#sec-affichage" onclick="paramScrollTo(event,'sec-affichage')">🎨 Affichage</a>
       <a href="#sec-rappels" onclick="paramScrollTo(event,'sec-rappels')">🔔 Rappels</a>
+      <a href="#sec-compte" onclick="paramScrollTo(event,'sec-compte')">👤 Compte</a>
       <a href="#sec-donnees" onclick="paramScrollTo(event,'sec-donnees')">💾 Données</a>
     </nav>
 
@@ -1716,6 +1767,42 @@
       <button class="btn-primary" onclick="saveReminders()">Enregistrer les rappels</button>
     </div>
 
+    <div class="divider" id="sec-compte">Compte &amp; synchronisation</div>
+
+    <div class="card" id="accountCard">
+      <div class="card-header">
+        <div class="card-title"><span class="dot" style="background:#a78bfa;box-shadow:0 0 10px #a78bfa"></span>Sync multi-appareils</div>
+        <span id="accountSyncBadge" class="sync-badge" style="display:none">Sync</span>
+      </div>
+
+      <!-- État déconnecté -->
+      <div id="accountLoggedOut">
+        <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6;margin-bottom:14px">
+          Connecte-toi pour <strong>synchroniser ton bassin, ton historique et tes rappels</strong> entre tous tes appareils (téléphone, tablette, PC). Sans compte, tes données restent stockées localement comme aujourd'hui.
+        </p>
+        <button class="btn-primary" onclick="openAccountLogin()">Se connecter / Créer un compte</button>
+        <p style="font-size:11px;color:var(--shallow);opacity:.6;line-height:1.5;margin-top:10px;text-align:center">
+          Connexion par lien magique — aucun mot de passe à retenir.
+        </p>
+      </div>
+
+      <!-- État connecté -->
+      <div id="accountLoggedIn" style="display:none">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.18);margin-bottom:14px">
+          <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#a78bfa,#7c3aed);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:18px" id="accountAvatar">?</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;color:var(--shallow);opacity:.7;text-transform:uppercase;letter-spacing:.08em">Connecté en tant que</div>
+            <div id="accountEmail" style="font-size:14px;color:#fff;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+          </div>
+        </div>
+        <div id="accountSyncStatus" style="font-size:12px;color:var(--shallow);opacity:.75;line-height:1.6;margin-bottom:14px;text-align:center"></div>
+        <div class="btn-row">
+          <button class="btn-ghost" onclick="forceSyncNow()">Synchroniser maintenant</button>
+          <button class="btn-ghost" onclick="accountLogout()" style="color:var(--coral)">Se déconnecter</button>
+        </div>
+      </div>
+    </div>
+
     <div class="divider" id="sec-donnees">Données &amp; sauvegarde</div>
 
     <div class="card">
@@ -1742,7 +1829,7 @@
         <div style="font-size:28px">✉️</div>
         <div style="flex:1">
           <div style="font-weight:600;color:#fff;margin-bottom:4px">Contacter le support</div>
-          <div style="font-size:13px;color:var(--shallow);opacity:.85;line-height:1.5">Question, bug, suggestion — ou rejoindre SOS Piscine V3.</div>
+          <div style="font-size:13px;color:var(--shallow);opacity:.85;line-height:1.5">Question, bug, suggestion — ou rejoindre Piscine Conseils &amp; Astuces.</div>
         </div>
         <div style="color:#7fd4d2;font-size:20px">→</div>
       </div>
@@ -1795,18 +1882,18 @@
         <div class="card-title"><span class="dot" style="background:#5eead4;box-shadow:0 0 10px #5eead4"></span>Crédits &amp; ressources</div>
       </div>
       <p style="font-size:13px;color:var(--shallow);line-height:1.6;margin-bottom:14px">
-        Les seuils, les formules et la plupart des conseils de cette app sont basés sur le travail bénévole du groupe Facebook <strong>SOS Piscine V3</strong>, communauté de passionnés et de professionnels qui partagent leurs expériences chimie&nbsp;/&nbsp;équipement piscine. Si l'app t'est utile, c'est en grande partie grâce à eux.
+        Les conseils, bonnes pratiques et retours terrain qui inspirent cette app viennent de la communauté francophone passionnée de piscine. Rejoins <strong>Piscine Conseils &amp; Astuces</strong> sur Facebook pour échanger sur ton bassin, poser tes questions et apprendre des expériences de milliers de membres.
       </p>
-      <a href="https://www.facebook.com/groups/1438741310278151?locale=fr_FR" target="_blank" rel="noopener noreferrer"
+      <a href="https://www.facebook.com/groups/381917578975959?locale=fr_FR" target="_blank" rel="noopener noreferrer"
          style="display:flex;align-items:center;justify-content:center;gap:10px;padding:12px 16px;
                 background:linear-gradient(135deg,#1877f2,#0c63d4);color:#fff;font-weight:600;font-size:14px;
                 border-radius:12px;text-decoration:none;box-shadow:0 2px 12px rgba(24,119,242,.35);
                 transition:transform .12s">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.93v-7.02H7.9v-2.91h2.54V9.83c0-2.51 1.49-3.9 3.78-3.9 1.09 0 2.24.2 2.24.2v2.47h-1.26c-1.24 0-1.63.77-1.63 1.56v1.88h2.78l-.45 2.91h-2.33V22c4.78-.75 8.43-4.91 8.43-9.94"/></svg>
-        Rejoindre le groupe SOS Piscine V3
+        Rejoindre Piscine Conseils &amp; Astuces
       </a>
       <p style="font-size:11px;color:var(--shallow);opacity:.6;line-height:1.5;margin-top:10px;text-align:center">
-        Le groupe est privé — accepte le règlement et réponds aux questions d'entrée pour rejoindre.
+        Réponds aux questions d'entrée du groupe pour valider ta demande d'adhésion.
       </p>
     </div>
 
@@ -1874,6 +1961,51 @@
 
 <div id="bassinSavedPill" class="bassin-saved-pill">Bassin sauvegardé</div>
 <div id="toast" class="toast"></div>
+
+<!-- =================== Modales compte =================== -->
+<div id="accountLoginOverlay" class="account-modal-overlay" style="display:none" onclick="if(event.target===this)closeAccountLogin()">
+  <div class="account-modal" role="dialog" aria-labelledby="accountLoginTitle" aria-modal="true">
+    <button type="button" class="account-modal-close" onclick="closeAccountLogin()" aria-label="Fermer">×</button>
+    <div id="accountLoginStep1">
+      <div class="account-modal-icon">✉️</div>
+      <h2 id="accountLoginTitle" class="account-modal-title">Connexion par lien magique</h2>
+      <p class="account-modal-sub">Renseigne ton email — tu recevras un lien à cliquer pour te connecter. Si tu n'as pas encore de compte, il sera créé automatiquement.</p>
+      <div class="field" style="margin-top:18px">
+        <label for="accountLoginEmail">Email</label>
+        <input type="email" id="accountLoginEmail" class="contact-input" placeholder="ton@email.fr" autocomplete="email" maxlength="254">
+      </div>
+      <button class="btn-primary" id="accountLoginSubmit" onclick="sendMagicLink()" style="margin-top:6px">Recevoir le lien magique</button>
+      <p style="font-size:11px;color:var(--shallow);opacity:.6;line-height:1.5;margin-top:14px;text-align:center">
+        Aucun mot de passe stocké. Tu peux te déconnecter à tout moment.
+      </p>
+    </div>
+    <div id="accountLoginStep2" style="display:none;text-align:center">
+      <div class="account-modal-icon" style="background:linear-gradient(135deg,#5eead4,#22c4a6)">✓</div>
+      <h2 class="account-modal-title">Lien envoyé !</h2>
+      <p class="account-modal-sub">Ouvre ta boîte mail et clique sur le lien dans le message <strong>Chimie Piscine</strong>. Le lien expire dans 1 h.</p>
+      <p style="font-size:12px;color:var(--shallow);opacity:.7;line-height:1.6;margin-top:14px">
+        Pense à vérifier les <strong>spams</strong> ou les <strong>promotions</strong> si tu ne reçois rien dans la minute.
+      </p>
+      <button class="btn-ghost" onclick="closeAccountLogin()" style="margin-top:14px">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<div id="accountMergeOverlay" class="account-modal-overlay" style="display:none">
+  <div class="account-modal" role="dialog" aria-labelledby="accountMergeTitle" aria-modal="true">
+    <div class="account-modal-icon" style="background:linear-gradient(135deg,#fbbf24,#f59e0b)">🔄</div>
+    <h2 id="accountMergeTitle" class="account-modal-title">Données locales détectées</h2>
+    <p class="account-modal-sub">Tu as des données déjà saisies sur cet appareil. Que veux-tu faire ?</p>
+    <div id="accountMergeStats" style="margin:14px 0;padding:12px;border-radius:10px;background:rgba(255,255,255,.04);font-size:12px;color:var(--shallow);line-height:1.7"></div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px">
+      <button class="btn-primary" onclick="resolveMergeChoice('import')">Importer mes données locales dans le compte</button>
+      <button class="btn-ghost" onclick="resolveMergeChoice('replace')">Utiliser les données du cloud (écraser local)</button>
+    </div>
+    <p style="font-size:11px;color:var(--shallow);opacity:.6;line-height:1.5;margin-top:14px;text-align:center">
+      L'import fusionne sans doublon (par date d'analyse). Tu peux toujours exporter avant via Données.
+    </p>
+  </div>
+</div>
 
 <script src="app.js"></script>
 </body>
