@@ -1442,6 +1442,7 @@
     <p class="page-sub">Doses calculées selon tes mesures · <span style="color:var(--leaf)">vert = aucune action</span></p>
 
     <div id="weatherCard" class="card" style="display:none"></div>
+    <div id="chloreProjectionCard" class="card" style="display:none;margin-top:12px"></div>
 
     <div id="correctionContent">
       <div class="empty">
@@ -1685,6 +1686,16 @@
       </div>
       <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6">
         Active la disposition 2 colonnes sur la page <strong>Mesures</strong> : saisie à gauche, aperçu live des doses à droite. Pour écran d'ordinateur (≥ 1000 px). Sans effet sur mobile.
+      </p>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="card-header">
+        <div class="card-title"><span class="dot" style="background:#a78bfa;box-shadow:0 0 10px #a78bfa"></span>Projection chlore (3 jours)</div>
+        <label class="switch"><input type="checkbox" id="chloreProjectionToggle" checked><span class="switch-slider"></span></label>
+      </div>
+      <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6">
+        Affiche sur la page <strong>Doses</strong> une projection sur 3 jours de l'évolution de ton Fcl, calculée à partir de ta vitesse de consommation historique et de la météo prévisionnelle. Recommande une dose préventive si ton chlore va passer sous la cible. Nécessite la géolocalisation du bassin + au moins 2 mesures récentes.
       </p>
     </div>
 
