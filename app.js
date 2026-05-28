@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.16.1';
+const APP_VERSION = '1.16.2';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -4387,10 +4387,23 @@ window.resolveMergeChoice = function(choice){
   if(_pendingMergeResolve){ _pendingMergeResolve(choice); _pendingMergeResolve = null; }
 };
 
+// Persiste à travers les déconnexions : marque qu'un user_id donné a déjà
+// résolu son choix de fusion sur cet appareil. Skip la modale si match.
+const ACCOUNT_LAST_USER_KEY = 'cp_last_synced_user_v1';
+
 async function handleFirstLogin(){
   const supa = getSupa();
   if(!supa) return;
   const uid = _authUser.id;
+
+  // Si cet appareil a déjà été initialisé pour ce user, on saute la modale
+  // de fusion et on fait juste un pull silencieux pour récupérer les nouveautés.
+  if(localStorage.getItem(ACCOUNT_LAST_USER_KEY) === uid){
+    await syncPullAll();
+    _initialSyncDone = true;
+    return;
+  }
+
   const localMeasures = loadJSON(STORAGE_KEYS.measurements, []);
   const localBassins = loadJSON(STORAGE_KEYS.bassins, []);
   const localReminders = loadJSON(STORAGE_KEYS.reminders, null);
@@ -4428,6 +4441,8 @@ async function handleFirstLogin(){
     await syncPullAll();
     _initialSyncDone = true;
   }
+
+  _rawSetItem(ACCOUNT_LAST_USER_KEY, uid);
 }
 
 // === Bootstrap session au chargement ===
