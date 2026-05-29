@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.17.1';
+const APP_VERSION = '1.18.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -709,7 +709,11 @@ function switchTab(name){
     }
   }
   if(name==='historique') renderCharts();
-  if(name==='correction') renderCorrections();
+  if(name==='correction'){
+    renderCorrections();
+    try{ renderInsightsCard(); }catch(e){}
+    try{ renderChloreProjectionCard(); }catch(e){}
+  }
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
@@ -942,6 +946,8 @@ function saveAndCalc(){
   updateCclBadge(m);
   updateLastControlInfo();
   renderCorrections();
+  try{ renderInsightsCard(); }catch(e){}
+  try{ renderChloreProjectionCard(); }catch(e){}
   cloudBackupSync();
   toast('Mesure enregistrée');
   setTimeout(()=>switchTab('correction'), 600);
@@ -2917,6 +2923,160 @@ function renderWeatherCard(){
   });
 }
 
+// ============== Insights tendances historiques ==============
+// Algo pur JS sur cp_measurements pour détecter dérives, conso anormale, etc.
+// Aucun service externe — tout est calculé sur les données déjà locales.
+
+const INSIGHTS_ENABLED_KEY = 'cp_insights_enabled_v1';
+function isInsightsEnabled(){
+  const v = localStorage.getItem(INSIGHTS_ENABLED_KEY);
+  return v === null ? true : v === '1';
+}
+
+function linearRegression(points){
+  if(!points || points.length < 2) return null;
+  const n = points.length;
+  let sx=0, sy=0, sxy=0, sxx=0, syy=0;
+  points.forEach(([x, y]) => { sx += x; sy += y; sxy += x*y; sxx += x*x; syy += y*y; });
+  const denom = n * sxx - sx * sx;
+  if(denom === 0) return null;
+  const slope = (n * sxy - sx * sy) / denom;
+  const intercept = (sy - slope * sx) / n;
+  const ssRes = points.reduce((acc, [x, y]) => acc + Math.pow(y - (slope * x + intercept), 2), 0);
+  const ssTot = syy - sy * sy / n;
+  const r2 = ssTot === 0 ? 1 : 1 - ssRes / ssTot;
+  return {slope, intercept, r2};
+}
+
+function stdDev(values){
+  if(!values || values.length < 2) return 0;
+  const mean = values.reduce((s, v) => s + v, 0) / values.length;
+  const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+  return Math.sqrt(variance);
+}
+
+function analyzeTrends(measurements){
+  const out = [];
+  if(!measurements || measurements.length < 3) return out;
+  const sorted = measurements.filter(m => m && m.date).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const now = Date.now();
+  const recent30d = sorted.filter(m => (now - new Date(m.date).getTime()) <= 30 * 86400000);
+  const recent7d = sorted.filter(m => (now - new Date(m.date).getTime()) <= 7 * 86400000);
+  const latest = sorted[sorted.length - 1];
+
+  // 1. Dérive pH monotone récente
+  const phChain = sorted.filter(m => m.ph != null).slice(-5);
+  if(phChain.length >= 3){
+    let upCount = 0, downCount = 0;
+    for(let i = 1; i < phChain.length; i++){
+      const diff = phChain[i].ph - phChain[i-1].ph;
+      if(diff > 0.03) upCount++;
+      else if(diff < -0.03) downCount++;
+    }
+    const totalDelta = phChain[phChain.length-1].ph - phChain[0].ph;
+    if(upCount >= 3 && totalDelta >= 0.2){
+      out.push({level:'warn', icon:'↗', text:`Ton pH dérive vers le haut depuis ${phChain.length} mesures (+${fmt(totalDelta,1)} cumulé). Vérifie ton TAC et ta cible — un pH qui monte régulièrement signe souvent un TAC élevé ou une eau trop dure.`});
+    } else if(downCount >= 3 && totalDelta <= -0.2){
+      out.push({level:'warn', icon:'↘', text:`Ton pH dérive vers le bas depuis ${phChain.length} mesures (${fmt(totalDelta,1)} cumulé). Surveille — un pH bas attaque les revêtements et fragilise l'équilibre.`});
+    }
+  }
+
+  // 2. Volatilité pH (instabilité = TAC trop bas)
+  const phRecent = recent30d.map(m => m.ph).filter(v => v != null);
+  if(phRecent.length >= 4){
+    const sd = stdDev(phRecent);
+    if(sd > 0.3){
+      out.push({level:'info', icon:'〰', text:`Ton pH varie beaucoup (écart-type ${fmt(sd,2)} sur 30 j). Cause classique : TAC trop bas, l'eau n'est pas tamponnée. Vise un TAC à 80-120 ppm.`});
+    }
+  }
+
+  // 3. Conso Cl anormale : compare vitesse 7j vs 30j
+  function chloreRate(list){
+    const points = list.filter(m => m.fcl != null && m.date);
+    if(points.length < 2) return null;
+    const rates = [];
+    for(let i = 1; i < points.length; i++){
+      const prev = points[i-1], cur = points[i];
+      if(cur.fcl >= prev.fcl) continue;
+      const hours = (new Date(cur.date) - new Date(prev.date)) / 3600000;
+      if(hours < 6 || hours > 96) continue;
+      const ppmPerDay = (prev.fcl - cur.fcl) / (hours / 24);
+      if(ppmPerDay > 0 && ppmPerDay < 5) rates.push(ppmPerDay);
+    }
+    if(rates.length < 2) return null;
+    rates.sort((a, b) => a - b);
+    return rates.length % 2 ? rates[(rates.length-1)/2] : (rates[rates.length/2 - 1] + rates[rates.length/2]) / 2;
+  }
+  const rate7 = chloreRate(recent7d);
+  const rate30 = chloreRate(recent30d);
+  if(rate7 && rate30 && rate30 > 0.1){
+    const ratio = rate7 / rate30;
+    if(ratio >= 1.4){
+      out.push({level:'warn', icon:'🔥', text:`Ta conso chlore récente est +${fmt((ratio-1)*100,0)}% vs ta moyenne 30 j (${fmt(rate7,2)} vs ${fmt(rate30,2)} ppm/j). Probable : chaleur, baignade plus fréquente, ou CYA insuffisant.`});
+    } else if(ratio <= 0.6){
+      out.push({level:'info', icon:'❄', text:`Ta conso chlore a chuté de ${fmt((1-ratio)*100,0)}% vs ta moyenne 30 j. Probable : météo plus fraîche ou couverture utilisée.`});
+    }
+  }
+
+  // 4. CYA en accumulation (>50 ppm)
+  if(latest && latest.cya != null && latest.cya > 50){
+    out.push({level:'alert', icon:'🧪', text:`CYA à ${fmt(latest.cya,0)} ppm — au-dessus de 50, ton chlore devient progressivement inefficace (chlore-lock). Envisage une vidange partielle (~30%) pour redescendre vers 30 ppm.`});
+  }
+
+  // 5. TAC en baisse régulière (régression linéaire sur 5+ mesures)
+  const tacPoints = recent30d.filter(m => m.tac != null);
+  if(tacPoints.length >= 5){
+    const t0 = new Date(tacPoints[0].date).getTime();
+    const reg = linearRegression(tacPoints.map(m => [(new Date(m.date).getTime() - t0) / 86400000, m.tac]));
+    if(reg && reg.slope < -0.5 && reg.r2 > 0.5){
+      const drop7d = reg.slope * 7;
+      out.push({level:'warn', icon:'📉', text:`Ton TAC baisse régulièrement (~${fmt(drop7d, 0)} ppm/semaine). Quand il chute, le pH devient instable. Prévois un ajustement avec du bicarbonate de sodium.`});
+    }
+  }
+
+  // 6. Pas de mesure depuis longtemps (>10 jours en saison avril-octobre)
+  const month = new Date().getMonth();
+  const inSeason = month >= 3 && month <= 9;
+  if(inSeason && latest){
+    const daysSince = Math.floor((now - new Date(latest.date).getTime()) / 86400000);
+    if(daysSince >= 10){
+      out.push({level:'info', icon:'🕒', text:`Ta dernière analyse remonte à ${daysSince} jours. En pleine saison, contrôle au moins toutes les semaines — beaucoup de choses peuvent changer.`});
+    }
+  }
+
+  return out;
+}
+
+function renderInsightsCard(){
+  const wrap = document.getElementById('insightsCard');
+  if(!wrap) return;
+  if(!isInsightsEnabled()){ wrap.style.display = 'none'; return; }
+  const measurements = loadActiveMeasurements();
+  if(!measurements || measurements.length < 3){ wrap.style.display = 'none'; return; }
+  const insights = analyzeTrends(measurements);
+  const colorMap = {ok:'#5eead4', info:'#7fd4d2', warn:'#fbbf24', alert:'#f87171'};
+  if(insights.length === 0){
+    wrap.style.display = 'block';
+    wrap.innerHTML = `<div class="card-header">
+      <div class="card-title"><span class="dot" style="background:#5eead4;box-shadow:0 0 10px #5eead4"></span>Insights</div>
+      <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">${measurements.length} mesures analysées</span>
+    </div>
+    <div style="color:var(--leaf);font-size:13px;padding:8px 0;line-height:1.5">✓ Tendances stables sur les 30 derniers jours — rien à signaler.</div>`;
+    return;
+  }
+  wrap.style.display = 'block';
+  const items = insights.map(ins => `
+    <div style="display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--depth-line);font-size:13px;line-height:1.55;color:var(--foam)">
+      <span style="color:${colorMap[ins.level]||'#7fd4d2'};flex:0 0 auto;width:22px;text-align:center;font-size:15px">${ins.icon}</span>
+      <span>${ins.text}</span>
+    </div>`).join('');
+  wrap.innerHTML = `<div class="card-header">
+    <div class="card-title"><span class="dot" style="background:#5eead4;box-shadow:0 0 10px #5eead4"></span>Insights</div>
+    <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">${measurements.length} mesures · 30 j</span>
+  </div>
+  <div style="padding:4px 0">${items}</div>`;
+}
+
 // ============== Projection conso chlore (chimie × météo × historique) ==============
 const CHLORE_PROJECTION_ENABLED_KEY = 'cp_chlore_projection_enabled_v1';
 function isChloreProjectionEnabled(){
@@ -3068,11 +3228,12 @@ function renderChloreProjectionCard(){
   });
 }
 
-// Chaîne le rendu de la projection chlore après chaque update météo
+// Chaîne le rendu de la projection chlore + insights après chaque update météo
 const _origRenderWeatherCard = renderWeatherCard;
 window.renderWeatherCard = function(){
   _origRenderWeatherCard();
   try{ renderChloreProjectionCard(); }catch(e){ console.warn('Projection render failed', e); }
+  try{ renderInsightsCard(); }catch(e){ console.warn('Insights render failed', e); }
 };
 
 // Géolocalisation rapide pour une carte de bassin
@@ -4164,6 +4325,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
     });
   }
 
+  // Toggle "Insights tendances"
+  const insightsToggle = $('insightsToggle');
+  if(insightsToggle){
+    insightsToggle.checked = isInsightsEnabled();
+    insightsToggle.addEventListener('change', () => {
+      localStorage.setItem(INSIGHTS_ENABLED_KEY, insightsToggle.checked ? '1' : '0');
+      renderInsightsCard();
+    });
+  }
+
   // Auto-save sur les paramètres bassin (debounced via input event)
   ['volume','phSouhaite','tacSouhaite','cya','cyaSouhaite','selSouhaite','thSouhaite'].forEach(id => {
     const el = $(id);
@@ -4329,6 +4500,7 @@ const SYNCABLE_KEYS = new Set([
   'cp_hist_metrics_v1',
   'cp_desktop_view_v1',
   'cp_chlore_projection_enabled_v1',
+  'cp_insights_enabled_v1',
 ]);
 
 let _supa = null;
@@ -4473,6 +4645,7 @@ function collectPrefsPayload(){
     desktop_view: localStorage.getItem('cp_desktop_view_v1') || null,
     optional_fields: loadJSON(STORAGE_KEYS.optionalFields, null),
     chlore_projection_enabled: localStorage.getItem('cp_chlore_projection_enabled_v1'),
+    insights_enabled: localStorage.getItem('cp_insights_enabled_v1'),
   };
 }
 
@@ -4536,6 +4709,7 @@ async function syncPullAll(){
       if(d.desktop_view) _rawSetItem('cp_desktop_view_v1', d.desktop_view);
       if(d.optional_fields) _rawSetItem(STORAGE_KEYS.optionalFields, JSON.stringify(d.optional_fields));
       if(d.chlore_projection_enabled === '0' || d.chlore_projection_enabled === '1') _rawSetItem('cp_chlore_projection_enabled_v1', d.chlore_projection_enabled);
+      if(d.insights_enabled === '0' || d.insights_enabled === '1') _rawSetItem('cp_insights_enabled_v1', d.insights_enabled);
     }
     if(rem.data && rem.data.data && Object.keys(rem.data.data).length){
       _rawSetItem(STORAGE_KEYS.reminders, JSON.stringify(rem.data.data));
