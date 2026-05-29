@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.18.0';
+const APP_VERSION = '1.19.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -714,6 +714,7 @@ function switchTab(name){
     try{ renderInsightsCard(); }catch(e){}
     try{ renderChloreProjectionCard(); }catch(e){}
   }
+  if(name==='mesure'){ try{ renderSeasonPromo(); }catch(e){} }
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
@@ -3831,6 +3832,166 @@ function showEduScreen(articleId){
   }
 }
 
+// ============== Mode Saisons (Hivernage / Remise en route) ==============
+const SEASON_STATE_KEY = 'cp_season_state_v1';
+
+const SEASON_HIVERNAGE_STEPS = [
+  {title:"Choc chlore préventif", detail:"Effectue un choc chloré (Fcl 5-10 ppm) la veille pour décontaminer l'eau et stocker une réserve oxydante. Filtration 24 h avant de passer à l'étape suivante."},
+  {title:"Ajuster pH et TAC", detail:"Le pH doit être stable entre 7.0 et 7.4 et le TAC entre 80 et 120 ppm. Un mauvais équilibre pendant l'hiver attaque les revêtements."},
+  {title:"Lavage à contre-courant + nettoyage filtre", detail:"Lavage complet du filtre à sable (rinçage final inclus) ou démontage/nettoyage cartouche. Détartrer si entartré (acide chlorhydrique dilué)."},
+  {title:"Baisser le niveau d'eau", detail:"Descends le niveau d'eau sous les buses de refoulement (typiquement 10-15 cm). Évite le gel des canalisations en cas d'hivernage passif."},
+  {title:"Vidanger canalisations + équipements", detail:"Vide skimmers, canalisations, filtre, pompe. Soit par les bouchons de vidange, soit avec un compresseur. Toute eau résiduelle peut geler et fissurer."},
+  {title:"Installer flotteurs antigel + bouchons", detail:"Place les flotteurs (gizmos) en diagonale dans le bassin pour absorber la pression du gel, et bouche les buses avec des bouchons d'hivernage."},
+  {title:"Ajouter le produit d'hivernage", detail:"Verse un algicide longue durée (produit dédié hivernage) selon la dose préconisée par le volume. Brasse l'eau pour homogénéiser."},
+  {title:"Couvrir la piscine", detail:"Pose une bâche d'hivernage ou couverture filet. Vérifie qu'elle est bien tendue pour éviter qu'elle ne touche l'eau."},
+];
+
+const SEASON_REMISE_STEPS = [
+  {title:"Retirer la bâche + débris", detail:"Nettoie la bâche avant rangement (sèche-la). Retire feuilles et débris en surface au filet avant d'enlever les flotteurs."},
+  {title:"Retirer flotteurs antigel + bouchons", detail:"Ôte les gizmos et bouchons d'hivernage. Inspecte qu'aucun joint n'est dégradé."},
+  {title:"Compléter le niveau d'eau", detail:"Remets le niveau d'eau au milieu du skimmer. Si nécessaire, vidange une partie pour diluer si la conductivité a augmenté."},
+  {title:"Filtration 24 h non-stop (2-3 jours)", detail:"Lance la pompe en continu pendant 48-72 h pour homogénéiser et oxygéner. Surveille bruit/débit anormaux."},
+  {title:"Nettoyer/rincer le filtre", detail:"Lavage à contre-courant si filtre à sable. Démontage + nettoyage si cartouche. Remplace la cartouche si > 2 ans ou très encrassée."},
+  {title:"Première analyse complète", detail:"Mesure pH, TAC, Fcl, CYA, T°. Le bassin a probablement dérivé pendant l'hiver — c'est normal."},
+  {title:"Ajuster pH et TAC d'abord", detail:"Vise pH 7.2-7.4 et TAC 80-120 ppm. C'est la base avant tout chlore — sans bon équilibre, le chlore reste inefficace."},
+  {title:"Choc chlore décontamination", detail:"Choc à 5-10 ppm Fcl pour éliminer la charge organique accumulée. Filtration 24 h après le choc."},
+  {title:"Vérifier/compléter CYA", detail:"Si CYA < 25 ppm, ajoute du stabilisant (acide cyanurique) pour atteindre 25-30 ppm — sinon ton chlore sera détruit par les UV."},
+  {title:"Re-mesurer 24-48 h après le choc", detail:"Contrôle que le Fcl est redescendu sous 3 ppm avant baignade. Si tout est aligné, ton bassin est prêt pour la saison."},
+];
+
+function getSeasonState(){
+  const def = {hivernage:{year:0,completed:[],dismissedPromo:false},remise:{year:0,completed:[],dismissedPromo:false}};
+  return Object.assign({}, def, loadJSON(SEASON_STATE_KEY, {}));
+}
+function saveSeasonState(s){ saveJSON(SEASON_STATE_KEY, s); }
+function currentYear(){ return new Date().getFullYear(); }
+
+function inHivernageWindow(){
+  const m = new Date().getMonth(); // 0=jan
+  return m === 9 || m === 10; // octobre + novembre
+}
+function inRemiseWindow(){
+  const m = new Date().getMonth();
+  return m === 2 || m === 3; // mars + avril
+}
+
+function toggleSeasonStep(mode, idx){
+  const s = getSeasonState();
+  if(s[mode].year !== currentYear()){ s[mode].year = currentYear(); s[mode].completed = []; }
+  const i = s[mode].completed.indexOf(idx);
+  if(i >= 0) s[mode].completed.splice(i, 1);
+  else s[mode].completed.push(idx);
+  saveSeasonState(s);
+  renderSeasonModal(mode);
+}
+
+function dismissSeasonPromo(mode){
+  const s = getSeasonState();
+  s[mode].year = currentYear();
+  s[mode].dismissedPromo = true;
+  saveSeasonState(s);
+  renderSeasonPromo();
+}
+
+function openSeasonGuide(mode){
+  const ov = document.getElementById('seasonOverlay');
+  if(!ov) return;
+  ov.dataset.mode = mode || (inRemiseWindow() ? 'remise' : 'hivernage');
+  ov.style.display = 'flex';
+  renderSeasonModal(ov.dataset.mode);
+}
+function closeSeasonGuide(){
+  const ov = document.getElementById('seasonOverlay');
+  if(ov) ov.style.display = 'none';
+}
+function switchSeasonMode(mode){
+  const ov = document.getElementById('seasonOverlay');
+  if(ov) ov.dataset.mode = mode;
+  renderSeasonModal(mode);
+}
+
+function renderSeasonModal(mode){
+  const title = document.getElementById('seasonTitle');
+  const tabs = document.getElementById('seasonTabs');
+  const body = document.getElementById('seasonBody');
+  if(!title || !tabs || !body) return;
+  const steps = mode === 'remise' ? SEASON_REMISE_STEPS : SEASON_HIVERNAGE_STEPS;
+  const state = getSeasonState();
+  // Reset progress si année différente (changement d'année calendaire)
+  if(state[mode].year !== currentYear()){
+    state[mode].year = currentYear();
+    state[mode].completed = [];
+    saveSeasonState(state);
+  }
+  const completed = state[mode].completed || [];
+  const total = steps.length;
+  const done = completed.length;
+  const pct = Math.round((done / total) * 100);
+  title.textContent = mode === 'remise' ? '🌸 Remise en route' : '❄ Hivernage';
+  tabs.innerHTML = `
+    <button class="season-tab${mode==='hivernage'?' active':''}" onclick="switchSeasonMode('hivernage')">❄ Hivernage</button>
+    <button class="season-tab${mode==='remise'?' active':''}" onclick="switchSeasonMode('remise')">🌸 Remise en route</button>
+  `;
+  const progressHtml = `
+    <div style="margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12px;color:var(--shallow);text-transform:uppercase;letter-spacing:.5px">
+        <span>Progression</span><span>${done} / ${total}</span>
+      </div>
+      <div style="height:8px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:linear-gradient(90deg,#5eead4,${mode==='remise'?'#fbbf24':'#a8d8ea'});transition:width .3s"></div>
+      </div>
+    </div>`;
+  const stepsHtml = steps.map((step, i) => {
+    const isDone = completed.includes(i);
+    return `<div class="season-step${isDone?' done':''}" onclick="toggleSeasonStep('${mode}',${i})">
+      <div class="season-step-check">${isDone ? '✓' : (i+1)}</div>
+      <div class="season-step-body">
+        <div class="season-step-title">${escapeHtml(step.title)}</div>
+        <div class="season-step-detail">${escapeHtml(step.detail)}</div>
+      </div>
+    </div>`;
+  }).join('');
+  const completedAll = done === total;
+  const footer = completedAll
+    ? `<div style="margin-top:18px;padding:14px;background:rgba(94,234,212,.10);border:1px solid rgba(94,234,212,.30);border-radius:12px;font-size:13px;line-height:1.55;color:#a8f8e8;text-align:center">🎉 <strong>Bravo, tout est coché pour ${currentYear()} !</strong><br>Ton bassin est ${mode === 'remise' ? 'prêt pour la saison' : 'protégé pour l\'hiver'}.</div>`
+    : `<div style="margin-top:14px;font-size:11px;color:var(--shallow);opacity:.55;line-height:1.5;text-align:center">Coche chaque étape au fur et à mesure — la progression est sauvegardée automatiquement pour cette année.</div>`;
+  body.innerHTML = progressHtml + stepsHtml + footer;
+}
+
+function renderSeasonPromo(){
+  const wrap = document.getElementById('seasonPromoCard');
+  if(!wrap) return;
+  const state = getSeasonState();
+  let mode = null;
+  if(inHivernageWindow()){
+    const h = state.hivernage;
+    if(h.year !== currentYear() || (!h.dismissedPromo && h.completed.length < SEASON_HIVERNAGE_STEPS.length)) mode = 'hivernage';
+  } else if(inRemiseWindow()){
+    const r = state.remise;
+    if(r.year !== currentYear() || (!r.dismissedPromo && r.completed.length < SEASON_REMISE_STEPS.length)) mode = 'remise';
+  }
+  if(!mode){ wrap.style.display = 'none'; return; }
+  const colors = mode === 'remise'
+    ? {bg:'linear-gradient(135deg,rgba(251,191,36,.12),rgba(251,191,36,.04))', border:'rgba(251,191,36,.30)', icon:'🌸', accent:'#fbbf24'}
+    : {bg:'linear-gradient(135deg,rgba(96,165,250,.12),rgba(96,165,250,.04))', border:'rgba(96,165,250,.30)', icon:'❄', accent:'#60a5fa'};
+  const label = mode === 'remise' ? 'Remise en route' : 'Hivernage';
+  const desc = mode === 'remise'
+    ? "C'est la période idéale pour redémarrer le bassin — checklist guidée des 10 étapes pour repartir sans accroc."
+    : "C'est le moment d'hiverner — checklist guidée des 8 étapes pour protéger ton bassin du gel.";
+  wrap.style.display = 'block';
+  wrap.style.background = colors.bg;
+  wrap.style.border = `1px solid ${colors.border}`;
+  wrap.innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px">
+      <div style="font-size:32px">${colors.icon}</div>
+      <div style="flex:1;cursor:pointer" onclick="openSeasonGuide('${mode}')">
+        <div style="font-weight:600;color:#fff;margin-bottom:4px">${label} — checklist guidée</div>
+        <div style="font-size:13px;color:var(--shallow);opacity:.85;line-height:1.5">${desc}</div>
+      </div>
+      <button onclick="dismissSeasonPromo('${mode}')" style="background:transparent;border:none;color:var(--shallow);opacity:.6;cursor:pointer;font-size:18px;padding:6px 10px;border-radius:8px" title="Masquer pour cette année">×</button>
+    </div>`;
+}
+
 // ============== Wizard premier lancement ==============
 function maybeOpenWizard(){
   // Premier lancement = aucun bassin créé (ni mesures)
@@ -4256,6 +4417,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   renderBackupUI();
   updateLastControlInfo();
   renderWeatherCard();
+  try{ renderSeasonPromo(); }catch(e){}
 
   if($('shareBtn')) $('shareBtn').addEventListener('click', () => shareControl());
 
@@ -4501,6 +4663,7 @@ const SYNCABLE_KEYS = new Set([
   'cp_desktop_view_v1',
   'cp_chlore_projection_enabled_v1',
   'cp_insights_enabled_v1',
+  'cp_season_state_v1',
 ]);
 
 let _supa = null;
@@ -4646,6 +4809,7 @@ function collectPrefsPayload(){
     optional_fields: loadJSON(STORAGE_KEYS.optionalFields, null),
     chlore_projection_enabled: localStorage.getItem('cp_chlore_projection_enabled_v1'),
     insights_enabled: localStorage.getItem('cp_insights_enabled_v1'),
+    season_state: loadJSON('cp_season_state_v1', null),
   };
 }
 
@@ -4710,6 +4874,7 @@ async function syncPullAll(){
       if(d.optional_fields) _rawSetItem(STORAGE_KEYS.optionalFields, JSON.stringify(d.optional_fields));
       if(d.chlore_projection_enabled === '0' || d.chlore_projection_enabled === '1') _rawSetItem('cp_chlore_projection_enabled_v1', d.chlore_projection_enabled);
       if(d.insights_enabled === '0' || d.insights_enabled === '1') _rawSetItem('cp_insights_enabled_v1', d.insights_enabled);
+      if(d.season_state && typeof d.season_state === 'object') _rawSetItem('cp_season_state_v1', JSON.stringify(d.season_state));
     }
     if(rem.data && rem.data.data && Object.keys(rem.data.data).length){
       _rawSetItem(STORAGE_KEYS.reminders, JSON.stringify(rem.data.data));
