@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.19.0';
+const APP_VERSION = '1.21.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -3832,6 +3832,209 @@ function showEduScreen(articleId){
   }
 }
 
+// ============== Partage bassin en lecture seule ==============
+let _viewerMode = false;
+let _viewerBassin = null;
+let _viewerMeasurements = [];
+let _viewerOwnerLabel = null;
+
+function isViewerMode(){ return _viewerMode; }
+
+function generateShareToken(){
+  const arr = new Uint8Array(9);
+  crypto.getRandomValues(arr);
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+  let token = '';
+  for(const b of arr) token += alphabet[b % alphabet.length];
+  return token;
+}
+
+async function createShareLink(bassinId){
+  if(!_authUser){ toast('Connecte-toi pour partager ton bassin', 'warn'); return null; }
+  const supa = getSupa();
+  if(!supa) return null;
+  const b = getBassinById(bassinId);
+  if(!b){ toast('Bassin introuvable', 'err'); return null; }
+  const token = generateShareToken();
+  const { error } = await supa.from('cp_share_links').insert({
+    token, owner_id: _authUser.id, bassin_id: bassinId, bassin_name: b.nom || 'Bassin',
+  });
+  if(error){ toast('Erreur création lien', 'err'); console.warn(error); return null; }
+  return token;
+}
+
+async function listShareLinks(bassinId){
+  if(!_authUser) return [];
+  const supa = getSupa();
+  if(!supa) return [];
+  const { data, error } = await supa.from('cp_share_links')
+    .select('token, bassin_id, bassin_name, created_at, revoked_at, last_accessed_at, access_count')
+    .eq('owner_id', _authUser.id)
+    .eq('bassin_id', bassinId)
+    .order('created_at', { ascending: false });
+  if(error){ console.warn(error); return []; }
+  return data || [];
+}
+
+window.revokeShareLink = async function(token){
+  if(!_authUser) return;
+  const supa = getSupa();
+  if(!supa) return;
+  if(!confirm('Révoquer ce lien ? Il deviendra inaccessible immédiatement.')) return;
+  const { error } = await supa.from('cp_share_links').update({ revoked_at: new Date().toISOString() }).eq('token', token);
+  if(error){ toast('Erreur révocation', 'err'); console.warn(error); return; }
+  toast('Lien révoqué', 'ok');
+  renderShareLinksList();
+};
+
+function shareUrl(token){
+  return `${window.location.origin}${window.location.pathname}?share=${token}`;
+}
+
+window.openShareModal = function(bassinId){
+  if(!_authUser){
+    if(confirm("Pour partager un lien de lecture seule, il faut un compte (gratuit, magic link). Te connecter maintenant ?")){
+      openAccountLogin();
+    }
+    return;
+  }
+  const ov = document.getElementById('shareOverlay');
+  if(!ov) return;
+  ov.dataset.bassinId = bassinId || getActiveBassinId();
+  ov.style.display = 'flex';
+  renderShareLinksList();
+};
+window.closeShareModal = function(){
+  const ov = document.getElementById('shareOverlay');
+  if(ov) ov.style.display = 'none';
+};
+
+async function renderShareLinksList(){
+  const ov = document.getElementById('shareOverlay');
+  const body = document.getElementById('shareLinksList');
+  if(!ov || !body) return;
+  const bassinId = ov.dataset.bassinId;
+  if(!bassinId){ body.innerHTML = '<div style="color:var(--shallow);opacity:.7">Aucun bassin sélectionné.</div>'; return; }
+  const b = getBassinById(bassinId);
+  const titleEl = document.getElementById('shareModalTitle');
+  if(titleEl) titleEl.textContent = `Partager « ${b ? (b.emoji + ' ' + b.nom) : 'bassin'} »`;
+  body.innerHTML = '<div style="color:var(--shallow);opacity:.7;font-size:13px;padding:12px 0">Chargement…</div>';
+  const links = await listShareLinks(bassinId);
+  if(!links.length){
+    body.innerHTML = `<div style="text-align:center;color:var(--shallow);font-size:13px;padding:18px 0;line-height:1.55;opacity:.85">
+      Aucun lien actif pour ce bassin.<br>
+      <span style="opacity:.6;font-size:12px">Crée un lien pour partager une vue lecture seule de tes mesures et de ton historique.</span>
+    </div>`;
+    return;
+  }
+  body.innerHTML = links.map(l => {
+    const isRevoked = !!l.revoked_at;
+    const url = shareUrl(l.token);
+    const meta = isRevoked
+      ? `<span style="color:var(--coral)">Révoqué le ${new Date(l.revoked_at).toLocaleDateString('fr-FR')}</span>`
+      : `${l.access_count || 0} accès${l.last_accessed_at ? ` · dernier ${relativeTime(l.last_accessed_at)}` : ''}`;
+    return `<div style="padding:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,${isRevoked?'.04':'.10'});border-radius:12px;margin-bottom:8px;opacity:${isRevoked?'.55':'1'}">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="flex:1;font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--shallow);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(url)}</div>
+        ${isRevoked ? '' : `<button class="btn-ghost" style="padding:4px 10px;font-size:12px;width:auto" onclick="copyShareLink('${l.token}')">📋 Copier</button>`}
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--shallow);opacity:.7">
+        <span>${meta}</span>
+        ${isRevoked ? '' : `<button class="btn-ghost" style="padding:2px 8px;font-size:11px;width:auto;color:var(--coral)" onclick="revokeShareLink('${l.token}')">Révoquer</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.copyShareLink = async function(token){
+  const url = shareUrl(token);
+  try {
+    await navigator.clipboard.writeText(url);
+    toast('Lien copié dans le presse-papier');
+  } catch(e){
+    prompt('Copie le lien :', url);
+  }
+};
+
+window.createNewShareLink = async function(){
+  const ov = document.getElementById('shareOverlay');
+  if(!ov) return;
+  const bassinId = ov.dataset.bassinId;
+  if(!bassinId) return;
+  const token = await createShareLink(bassinId);
+  if(token){
+    toast('Lien créé');
+    renderShareLinksList();
+  }
+};
+
+// === Viewer mode (lecture seule via ?share=TOKEN) ===
+async function checkShareMode(){
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('share');
+  if(!token) return false;
+  try{
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/share-view?token=${encodeURIComponent(token)}`, {
+      headers: { 'apikey': SUPABASE_KEY }
+    });
+    if(!resp.ok){
+      const err = await resp.json().catch(() => ({}));
+      showViewerError(err.error || `HTTP ${resp.status}`);
+      return false;
+    }
+    const data = await resp.json();
+    _viewerMode = true;
+    _viewerBassin = data.bassin;
+    _viewerMeasurements = (data.measurements || []).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+    _viewerOwnerLabel = data.bassinName;
+    document.body.classList.add('viewer-mode');
+    showViewerBanner();
+    return true;
+  } catch(e){
+    console.error('Share fetch failed', e);
+    showViewerError('network');
+    return false;
+  }
+}
+
+function showViewerError(code){
+  const map = {
+    invalid_token: 'Lien invalide.',
+    not_found: 'Lien introuvable.',
+    revoked: 'Ce lien a été révoqué par son propriétaire.',
+    bassin_missing: 'Bassin partagé supprimé.',
+    network: 'Connexion impossible.',
+  };
+  const msg = map[code] || ('Erreur : ' + code);
+  document.body.classList.add('viewer-error');
+  const banner = document.createElement('div');
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:10000;padding:14px 20px;background:linear-gradient(135deg,#f87171,#ef4444);color:#fff;font-size:14px;line-height:1.5;display:flex;justify-content:space-between;align-items:center;gap:14px;box-shadow:0 2px 14px rgba(248,113,113,.4)';
+  banner.innerHTML = `<div>🔒 <strong>Lien de partage indisponible</strong> — ${escapeHtml(msg)}</div><a href="?" style="color:#fff;text-decoration:underline;font-size:13px;font-weight:600">Aller à l'app</a>`;
+  document.body.appendChild(banner);
+}
+
+function showViewerBanner(){
+  const banner = document.createElement('div');
+  banner.id = 'viewerBanner';
+  banner.style.cssText = 'position:sticky;top:0;left:0;right:0;z-index:200;padding:12px 20px;background:linear-gradient(135deg,#0a3d62,#1d7a8c);color:#fff;font-size:13px;line-height:1.5;display:flex;justify-content:space-between;align-items:center;gap:14px;box-shadow:0 2px 12px rgba(10,61,98,.5)';
+  banner.innerHTML = `<div>👁 <strong>Mode lecture seule</strong> — ${escapeHtml(_viewerOwnerLabel || 'Bassin partagé')} <span style="opacity:.7">(${_viewerMeasurements.length} mesures)</span></div><button onclick="exitViewerMode()" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;font-family:inherit">Quitter</button>`;
+  document.body.insertBefore(banner, document.body.firstChild);
+}
+
+window.exitViewerMode = function(){
+  const u = new URL(window.location.href);
+  u.searchParams.delete('share');
+  window.location.href = u.toString();
+};
+
+// === Overrides accesseurs bassins/mesures pour mode lecture seule ===
+const _origGetBassinsVM = getBassins;
+window.getBassins = function(){ return _viewerMode && _viewerBassin ? [_viewerBassin] : _origGetBassinsVM(); };
+const _origGetActiveBassinIdVM = getActiveBassinId;
+window.getActiveBassinId = function(){ return _viewerMode && _viewerBassin ? _viewerBassin.id : _origGetActiveBassinIdVM(); };
+const _origLoadActiveMeasurementsVM = loadActiveMeasurements;
+window.loadActiveMeasurements = function(){ return _viewerMode ? _viewerMeasurements.slice() : _origLoadActiveMeasurementsVM(); };
+
 // ============== Mode Saisons (Hivernage / Remise en route) ==============
 const SEASON_STATE_KEY = 'cp_season_state_v1';
 
@@ -4428,7 +4631,21 @@ document.addEventListener('DOMContentLoaded', ()=>{
   }
   setupHints();
 
-  maybeOpenWizard();
+  // Mode lecture seule (?share=TOKEN) : on charge les données distantes AVANT
+  // toute action dépendante de l'utilisateur (wizard, popups, sync auto).
+  checkShareMode().then(isViewer => {
+    if(isViewer){
+      // En mode viewer on bascule directement sur la page Doses (vue d'analyse)
+      try{ switchTab('correction'); }catch(e){}
+      try{ renderWeatherCard(); }catch(e){}
+      try{ renderInsightsCard(); }catch(e){}
+      try{ renderChloreProjectionCard(); }catch(e){}
+      try{ renderHealthScoreCard(); }catch(e){}
+      try{ renderCharts(); }catch(e){}
+      return; // on s'arrête là — pas de wizard, pas de popup, pas de sync
+    }
+    maybeOpenWizard();
+  });
 
   // Accès admin discret via #admin dans l'URL
   if(location.hash === '#admin') openAdmin();
@@ -5023,6 +5240,7 @@ async function handleFirstLogin(){
 
 // === Bootstrap session au chargement ===
 document.addEventListener('DOMContentLoaded', async () => {
+  if(new URLSearchParams(window.location.search).has('share')) return; // mode viewer : pas de sync auth
   const supa = getSupa();
   if(!supa){ console.warn('Supabase SDK indisponible — sync désactivé'); return; }
   try{
@@ -5048,13 +5266,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // Popup d'info sync (one-shot, opt-out persistant)
-  setTimeout(maybeShowSyncPromo, 2500);
+  if(!_viewerMode) setTimeout(maybeShowSyncPromo, 2500);
 });
 
 // ============== Popup promo création de compte ==============
 const SYNC_PROMO_KEY = 'cp_sync_promo_dismissed_v1';
 
 function maybeShowSyncPromo(){
+  if(_viewerMode) return;                                            // mode lecture seule
   if(_authUser) return;                                              // déjà connecté
   if(localStorage.getItem(SYNC_PROMO_KEY) === '1') return;           // déjà dismissé
   const wizard = document.getElementById('wizardOverlay');

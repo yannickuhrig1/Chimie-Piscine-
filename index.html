@@ -479,6 +479,30 @@
   }
   .bassin-chip-add:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.35)}
 
+  /* Mode lecture seule (?share=TOKEN) — cache l'UI d'édition */
+  body.viewer-mode .tab[data-page="mesure"],
+  body.viewer-mode .tab[data-page="parametres"],
+  body.viewer-mode #page-mesure,
+  body.viewer-mode #page-parametres,
+  body.viewer-mode #page-contact,
+  body.viewer-mode #page-admin,
+  body.viewer-mode #syncPromoOverlay,
+  body.viewer-mode #seasonPromoCard,
+  body.viewer-mode #bassinSwitcher,
+  body.viewer-mode .bassin-switcher,
+  body.viewer-mode #adminGate,
+  body.viewer-mode .params-anchors,
+  body.viewer-mode #accountLoginOverlay,
+  body.viewer-mode #accountMergeOverlay{
+    display:none !important;
+  }
+  body.viewer-mode .tabs-inner{justify-content:center}
+  body.viewer-mode #correctionContent,
+  body.viewer-mode #weatherCard,
+  body.viewer-mode #chloreProjectionCard,
+  body.viewer-mode #insightsCard,
+  body.viewer-mode #healthScoreCard{pointer-events:auto}
+
   /* Modale Saisons */
   .season-tab{
     flex:1;padding:10px 14px;border:none;background:transparent;color:var(--shallow);
@@ -1160,6 +1184,19 @@
 
   <!-- =================== MODALE BASSIN (création / édition) =================== -->
   <!-- =================== MODALE ÉDUCATION =================== -->
+  <!-- =================== MODALE PARTAGE BASSIN =================== -->
+  <div id="shareOverlay" class="account-modal-overlay" style="display:none" onclick="if(event.target===this)closeShareModal()">
+    <div class="account-modal" role="dialog" aria-labelledby="shareModalTitle" aria-modal="true" style="max-width:520px">
+      <button type="button" class="account-modal-close" onclick="closeShareModal()" aria-label="Fermer">×</button>
+      <div class="account-modal-icon" style="background:linear-gradient(135deg,#7fd4d2,#22b4d4)">🔗</div>
+      <h2 id="shareModalTitle" class="account-modal-title">Partager le bassin</h2>
+      <p class="account-modal-sub">Génère un lien public en lecture seule. Le visiteur verra ton bassin, tes mesures et tes graphiques mais ne pourra rien modifier.</p>
+      <div id="shareLinksList" style="margin:18px 0 14px;max-height:300px;overflow-y:auto"></div>
+      <button class="btn-primary" onclick="createNewShareLink()">+ Créer un nouveau lien</button>
+      <p style="font-size:11px;color:var(--shallow);opacity:.6;line-height:1.5;margin-top:14px;text-align:center">Conserve les liens privés — toute personne avec l'URL pourra consulter ton bassin jusqu'à révocation.</p>
+    </div>
+  </div>
+
   <!-- =================== MODALE SAISONS (Hivernage / Remise) =================== -->
   <div id="seasonOverlay" style="display:none;position:fixed;inset:0;background:rgba(2,12,26,.92);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);z-index:9998;padding:20px;align-items:flex-start;justify-content:center;overflow-y:auto" onclick="if(event.target===this)closeSeasonGuide()">
     <div style="background:linear-gradient(135deg,rgba(20,60,90,.96),rgba(10,40,70,.96));border:1px solid rgba(255,255,255,.10);border-radius:18px;padding:22px;max-width:680px;width:100%;color:#fff;margin:20px 0 140px">
@@ -1695,6 +1732,17 @@
         </div>
       </details>
       <button class="btn-primary" onclick="saveBassinConfigFromRappels()">Configurer mon bassin</button>
+    </div>
+
+    <div class="card" style="margin-top:14px;cursor:pointer" onclick="openShareModal()">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="font-size:28px">🔗</div>
+        <div style="flex:1">
+          <div style="font-weight:600;color:#fff;margin-bottom:4px">Partager mon bassin en lecture seule</div>
+          <div style="font-size:13px;color:var(--shallow);opacity:.85;line-height:1.5">Génère un lien à envoyer à un pisciniste ou un copain qui te conseille — il verra ton historique sans pouvoir rien modifier. Révocable à tout moment.</div>
+        </div>
+        <div style="color:#7fd4d2;font-size:20px">→</div>
+      </div>
     </div>
 
     <div class="divider" id="sec-affichage">Affichage</div>
