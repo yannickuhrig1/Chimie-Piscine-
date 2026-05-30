@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Politique de confidentialité — Chimie Piscine</title>
+<meta name="description" content="Données collectées et traitements effectués par l'application Chimie Piscine.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --abyss:#041d2e;
+    --deep:#0a3d62;
+    --mid:#1c6b8c;
+    --water:#22b4d4;
+    --shallow:#7fdbda;
+    --foam:#e8f9f8;
+    --cream:#fbf6ea;
+    --coral:#ff6b6b;
+    --leaf:#06d6a0;
+    --ink:#0d2436;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:#0a1f33;color:var(--foam);font-family:'Manrope',sans-serif;min-height:100vh;line-height:1.6}
+  a{color:var(--shallow);text-decoration:none;border-bottom:1px solid rgba(127,219,218,.35)}
+  a:hover{border-bottom-color:var(--shallow)}
+
+  .toolbar{
+    position:sticky;top:0;z-index:50;
+    display:flex;gap:14px;align-items:center;
+    padding:14px 18px;background:rgba(4,29,46,.92);backdrop-filter:blur(10px);
+    border-bottom:1px solid rgba(127,219,218,.2);
+  }
+  .home{
+    width:34px;height:34px;border-radius:10px;
+    background:linear-gradient(135deg,var(--water),var(--shallow));
+    display:grid;place-items:center;text-decoration:none;color:white;font-size:18px;
+    border:none;
+  }
+  .toolbar .title{font-family:'Fraunces',serif;font-size:17px;font-weight:500}
+  .toolbar .title em{font-style:italic;color:var(--shallow);font-weight:400}
+
+  main{
+    max-width:820px;margin:0 auto;padding:40px 22px 80px;
+  }
+  h1{
+    font-family:'Fraunces',serif;font-size:34px;font-weight:500;letter-spacing:-.02em;
+    margin-bottom:8px;
+  }
+  h1 em{font-style:italic;color:var(--shallow);font-weight:400}
+  .meta{
+    font-size:13px;color:var(--shallow);opacity:.75;margin-bottom:32px;
+  }
+  .intro{
+    background:rgba(34,180,212,.08);border:1px solid rgba(127,219,218,.2);
+    border-radius:16px;padding:18px 20px;margin-bottom:32px;font-size:14.5px;
+  }
+  h2{
+    font-family:'Fraunces',serif;font-size:22px;font-weight:500;
+    margin:36px 0 12px;color:var(--shallow);letter-spacing:-.01em;
+  }
+  h3{
+    font-family:'Manrope',sans-serif;font-size:15px;font-weight:600;
+    margin:22px 0 8px;color:var(--foam);
+  }
+  p{margin:10px 0;font-size:14.5px;color:rgba(232,249,248,.92)}
+  ul{margin:10px 0 10px 22px;font-size:14.5px;color:rgba(232,249,248,.92)}
+  ul li{margin:6px 0}
+  strong{color:var(--foam);font-weight:600}
+  code{
+    font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;
+    background:rgba(255,255,255,.08);padding:1px 6px;border-radius:6px;
+    color:var(--shallow);
+  }
+
+  .card{
+    background:rgba(255,255,255,.04);border:1px solid rgba(127,219,218,.15);
+    border-radius:14px;padding:16px 18px;margin:14px 0;
+  }
+  .card .head{
+    display:flex;align-items:center;gap:10px;margin-bottom:6px;
+    font-weight:600;color:var(--foam);
+  }
+  .card .head .badge{
+    font-size:11px;padding:3px 8px;border-radius:999px;
+    background:rgba(127,219,218,.15);color:var(--shallow);font-weight:500;
+    letter-spacing:.04em;text-transform:uppercase;
+  }
+  .card .body{font-size:13.5px;color:rgba(232,249,248,.85)}
+  .card .body p{margin:4px 0}
+
+  .grid-services{display:grid;gap:12px;margin:14px 0 20px}
+
+  table{
+    width:100%;border-collapse:collapse;margin:14px 0;font-size:13.5px;
+  }
+  th,td{
+    text-align:left;padding:10px 12px;
+    border-bottom:1px solid rgba(127,219,218,.12);
+  }
+  th{color:var(--shallow);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+  td{color:rgba(232,249,248,.9)}
+
+  .footer{
+    margin-top:50px;padding-top:24px;
+    border-top:1px solid rgba(127,219,218,.15);
+    font-size:13px;color:rgba(232,249,248,.6);text-align:center;
+  }
+  .footer a{color:var(--shallow)}
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <a class="home" href="/" aria-label="Retour à l'app">←</a>
+  <div class="title"><em>Chimie Piscine</em> — Confidentialité</div>
+</div>
+
+<main>
+  <h1>Politique de <em>confidentialité</em></h1>
+  <div class="meta">Dernière mise à jour : 30 mai 2026 — Version de l'application : 1.22.1</div>
+
+  <div class="intro">
+    <p><strong>En résumé :</strong> Chimie Piscine fonctionne par défaut sans aucun compte, et stocke vos mesures uniquement dans votre navigateur ou votre téléphone. La création d'un compte (par e-mail) est <strong>optionnelle</strong> et sert uniquement à synchroniser vos données entre vos appareils. Aucune publicité, aucun revendeur tiers, aucun partage avec des courtiers de données.</p>
+  </div>
+
+  <h2>1. Qui est responsable du traitement ?</h2>
+  <p><strong>Yannick Uhrig</strong>, éditeur indépendant de l'application Chimie Piscine (PWA et version Android), accessible à <a href="https://chimie-piscine.vercel.app">chimie-piscine.vercel.app</a>.</p>
+  <p>Contact pour toute question liée à vos données : <a href="mailto:support@yannick-uhrig.com">support@yannick-uhrig.com</a>.</p>
+
+  <h2>2. Comment l'application fonctionne par défaut</h2>
+  <p>Au premier lancement, l'application fonctionne <strong>entièrement en local</strong>. Vos mesures (pH, chlore, TAC, etc.), la configuration de vos bassins et vos préférences sont stockés dans le <code>localStorage</code> de votre navigateur ou dans le stockage interne de l'application Android. Rien n'est envoyé sur un serveur, à l'exception des appels de météo si vous activez cette fonction (voir §5).</p>
+  <p>Vous pouvez à tout moment effacer ces données depuis les réglages de votre navigateur (effacer les données du site) ou en désinstallant l'application Android.</p>
+
+  <h2>3. Création d'un compte (optionnelle)</h2>
+  <p>Si vous choisissez de créer un compte, l'application utilise <strong>Supabase</strong> pour stocker une copie de vos données dans le cloud afin de les synchroniser entre vos appareils.</p>
+
+  <h3>Données collectées au moment de la connexion</h3>
+  <ul>
+    <li>Votre <strong>adresse e-mail</strong>, utilisée comme identifiant de connexion via un lien magique (pas de mot de passe à retenir).</li>
+    <li>Un identifiant utilisateur technique (UUID) généré par Supabase.</li>
+  </ul>
+
+  <h3>Données synchronisées si vous êtes connecté</h3>
+  <ul>
+    <li>La <strong>configuration de vos bassins</strong> (nom, volume, désinfection, ville, coordonnées si renseignées).</li>
+    <li>Vos <strong>mesures</strong> de chimie (date, pH, chlore, TAC, CYA, sel, TH, phosphates, brome, température, notes).</li>
+    <li>Vos <strong>rappels</strong> et préférences d'affichage (thème, métriques visibles).</li>
+  </ul>
+
+  <h3>Confidentialité technique</h3>
+  <p>Les tables Supabase sont protégées par des règles <em>Row-Level Security</em> strictes : <strong>seul le propriétaire d'un enregistrement peut le lire ou le modifier</strong>. Personne d'autre, y compris l'éditeur de l'application, ne peut accéder à vos données via l'interface publique.</p>
+
+  <h2>4. Sous-traitants et services tiers</h2>
+
+  <div class="grid-services">
+
+    <div class="card">
+      <div class="head">Vercel <span class="badge">Hébergement</span></div>
+      <div class="body">
+        <p>Héberge la version web de l'application. Vercel reçoit votre adresse IP et votre user-agent dans le cadre standard d'une visite HTTP. <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener">Politique Vercel</a>.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="head">Supabase <span class="badge">Base de données — compte opt-in</span></div>
+      <div class="body">
+        <p>Fournit l'authentification par lien magique et le stockage cloud de vos données <strong>si vous créez un compte</strong>. Données stockées en UE. <a href="https://supabase.com/privacy" target="_blank" rel="noopener">Politique Supabase</a>.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="head">Resend <span class="badge">E-mails transactionnels</span></div>
+      <div class="body">
+        <p>Envoie les e-mails de connexion (lien magique) et les éventuelles réponses aux tickets de support. Votre adresse e-mail est transmise pour l'envoi uniquement. <a href="https://resend.com/legal/privacy-policy" target="_blank" rel="noopener">Politique Resend</a>.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="head">Chatwoot (auto-hébergé) <span class="badge">Tickets de support</span></div>
+      <div class="body">
+        <p>Si vous utilisez le formulaire de contact intégré (page <code>/#contact</code>), votre nom, votre e-mail et votre message sont enregistrés dans une instance Chatwoot auto-hébergée sur l'infrastructure de l'éditeur (UE). Aucun cookie tiers.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="head">Umami (auto-hébergé) <span class="badge">Statistiques anonymes</span></div>
+      <div class="body">
+        <p>Mesure d'audience respectueuse de la vie privée, sans cookie, sans empreinte navigateur, avec IP anonymisée. Aucun identifiant personnel n'est collecté. Instance hébergée par l'éditeur (UE). <a href="https://umami.is/docs/faq" target="_blank" rel="noopener">Détails Umami</a>.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="head">Open-Meteo <span class="badge">Météo</span></div>
+      <div class="body">
+        <p>Si vous activez la météo locale, l'application envoie à <code>api.open-meteo.com</code> soit les coordonnées GPS de votre bassin (que vous avez vous-même renseignées), soit un nom de ville / code postal pour la fonction de recherche. Service gratuit, sans inscription. <a href="https://open-meteo.com/en/terms" target="_blank" rel="noopener">Conditions Open-Meteo</a>.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="head">Cloudflare <span class="badge">Réseau / Proxy</span></div>
+      <div class="body">
+        <p>Sert de relais pour certains sous-domaines auto-hébergés (tickets, statistiques). En tant que CDN, Cloudflare voit transiter votre adresse IP. <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener">Politique Cloudflare</a>.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <h2>5. Permissions sensibles</h2>
+
+  <h3>Géolocalisation</h3>
+  <p>Demandée uniquement si vous appuyez sur le bouton « Utiliser ma position » lors de la configuration d'un bassin, pour pré-remplir vos coordonnées et activer la météo locale. <strong>La position n'est ni envoyée à un serveur de l'éditeur, ni stockée à votre insu</strong> : elle est uniquement utilisée localement, puis (si vous validez) sauvegardée dans la configuration du bassin que vous possédez.</p>
+
+  <h3>Notifications</h3>
+  <p>Si vous activez les rappels avec notifications, votre navigateur génère un identifiant d'abonnement push (endpoint chiffré). Cet identifiant est stocké côté Supabase pour permettre l'envoi des rappels. Aucun contenu personnel n'est inclus dans les notifications au-delà des intitulés que vous avez configurés (ex : « Mesurer le chlore »).</p>
+
+  <h3>Stockage local</h3>
+  <p>L'application utilise <code>localStorage</code> et le cache du service worker pour fonctionner hors-ligne. Vous pouvez les effacer à tout moment depuis votre navigateur ou les paramètres système.</p>
+
+  <h2>6. Vos droits</h2>
+  <p>Conformément au RGPD, vous disposez des droits suivants :</p>
+
+  <table>
+    <thead>
+      <tr><th>Droit</th><th>Comment l'exercer</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Accès</strong></td><td>Toutes vos données sont visibles dans l'application. Si vous avez un compte, exportez via Paramètres → Export JSON.</td></tr>
+      <tr><td><strong>Rectification</strong></td><td>Modifiez ou supprimez n'importe quelle mesure directement dans l'historique.</td></tr>
+      <tr><td><strong>Effacement</strong></td><td>Sans compte : effacez les données du site dans votre navigateur. Avec compte : demande par e-mail à <a href="mailto:support@yannick-uhrig.com">support@yannick-uhrig.com</a>, traitée sous 30 jours.</td></tr>
+      <tr><td><strong>Portabilité</strong></td><td>Export JSON disponible dans Paramètres → Export.</td></tr>
+      <tr><td><strong>Opposition</strong></td><td>Vous pouvez à tout moment vous déconnecter (l'application reste fonctionnelle en mode local) ou désactiver les statistiques via les paramètres « Do Not Track » de votre navigateur — Umami respecte ce signal.</td></tr>
+      <tr><td><strong>Réclamation</strong></td><td>Auprès de la <a href="https://www.cnil.fr/fr/plaintes" target="_blank" rel="noopener">CNIL</a>.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>7. Durée de conservation</h2>
+  <ul>
+    <li><strong>Données locales</strong> : conservées tant que vous ne les effacez pas vous-même.</li>
+    <li><strong>Données de compte Supabase</strong> : conservées tant que votre compte existe. Suppression complète sur simple demande par e-mail.</li>
+    <li><strong>Tickets de support Chatwoot</strong> : conservés 2 ans après la dernière interaction, puis archivés ou supprimés.</li>
+    <li><strong>Statistiques Umami</strong> : aucune donnée individuelle, agrégats conservés sans limite.</li>
+  </ul>
+
+  <h2>8. Sécurité</h2>
+  <p>Les échanges réseau sont chiffrés (HTTPS / TLS) de bout en bout. Les bases de données Supabase utilisent <em>Row-Level Security</em> avec authentification par JWT signé. Les clés sensibles (clés API SMTP, clés VAPID privées) ne quittent jamais l'infrastructure de l'éditeur.</p>
+
+  <h2>9. Cookies et traceurs</h2>
+  <p>L'application <strong>n'utilise aucun cookie publicitaire</strong>. Elle utilise uniquement :</p>
+  <ul>
+    <li>Un cookie de session technique <strong>uniquement si vous êtes connecté à un compte</strong> (token Supabase, expiration 1 h, renouvelé automatiquement).</li>
+    <li>Le stockage local (<code>localStorage</code>) pour conserver vos données entre les sessions.</li>
+  </ul>
+  <p>Umami fonctionne sans cookie.</p>
+
+  <h2>10. Enfants</h2>
+  <p>L'application n'est pas conçue pour les enfants de moins de 13 ans et ne collecte volontairement aucune donnée les concernant.</p>
+
+  <h2>11. Modifications</h2>
+  <p>Cette politique peut évoluer en cas d'ajout de fonctionnalité. La date de mise à jour ci-dessus reflète la version en vigueur. Les modifications substantielles seront annoncées dans les notes de version au lancement de l'application.</p>
+
+  <h2>12. Contact</h2>
+  <p>Pour toute question relative à cette politique ou pour exercer vos droits :</p>
+  <p><strong>Yannick Uhrig</strong> — <a href="mailto:support@yannick-uhrig.com">support@yannick-uhrig.com</a></p>
+
+  <div class="footer">
+    <p><a href="/">Retour à Chimie Piscine</a></p>
+  </div>
+
+</main>
+</body>
+</html>
