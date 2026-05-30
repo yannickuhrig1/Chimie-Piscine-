@@ -65,20 +65,37 @@ jobs:
 
       - name: Pre-configure Bubblewrap (skip JDK/SDK install prompts)
         run: |
+          SDK_PATH="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+
+          echo "--- ANDROID_HOME contents ---"
+          ls -la "$SDK_PATH" | head -15
+          echo "--- cmdline-tools contents ---"
+          ls -la "$SDK_PATH/cmdline-tools" || true
+
+          # Bubblewrap exige $SDK/cmdline-tools/latest/bin/sdkmanager mais le runner
+          # n'expose que des sous-répertoires versionnés (ex 16.0, 19.0). On crée
+          # le symlink "latest" vers la version la plus récente.
+          if [ ! -d "$SDK_PATH/cmdline-tools/latest" ]; then
+            cd "$SDK_PATH/cmdline-tools"
+            LATEST_VER=$(ls -d */ 2>/dev/null | grep -v "^latest/$" | sort -rV | head -1 | tr -d /)
+            echo "Symlinking cmdline-tools/latest -> $LATEST_VER"
+            if [ -n "$LATEST_VER" ]; then
+              ln -sf "$LATEST_VER" latest
+            fi
+            cd -
+          fi
+          ls -la "$SDK_PATH/cmdline-tools/latest/bin/sdkmanager" || \
+            (echo "ERREUR : sdkmanager introuvable" && exit 1)
+
           mkdir -p ~/.bubblewrap
-          # Pointe Bubblewrap vers le JDK et le SDK déjà fournis par le runner.
           cat > ~/.bubblewrap/config.json <<EOF
           {
             "jdkPath": "${JAVA_HOME}",
-            "androidSdkPath": "${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+            "androidSdkPath": "$SDK_PATH"
           }
           EOF
           echo "--- ~/.bubblewrap/config.json ---"
           cat ~/.bubblewrap/config.json
-          echo "--- JAVA_HOME contents ---"
-          ls -la "$JAVA_HOME/bin" | head -5
-          echo "--- ANDROID_HOME contents ---"
-          ls -la "${ANDROID_HOME:-/usr/local/lib/android/sdk}" | head -10
 
       - name: Initialize Bubblewrap project
         working-directory: android-build
