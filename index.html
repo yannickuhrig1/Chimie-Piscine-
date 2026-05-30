@@ -2128,6 +2128,18 @@
   </div>
 </div>
 
+<div id="releaseNotesOverlay" class="account-modal-overlay" style="display:none" onclick="if(event.target===this)closeReleaseNotes()">
+  <div class="account-modal" role="dialog" aria-labelledby="releaseNotesTitle" aria-modal="true" style="max-width:560px">
+    <button type="button" class="account-modal-close" onclick="closeReleaseNotes()" aria-label="Fermer">×</button>
+    <div class="account-modal-icon" style="background:linear-gradient(135deg,#a78bfa,#7c3aed)">✨</div>
+    <h2 id="releaseNotesTitle" class="account-modal-title">Nouveau dans Chimie Piscine</h2>
+    <p class="account-modal-sub">Voici ce qui a été ajouté depuis ta dernière visite.</p>
+    <div id="releaseNotesList" style="margin:20px 0 16px;max-height:55vh;overflow-y:auto"></div>
+    <button class="btn-primary" onclick="closeReleaseNotes()">J'ai compris</button>
+    <p style="font-size:11px;color:var(--shallow);opacity:.55;line-height:1.5;margin-top:14px;text-align:center">Ce message ne s'affichera plus jusqu'à la prochaine mise à jour.</p>
+  </div>
+</div>
+
 <div id="syncPromoOverlay" class="account-modal-overlay" style="display:none" onclick="if(event.target===this)closeSyncPromo()">
   <div class="account-modal" role="dialog" aria-labelledby="syncPromoTitle" aria-modal="true">
     <button type="button" class="account-modal-close" onclick="closeSyncPromo()" aria-label="Fermer">×</button>

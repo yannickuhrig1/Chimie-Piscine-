@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.21.1';
+const APP_VERSION = '1.22.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -4770,6 +4770,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       return; // on s'arrête là — pas de wizard, pas de popup, pas de sync
     }
     maybeOpenWizard();
+    try{ maybeShowReleaseNotes(); }catch(e){}
   });
 
   // Accès admin discret via #admin dans l'URL
@@ -5441,6 +5442,101 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Popup d'info sync (one-shot, opt-out persistant)
   if(!_viewerMode) setTimeout(maybeShowSyncPromo, 2500);
 });
+
+// ============== Release notes (popup nouveautés par version) ==============
+const RELEASE_NOTES_KEY = 'cp_release_notes_seen_v1';
+
+const RELEASE_NOTES = [
+  {
+    version: '1.21.0',
+    icon: '🔗',
+    color: '#7fd4d2',
+    title: 'Partage de bassin en lecture seule',
+    body: "Génère un lien public à envoyer à un pisciniste, un copain ou un forum — la personne voit ton historique et tes analyses mais ne peut rien modifier. Bouton 🔗 dans le bassin switcher en haut, ou Paramètres → Bassin → Partager.",
+  },
+  {
+    version: '1.20.0',
+    icon: '💯',
+    color: '#a8d8ea',
+    title: 'Score santé global du bassin',
+    body: "Une jauge 0-100 en haut de la page Doses, calculée depuis pH, Cl libre, TAC, CYA et LSI pondérés. Verdict instantané (Excellent / Bon / Correct / À surveiller / Urgent) + breakdown par paramètre.",
+  },
+  {
+    version: '1.17.0',
+    icon: '🔮',
+    color: '#a78bfa',
+    title: 'Projection chlore via météo locale',
+    body: "Une carte sur la page Doses qui prédit l'évolution de ton Fcl sur 3 jours en croisant ta vitesse de consommation historique et la météo prévisionnelle Open-Meteo. Recommande une dose préventive si ton chlore risque de chuter sous la cible.",
+  },
+  {
+    version: '1.16.0',
+    icon: '🪄',
+    color: '#fbbf24',
+    title: 'Compte avec sauvegarde Supabase',
+    body: "Connecte-toi par lien magique (aucun mot de passe à retenir) pour synchroniser ton bassin, ton historique, tes rappels et tes préférences entre tous tes appareils. 100% optionnel — l'app reste utilisable sans compte comme avant.",
+  },
+];
+
+function compareVersions(a, b){
+  const pa = (a || '0.0.0').split('.').map(Number);
+  const pb = (b || '0.0.0').split('.').map(Number);
+  for(let i = 0; i < Math.max(pa.length, pb.length); i++){
+    const va = pa[i] || 0, vb = pb[i] || 0;
+    if(va < vb) return -1;
+    if(va > vb) return 1;
+  }
+  return 0;
+}
+
+function getUnseenReleaseNotes(){
+  const seen = localStorage.getItem(RELEASE_NOTES_KEY);
+  return RELEASE_NOTES.filter(n => !seen || compareVersions(n.version, seen) > 0);
+}
+
+function maybeShowReleaseNotes(){
+  if(_viewerMode) return;
+  if(getBassins().length === 0) return;
+  const unseen = getUnseenReleaseNotes();
+  if(unseen.length === 0) return;
+  setTimeout(() => openReleaseNotes(unseen), 1200);
+}
+
+function _hexToRgbStr(hex){
+  if(!hex || hex[0] !== '#') return '255,255,255';
+  const h = hex.replace('#','');
+  const r = parseInt(h.substr(0,2), 16);
+  const g = parseInt(h.substr(2,2), 16);
+  const b = parseInt(h.substr(4,2), 16);
+  return `${r},${g},${b}`;
+}
+
+window.openReleaseNotes = function(notes){
+  const ov = document.getElementById('releaseNotesOverlay');
+  const list = document.getElementById('releaseNotesList');
+  if(!ov || !list) return;
+  notes = notes || RELEASE_NOTES;
+  list.innerHTML = notes.map(n => {
+    const rgb = _hexToRgbStr(n.color);
+    return `<div style="display:flex;gap:12px;padding:14px;margin-bottom:10px;background:rgba(${rgb},.06);border:1px solid rgba(${rgb},.18);border-radius:12px">
+      <div style="font-size:28px;flex:0 0 auto;line-height:1">${n.icon}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;color:#fff;margin-bottom:4px;font-size:14px">${escapeHtml(n.title)}</div>
+        <div style="font-size:13px;color:var(--shallow);line-height:1.55">${escapeHtml(n.body)}</div>
+      </div>
+    </div>`;
+  }).join('');
+  ov.style.display = 'flex';
+};
+
+window.closeReleaseNotes = function(){
+  const ov = document.getElementById('releaseNotesOverlay');
+  if(ov) ov.style.display = 'none';
+  try{ _rawSetItem(RELEASE_NOTES_KEY, APP_VERSION); }catch(e){}
+};
+
+window.showAllReleaseNotes = function(){
+  openReleaseNotes(RELEASE_NOTES);
+};
 
 // ============== Popup promo création de compte ==============
 const SYNC_PROMO_KEY = 'cp_sync_promo_dismissed_v1';
