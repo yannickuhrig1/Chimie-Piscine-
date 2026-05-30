@@ -711,6 +711,7 @@ function switchTab(name){
   if(name==='historique') renderCharts();
   if(name==='correction'){
     renderCorrections();
+    try{ renderHealthScoreCard(); }catch(e){}
     try{ renderInsightsCard(); }catch(e){}
     try{ renderChloreProjectionCard(); }catch(e){}
   }
@@ -947,6 +948,7 @@ function saveAndCalc(){
   updateCclBadge(m);
   updateLastControlInfo();
   renderCorrections();
+  try{ renderHealthScoreCard(); }catch(e){}
   try{ renderInsightsCard(); }catch(e){}
   try{ renderChloreProjectionCard(); }catch(e){}
   cloudBackupSync();
@@ -2924,6 +2926,127 @@ function renderWeatherCard(){
   });
 }
 
+// ============== Score santé global du bassin ==============
+const HEALTH_SCORE_ENABLED_KEY = 'cp_health_score_enabled_v1';
+function isHealthScoreEnabled(){
+  const v = localStorage.getItem(HEALTH_SCORE_ENABLED_KEY);
+  return v === null ? true : v === '1';
+}
+
+function calcHealthScore(m){
+  if(!m) return null;
+  let score = 100;
+  const breakdown = [];
+
+  if(m.ph != null && m.phSouhaite != null){
+    const diff = Math.abs(m.ph - m.phSouhaite);
+    let p = 0;
+    if(diff > 0.5) p = 40;
+    else if(diff > 0.3) p = 25;
+    else if(diff > 0.15) p = 10;
+    else if(diff > 0.05) p = 3;
+    score -= p;
+    breakdown.push({key:'ph', name:'pH', value:fmt(m.ph,1), penalty:p, status: p < 5 ? 'ok' : p < 25 ? 'warn' : 'bad'});
+  }
+
+  if(m.fcl != null && m.cya != null){
+    const target = m.cya / 10;
+    const ratio = m.fcl / Math.max(0.5, target);
+    let p = 0;
+    if(ratio < 0.3) p = 30;
+    else if(ratio < 0.6) p = 20;
+    else if(ratio < 0.9) p = 8;
+    else if(ratio > 2.5) p = 15;
+    else if(ratio > 1.8) p = 6;
+    score -= p;
+    breakdown.push({key:'fcl', name:'Chlore libre', value:fmt(m.fcl,1)+' ppm', penalty:p, status: p < 5 ? 'ok' : p < 20 ? 'warn' : 'bad'});
+  }
+
+  if(m.tac != null){
+    let p = 0;
+    if(m.tac < 40 || m.tac > 200) p = 15;
+    else if(m.tac < 60 || m.tac > 150) p = 8;
+    else if(m.tac < 80 || m.tac > 120) p = 3;
+    score -= p;
+    breakdown.push({key:'tac', name:'TAC', value:fmt(m.tac,0)+' ppm', penalty:p, status: p < 5 ? 'ok' : p < 10 ? 'warn' : 'bad'});
+  }
+
+  if(m.cya != null){
+    let p = 0;
+    if(m.cya > 100) p = 10;
+    else if(m.cya > 70) p = 6;
+    else if(m.cya > 50) p = 3;
+    else if(m.cya < 15) p = 5;
+    score -= p;
+    breakdown.push({key:'cya', name:'CYA', value:fmt(m.cya,0)+' ppm', penalty:p, status: p < 4 ? 'ok' : p < 8 ? 'warn' : 'bad'});
+  }
+
+  if(m.ph != null && m.temp != null && m.th != null && m.tac != null){
+    const lsi = calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel');
+    if(lsi != null){
+      let p = 0;
+      if(Math.abs(lsi) > 1) p = 5;
+      else if(Math.abs(lsi) > 0.5) p = 3;
+      score -= p;
+      breakdown.push({key:'lsi', name:'Équilibre LSI', value:(lsi>=0?'+':'')+fmt(lsi,2), penalty:p, status: p < 2 ? 'ok' : p < 4 ? 'warn' : 'bad'});
+    }
+  }
+
+  score = Math.max(0, Math.min(100, Math.round(score)));
+  let label, color;
+  if(score >= 85){ label = 'Excellent'; color = '#5eead4'; }
+  else if(score >= 70){ label = 'Bon'; color = '#a8d8ea'; }
+  else if(score >= 55){ label = 'Correct'; color = '#fbbf24'; }
+  else if(score >= 35){ label = 'À surveiller'; color = '#fb923c'; }
+  else { label = 'Urgent'; color = '#f87171'; }
+
+  return {score, label, color, breakdown};
+}
+
+function renderHealthScoreCard(){
+  const wrap = document.getElementById('healthScoreCard');
+  if(!wrap) return;
+  if(!isHealthScoreEnabled()){ wrap.style.display = 'none'; return; }
+  const measurements = loadActiveMeasurements();
+  const latest = measurements.slice(-1)[0];
+  if(!latest){ wrap.style.display = 'none'; return; }
+  const result = calcHealthScore(latest);
+  if(!result || !result.breakdown.length){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  const r = 52;
+  const c = 2 * Math.PI * r;
+  const dashoffset = c * (1 - result.score / 100);
+  const colorMap = {ok:'#5eead4', warn:'#fbbf24', bad:'#f87171'};
+  const breakdown = result.breakdown.map(b => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:13px">
+      <span style="width:8px;height:8px;border-radius:50%;background:${colorMap[b.status]};flex:0 0 auto"></span>
+      <span style="flex:1;color:var(--shallow)">${b.name}</span>
+      <span style="font-family:'JetBrains Mono',monospace;color:#fff;font-size:12px">${b.value}</span>
+      <span style="font-size:11px;color:var(--shallow);opacity:.55;font-family:'JetBrains Mono',monospace;min-width:36px;text-align:right">${b.penalty === 0 ? '✓' : '−'+b.penalty}</span>
+    </div>`).join('');
+  wrap.innerHTML = `<div class="card-header">
+    <div class="card-title"><span class="dot" style="background:${result.color};box-shadow:0 0 10px ${result.color}"></span>Score santé global</div>
+    <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">${result.breakdown.length} paramètres</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:18px;margin:8px 0 6px">
+    <div style="position:relative;width:120px;height:120px;flex:0 0 auto">
+      <svg width="120" height="120" viewBox="0 0 120 120" style="transform:rotate(-90deg)">
+        <circle cx="60" cy="60" r="${r}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="10"/>
+        <circle cx="60" cy="60" r="${r}" fill="none" stroke="${result.color}" stroke-width="10" stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${dashoffset}" style="transition:stroke-dashoffset .6s ease-out,stroke .3s"/>
+      </svg>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1">
+        <div style="font-size:32px;font-weight:600;color:#fff;font-family:'Fraunces',serif">${result.score}</div>
+        <div style="font-size:10px;color:var(--shallow);opacity:.65;text-transform:uppercase;letter-spacing:.5px;margin-top:4px">/ 100</div>
+      </div>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:18px;font-weight:600;color:${result.color};font-family:'Fraunces',serif;margin-bottom:4px">${result.label}</div>
+      <div style="font-size:12px;color:var(--shallow);opacity:.75;line-height:1.5">Score composite pondéré : pH (40 pts), Cl (30), TAC (15), CYA (10), LSI (5).</div>
+    </div>
+  </div>
+  <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--depth-line)">${breakdown}</div>`;
+}
+
 // ============== Insights tendances historiques ==============
 // Algo pur JS sur cp_measurements pour détecter dérives, conso anormale, etc.
 // Aucun service externe — tout est calculé sur les données déjà locales.
@@ -3229,10 +3352,11 @@ function renderChloreProjectionCard(){
   });
 }
 
-// Chaîne le rendu de la projection chlore + insights après chaque update météo
+// Chaîne le rendu de la projection chlore + insights + score santé après chaque update météo
 const _origRenderWeatherCard = renderWeatherCard;
 window.renderWeatherCard = function(){
   _origRenderWeatherCard();
+  try{ renderHealthScoreCard(); }catch(e){ console.warn('HealthScore render failed', e); }
   try{ renderChloreProjectionCard(); }catch(e){ console.warn('Projection render failed', e); }
   try{ renderInsightsCard(); }catch(e){ console.warn('Insights render failed', e); }
 };
@@ -4714,6 +4838,16 @@ document.addEventListener('DOMContentLoaded', ()=>{
     });
   }
 
+  // Toggle "Score santé global"
+  const healthToggle = $('healthScoreToggle');
+  if(healthToggle){
+    healthToggle.checked = isHealthScoreEnabled();
+    healthToggle.addEventListener('change', () => {
+      localStorage.setItem(HEALTH_SCORE_ENABLED_KEY, healthToggle.checked ? '1' : '0');
+      renderHealthScoreCard();
+    });
+  }
+
   // Auto-save sur les paramètres bassin (debounced via input event)
   ['volume','phSouhaite','tacSouhaite','cya','cyaSouhaite','selSouhaite','thSouhaite'].forEach(id => {
     const el = $(id);
@@ -4881,6 +5015,7 @@ const SYNCABLE_KEYS = new Set([
   'cp_chlore_projection_enabled_v1',
   'cp_insights_enabled_v1',
   'cp_season_state_v1',
+  'cp_health_score_enabled_v1',
 ]);
 
 let _supa = null;
@@ -5027,6 +5162,7 @@ function collectPrefsPayload(){
     chlore_projection_enabled: localStorage.getItem('cp_chlore_projection_enabled_v1'),
     insights_enabled: localStorage.getItem('cp_insights_enabled_v1'),
     season_state: loadJSON('cp_season_state_v1', null),
+    health_score_enabled: localStorage.getItem('cp_health_score_enabled_v1'),
   };
 }
 
@@ -5092,6 +5228,7 @@ async function syncPullAll(){
       if(d.chlore_projection_enabled === '0' || d.chlore_projection_enabled === '1') _rawSetItem('cp_chlore_projection_enabled_v1', d.chlore_projection_enabled);
       if(d.insights_enabled === '0' || d.insights_enabled === '1') _rawSetItem('cp_insights_enabled_v1', d.insights_enabled);
       if(d.season_state && typeof d.season_state === 'object') _rawSetItem('cp_season_state_v1', JSON.stringify(d.season_state));
+      if(d.health_score_enabled === '0' || d.health_score_enabled === '1') _rawSetItem('cp_health_score_enabled_v1', d.health_score_enabled);
     }
     if(rem.data && rem.data.data && Object.keys(rem.data.data).length){
       _rawSetItem(STORAGE_KEYS.reminders, JSON.stringify(rem.data.data));

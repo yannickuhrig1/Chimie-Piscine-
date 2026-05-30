@@ -1523,7 +1523,8 @@
     <h1 class="page-title">Corrections <em>recommandées</em></h1>
     <p class="page-sub">Doses calculées selon tes mesures · <span style="color:var(--leaf)">vert = aucune action</span></p>
 
-    <div id="weatherCard" class="card" style="display:none"></div>
+    <div id="healthScoreCard" class="card" style="display:none"></div>
+    <div id="weatherCard" class="card" style="display:none;margin-top:12px"></div>
     <div id="chloreProjectionCard" class="card" style="display:none;margin-top:12px"></div>
     <div id="insightsCard" class="card" style="display:none;margin-top:12px"></div>
 
@@ -1811,6 +1812,16 @@
       </div>
       <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6">
         Analyse ton historique sur 30 jours pour repérer les <strong>dérives</strong> et <strong>anomalies</strong> : pH qui dérive, conso chlore inhabituelle, TAC en baisse, CYA qui s'accumule, pH instable… Nécessite au moins 3 mesures.
+      </p>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="card-header">
+        <div class="card-title"><span class="dot" style="background:#a8d8ea;box-shadow:0 0 10px #a8d8ea"></span>Score santé global</div>
+        <label class="switch"><input type="checkbox" id="healthScoreToggle" checked><span class="switch-slider"></span></label>
+      </div>
+      <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6">
+        Affiche en haut de la page <strong>Doses</strong> un score composite 0-100 calculé depuis ta dernière mesure (pH, Cl, TAC, CYA, LSI pondérés). Verdict instantané : Excellent · Bon · Correct · À surveiller · Urgent.
       </p>
     </div>
 
