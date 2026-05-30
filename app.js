@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.22.0';
+const APP_VERSION = '1.22.1';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -1631,10 +1631,16 @@ function renderHistory(){
     return;
   }
   const months = ['JAN','FÉV','MAR','AVR','MAI','JUI','JUI','AOÛ','SEP','OCT','NOV','DÉC'];
-  wrap.innerHTML = list.slice().reverse().slice(0, 50).map((m, idx) => {
-    const realIdx = list.length - 1 - idx;
+  // Tri explicite par date décroissante (peu importe l'ordre dans le storage,
+  // qui peut varier après un sync cloud)
+  const sortedWithIdx = list
+    .map((m, idx) => ({ m, idx }))
+    .filter(x => x.m && x.m.date)
+    .sort((a, b) => new Date(b.m.date).getTime() - new Date(a.m.date).getTime())
+    .slice(0, 50);
+  wrap.innerHTML = sortedWithIdx.map(({ m, idx }) => {
     const d = new Date(m.date);
-    return `<div class="history-item" onclick="openHistDetail(${realIdx})" style="cursor:pointer">
+    return `<div class="history-item" onclick="openHistDetail(${idx})" style="cursor:pointer">
       <div class="history-date">
         <div class="day">${d.getDate()}</div>
         <div class="month">${months[d.getMonth()]}</div>
@@ -1644,7 +1650,7 @@ function renderHistory(){
         <div class="h-item"><div class="h-label">Fcl</div><div class="h-value">${m.fcl!==null?fmt(m.fcl,2):'—'}</div></div>
         <div class="h-item"><div class="h-label">TAC</div><div class="h-value">${m.tac!==null?fmt(m.tac,0):'—'}</div></div>
       </div>
-      <button class="history-delete" onclick="event.stopPropagation();deleteMeasurement(${realIdx})" aria-label="Supprimer">×</button>
+      <button class="history-delete" onclick="event.stopPropagation();deleteMeasurement(${idx})" aria-label="Supprimer">×</button>
     </div>`;
   }).join('');
 }
