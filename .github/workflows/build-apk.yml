@@ -66,10 +66,13 @@ jobs:
       - name: Initialize Bubblewrap project
         working-directory: android-build
         run: |
-          cat > twa-manifest.json <<EOF
+          HOST=$(echo "${{ steps.url.outputs.url }}" | sed 's|https://||;s|/.*||')
+
+          # Backup file : init va écraser twa-manifest.json, on le restaurera après.
+          cat > twa-manifest-custom.json <<EOF
           {
             "packageId": "fr.yannickuhrig.chimiepiscine",
-            "host": "$(echo "${{ steps.url.outputs.url }}" | sed 's|https://||;s|/.*||')",
+            "host": "$HOST",
             "name": "Chimie Piscine",
             "launcherName": "Piscine",
             "display": "standalone",
@@ -106,23 +109,24 @@ jobs:
             }
           }
           EOF
-          
-          # Init non-interactif : `yes` répond à tous les prompts (install SDK, licences...)
-          yes | bubblewrap init --manifest="${{ steps.url.outputs.url }}/manifest.json" --directory=. || true
 
-          # Override avec notre manifest custom
-          mv twa-manifest.json twa-manifest.json.tmp
-          cp twa-manifest.json.tmp twa-manifest.json
+          # Bubblewrap init : stdin fermé → inquirer prend les defaults issus du
+          # web manifest (ne PAS faire `yes |`, ça injecte "y" dans les champs texte
+          # et casse le packageId).
+          bubblewrap init --manifest="${{ steps.url.outputs.url }}/manifest.json" --directory=. </dev/null || true
+
+          # Restaure notre manifest custom (écrasement de celui généré par init)
+          cp twa-manifest-custom.json twa-manifest.json
+
+          # Régénère le projet Android à partir de notre manifest custom
+          bubblewrap update </dev/null || true
 
       - name: Build APK
         working-directory: android-build
         env:
           BUBBLEWRAP_KEYSTORE_PASSWORD: chimiepiscine
           BUBBLEWRAP_KEY_PASSWORD: chimiepiscine
-        run: |
-          # `yes |` auto-accepte l'installation du SDK Android et les licences (CI non-interactif)
-          yes | bubblewrap build --skipPwaValidation || \
-            (echo "Build échoué, tentative via update..." && yes | bubblewrap update && yes | bubblewrap build --skipPwaValidation)
+        run: bubblewrap build --skipPwaValidation </dev/null
 
       - name: Find APK
         id: find_apk
