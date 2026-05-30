@@ -63,6 +63,23 @@ jobs:
             -storepass chimiepiscine -keypass chimiepiscine \
             -dname "CN=Yannick Uhrig, OU=Personal, O=YU, L=Moselle, S=Grand Est, C=FR"
 
+      - name: Pre-configure Bubblewrap (skip JDK/SDK install prompts)
+        run: |
+          mkdir -p ~/.bubblewrap
+          # Pointe Bubblewrap vers le JDK et le SDK déjà fournis par le runner.
+          cat > ~/.bubblewrap/config.json <<EOF
+          {
+            "jdkPath": "${JAVA_HOME}",
+            "androidSdkPath": "${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          }
+          EOF
+          echo "--- ~/.bubblewrap/config.json ---"
+          cat ~/.bubblewrap/config.json
+          echo "--- JAVA_HOME contents ---"
+          ls -la "$JAVA_HOME/bin" | head -5
+          echo "--- ANDROID_HOME contents ---"
+          ls -la "${ANDROID_HOME:-/usr/local/lib/android/sdk}" | head -10
+
       - name: Initialize Bubblewrap project
         working-directory: android-build
         run: |
