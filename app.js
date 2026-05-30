@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.21.0';
+const APP_VERSION = '1.21.1';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -3419,14 +3419,15 @@ function renderBassinSwitcher(){
 
   const chips = bassins.map(b => {
     const isActive = b.id === activeId;
-    const editBtn = isActive
-      ? `<span class="bassin-chip-edit" onclick="event.stopPropagation();openBassinModal('${b.id}')" title="Modifier">⚙</span>`
+    const actions = isActive
+      ? `<span class="bassin-chip-edit" onclick="event.stopPropagation();openShareModal('${b.id}')" title="Partager en lecture seule">🔗</span>
+         <span class="bassin-chip-edit" onclick="event.stopPropagation();openBassinModal('${b.id}')" title="Modifier">⚙</span>`
       : '';
     return `<div class="bassin-chip ${isActive?'active':''}" onclick="switchBassin('${b.id}')" data-id="${b.id}">
       <span class="dot-color" style="color:${b.couleur};background:${b.couleur}"></span>
       <span class="chip-emoji">${b.emoji||'🏊'}</span>
       <span>${escapeHtml(b.nom)}</span>
-      ${editBtn}
+      ${actions}
     </div>`;
   }).join('');
 
@@ -5166,6 +5167,24 @@ function collectPrefsPayload(){
   };
 }
 
+// Helper : fusionne deux listes de bassins en préservant le geo. Le geo est
+// "sticky" — une fois positionné, on ne le perd plus à cause d'un appareil
+// qui n'aurait pas la valeur en local. Source = la liste à enrichir, ref = celle qui peut
+// contenir un geo manquant dans source.
+function mergeBassinsPreservingGeo(source, ref){
+  if(!Array.isArray(source) || !Array.isArray(ref)) return source || [];
+  return source.map(b => {
+    if(!b || !b.id) return b;
+    const hasGeo = b.config && b.config.geo && b.config.geo.lat != null;
+    if(hasGeo) return b;
+    const r = ref.find(x => x && x.id === b.id);
+    if(r && r.config && r.config.geo && r.config.geo.lat != null){
+      return { ...b, config: { ...(b.config || {}), geo: r.config.geo } };
+    }
+    return b;
+  });
+}
+
 async function syncPushAll(){
   if(!_authUser) return;
   const supa = getSupa();
@@ -5174,7 +5193,19 @@ async function syncPushAll(){
   try{
     const uid = _authUser.id;
     const nowIso = new Date().toISOString();
-    await supa.from('cp_pool_config').upsert({ user_id: uid, data: collectConfigPayload(), updated_at: nowIso });
+    // Récupère la version cloud des bassins pour préserver geo (et éviter le wipe d'une donnée
+    // que le device courant n'aurait pas pour une raison X).
+    let payload = collectConfigPayload();
+    try{
+      const { data: cloudCfg } = await supa.from('cp_pool_config').select('data').eq('user_id', uid).maybeSingle();
+      const cloudBassins = (cloudCfg && cloudCfg.data && cloudCfg.data.bassins) || [];
+      const mergedBassins = mergeBassinsPreservingGeo(payload.bassins, cloudBassins);
+      if(JSON.stringify(mergedBassins) !== JSON.stringify(payload.bassins)){
+        _rawSetItem(STORAGE_KEYS.bassins, JSON.stringify(mergedBassins));
+        payload = { ...payload, bassins: mergedBassins };
+      }
+    }catch(e){ console.warn('Geo preservation read failed', e); }
+    await supa.from('cp_pool_config').upsert({ user_id: uid, data: payload, updated_at: nowIso });
     await supa.from('cp_preferences').upsert({ user_id: uid, data: collectPrefsPayload(), updated_at: nowIso });
     await supa.from('cp_reminders').upsert({ user_id: uid, data: loadJSON(STORAGE_KEYS.reminders, {}), updated_at: nowIso });
     const localMeasures = loadJSON(STORAGE_KEYS.measurements, []);
@@ -5215,7 +5246,12 @@ async function syncPullAll(){
     ]);
     if(cfg.data && cfg.data.data){
       const d = cfg.data.data;
-      if(Array.isArray(d.bassins)) _rawSetItem(STORAGE_KEYS.bassins, JSON.stringify(d.bassins));
+      if(Array.isArray(d.bassins)){
+        // Sticky geo : si le cloud a un bassin sans geo mais local en a un, on garde le local
+        const localBassins = loadJSON(STORAGE_KEYS.bassins, []);
+        const merged = mergeBassinsPreservingGeo(d.bassins, localBassins);
+        _rawSetItem(STORAGE_KEYS.bassins, JSON.stringify(merged));
+      }
       if(d.active_bassin_id) _rawSetItem(STORAGE_KEYS.activeBassin, d.active_bassin_id);
       if(d.last_inputs) _rawSetItem(STORAGE_KEYS.lastInputs, JSON.stringify(d.last_inputs));
     }
