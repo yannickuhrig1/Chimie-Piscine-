@@ -179,7 +179,12 @@ jobs:
         env:
           BUBBLEWRAP_KEYSTORE_PASSWORD: chimiepiscine
           BUBBLEWRAP_KEY_PASSWORD: chimiepiscine
-        run: bubblewrap build --skipPwaValidation </dev/null
+        run: |
+          # `bubblewrap build` demande de façon interactive s'il faut régénérer le
+          # projet quand le checksum du twa-manifest.json ne correspond pas (on copie
+          # notre manifest custom après `update`). Avec stdin fermé il reçoit EOF et
+          # meurt (exit 130). On répond "no" : le projet est déjà à jour via `update`.
+          printf 'no\n' | bubblewrap build --skipPwaValidation
 
       - name: Find APK
         id: find_apk
