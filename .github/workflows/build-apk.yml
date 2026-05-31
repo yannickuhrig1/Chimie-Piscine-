@@ -87,6 +87,19 @@ jobs:
           ls -la "$SDK_PATH/cmdline-tools/latest/bin/sdkmanager" || \
             (echo "ERREUR : sdkmanager introuvable" && exit 1)
 
+          # `bubblewrap build` valide l'existence de $SDK/tools/bin/sdkmanager
+          # (emplacement "tools" legacy, supprimé des runners GitHub qui n'ont plus
+          # que cmdline-tools). On symlink tools -> cmdline-tools/latest pour que la
+          # validation AndroidSdkTools.create() passe.
+          if [ ! -e "$SDK_PATH/tools" ]; then
+            ln -sf "$SDK_PATH/cmdline-tools/latest" "$SDK_PATH/tools"
+            echo "Symlinking tools -> cmdline-tools/latest"
+          fi
+          ls -la "$SDK_PATH/tools/bin/sdkmanager" || echo "WARN: tools/bin/sdkmanager absent"
+
+          # Accepte les licences SDK (sinon build-tools/gradle refusent de builder)
+          yes | "$SDK_PATH/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+
           mkdir -p ~/.bubblewrap
           cat > ~/.bubblewrap/config.json <<EOF
           {
