@@ -97,8 +97,14 @@ jobs:
           fi
           ls -la "$SDK_PATH/tools/bin/sdkmanager" || echo "WARN: tools/bin/sdkmanager absent"
 
-          # Accepte les licences SDK (sinon build-tools/gradle refusent de builder)
-          yes | "$SDK_PATH/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null 2>&1 || true
+          # Bubblewrap exige EXACTEMENT build-tools/34.0.0 (version codée en dur
+          # dans SUPPORTED_BUILD_TOOLS_VERSION). Les runners n'ont que des versions
+          # plus récentes → on installe la 34.0.0 + platform-34 via sdkmanager.
+          SDKMANAGER="$SDK_PATH/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          "$SDKMANAGER" "build-tools;34.0.0" "platforms;android-34" "platform-tools" || \
+            (echo "ERREUR : installation build-tools 34.0.0 échouée" && exit 1)
+          ls -la "$SDK_PATH/build-tools/34.0.0/aapt2" || echo "WARN: aapt2 absent"
 
           mkdir -p ~/.bubblewrap
           cat > ~/.bubblewrap/config.json <<EOF
