@@ -58,14 +58,24 @@ jobs:
           fi
           echo "code=${{ github.run_number }}" >> $GITHUB_OUTPUT
 
-      - name: Generate signing keystore
+      - name: Restore stable signing keystore
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
         run: |
           mkdir -p android-build
           cd android-build
-          keytool -genkey -v -keystore android.keystore \
-            -alias android -keyalg RSA -keysize 2048 -validity 10000 \
-            -storepass chimiepiscine -keypass chimiepiscine \
-            -dname "CN=Yannick Uhrig, OU=Personal, O=YU, L=Moselle, S=Grand Est, C=FR"
+          # Keystore STABLE (alias android, pass chimiepiscine) restauré depuis le
+          # secret. SHA-256 94:FD:50:4B... = celui déclaré dans
+          # /.well-known/assetlinks.json → la TWA s'ouvre en plein écran (pas de
+          # barre Chrome) et la signature est constante (requis par le Play Store).
+          # Ne JAMAIS revenir à keytool -genkey (clé aléatoire à chaque build).
+          if [ -z "$ANDROID_KEYSTORE_B64" ]; then
+            echo "::error::secret ANDROID_KEYSTORE_B64 manquant"; exit 1
+          fi
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > android.keystore
+          echo "Keystore restauré ($(stat -c%s android.keystore) octets). Fingerprint :"
+          keytool -list -v -keystore android.keystore -storepass chimiepiscine -alias android \
+            | grep -i "SHA256:" || true
 
       - name: Pre-configure Bubblewrap (skip JDK/SDK install prompts)
         run: |
