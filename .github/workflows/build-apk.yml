@@ -18,6 +18,7 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -116,6 +117,18 @@ jobs:
           echo "--- ~/.bubblewrap/config.json ---"
           cat ~/.bubblewrap/config.json
 
+          # Gradle en CI : daemon désactivé (sinon il reste suspendu et le step pend),
+          # console plain (pas d'animations/curseur), pas de watch fs.
+          mkdir -p ~/.gradle
+          cat > ~/.gradle/gradle.properties <<EOF
+          org.gradle.daemon=false
+          org.gradle.console=plain
+          org.gradle.vfs.watch=false
+          org.gradle.welcome=never
+          EOF
+          echo "--- ~/.gradle/gradle.properties ---"
+          cat ~/.gradle/gradle.properties
+
       - name: Initialize Bubblewrap project
         working-directory: android-build
         run: |
@@ -183,10 +196,17 @@ jobs:
           # `bubblewrap build` demande de façon interactive s'il faut régénérer le
           # projet (checksum du twa-manifest.json absent car on copie notre manifest
           # custom). Défaut = Yes = régénère depuis notre manifest puis build.
-          # `yes ""` envoie des lignes vides à l'infini → accepte tous les défauts,
-          # garde stdin ouvert (pas d'EOF/crash) et meurt en SIGPIPE à la fin.
-          # Sûr pour `build` (aucun champ texte, contrairement à `init`).
-          yes "" | bubblewrap build --skipPwaValidation
+          # `yes ""` accepte tous les défauts en gardant stdin ouvert.
+          # `timeout` garantit que le step échoue proprement (et libère les logs)
+          # au lieu de pendre si Gradle se bloque.
+          set -o pipefail
+          timeout 1200 bash -c 'yes "" | bubblewrap build --skipPwaValidation' || {
+            code=$?
+            echo "::error::bubblewrap build a échoué/timeout (code $code)"
+            echo "=== gradlew présent ? ==="; ls -la gradlew 2>&1 || true
+            echo "=== dernières lignes build/outputs ==="; find . -name "*.txt" -path "*outputs*" 2>/dev/null | head
+            exit $code
+          }
 
       - name: Find APK
         id: find_apk
