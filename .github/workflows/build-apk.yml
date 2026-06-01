@@ -178,14 +178,26 @@ jobs:
 
           # Bubblewrap init : stdin fermé → inquirer prend les defaults issus du
           # web manifest (ne PAS faire `yes |`, ça injecte "y" dans les champs texte
-          # et casse le packageId).
+          # et casse le packageId). Génère le squelette du projet Android (gradlew…).
           bubblewrap init --manifest="${{ steps.url.outputs.url }}/manifest.json" --directory=. </dev/null || true
 
           # Restaure notre manifest custom (écrasement de celui généré par init)
           cp twa-manifest-custom.json twa-manifest.json
 
-          # Régénère le projet Android à partir de notre manifest custom
-          bubblewrap update </dev/null || true
+          # Régénère le projet Android à partir de notre manifest custom.
+          # --skipVersionUpgrade est ESSENTIEL : sinon, comme appVersionName
+          # ("1.22.3") != appVersionCode ("84"), bubblewrap prompte le versionName
+          # (validation longueur >=1). Avec stdin fermé/`yes ""` → boucle infinie
+          # (input vide rejeté à l'infini) jusqu'au timeout. Le flag saute ce bloc.
+          # `update` écrit aussi manifest-checksum.txt (sha1 du manifest) → `build`
+          # ne reposera plus la question "regenerate?".
+          bubblewrap update --skipVersionUpgrade </dev/null
+
+          # Filet de sécurité : garantit que le checksum existe et correspond
+          # (sha1 hex du contenu de twa-manifest.json), même si update changeait.
+          node -e "const c=require('crypto'),f=require('fs');f.writeFileSync('manifest-checksum.txt',c.createHash('sha1').update(f.readFileSync('twa-manifest.json')).digest('hex'))"
+          echo "--- manifest-checksum.txt ---"; cat manifest-checksum.txt; echo
+          echo "--- gradlew présent ? ---"; ls -la gradlew
 
       - name: Build APK
         working-directory: android-build
@@ -193,18 +205,16 @@ jobs:
           BUBBLEWRAP_KEYSTORE_PASSWORD: chimiepiscine
           BUBBLEWRAP_KEY_PASSWORD: chimiepiscine
         run: |
-          # `bubblewrap build` demande de façon interactive s'il faut régénérer le
-          # projet (checksum du twa-manifest.json absent car on copie notre manifest
-          # custom). Défaut = Yes = régénère depuis notre manifest puis build.
-          # `yes ""` accepte tous les défauts en gardant stdin ouvert.
-          # `timeout` garantit que le step échoue proprement (et libère les logs)
-          # au lieu de pendre si Gradle se bloque.
+          # Le manifest-checksum.txt généré à l'étape précédente correspond au
+          # twa-manifest.json → `build` ne pose AUCUN prompt "regenerate?" et
+          # compile directement le projet déjà généré. stdin fermé par sûreté.
+          # `timeout` garde-fou : échec propre (libère les logs) si Gradle bloque.
           set -o pipefail
-          timeout 1200 bash -c 'yes "" | bubblewrap build --skipPwaValidation' || {
+          timeout 1200 bubblewrap build --skipPwaValidation </dev/null || {
             code=$?
             echo "::error::bubblewrap build a échoué/timeout (code $code)"
             echo "=== gradlew présent ? ==="; ls -la gradlew 2>&1 || true
-            echo "=== dernières lignes build/outputs ==="; find . -name "*.txt" -path "*outputs*" 2>/dev/null | head
+            echo "=== build/outputs ==="; find . -path "*outputs*" -name "*.apk" -o -path "*outputs*" -name "*.aab" 2>/dev/null | head
             exit $code
           }
 
