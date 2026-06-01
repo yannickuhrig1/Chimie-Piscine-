@@ -148,6 +148,7 @@ jobs:
             "navigationDividerColor": "#0a3d62",
             "navigationDividerColorDark": "#041d2e",
             "backgroundColor": "#041d2e",
+            "splashScreenFadeOutDuration": 300,
             "enableNotifications": true,
             "startUrl": "/index.html",
             "iconUrl": "${{ steps.url.outputs.url }}/icon-512.png",
