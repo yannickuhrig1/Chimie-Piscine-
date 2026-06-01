@@ -15,6 +15,9 @@ on:
         required: true
         default: 'https://chimie-piscine.vercel.app'
 
+permissions:
+  contents: write   # nécessaire pour que softprops/action-gh-release crée la Release sur tag
+
 jobs:
   build-apk:
     runs-on: ubuntu-latest
