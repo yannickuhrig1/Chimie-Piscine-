@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.22.3';
+const APP_VERSION = '1.22.4';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -3971,6 +3971,12 @@ let _viewerOwnerLabel = null;
 
 function isViewerMode(){ return _viewerMode; }
 
+// Cache de session des liens fraîchement créés/révoqués. Supabase a un délai de
+// cohérence lecture-après-écriture : un SELECT lancé juste après l'INSERT ne voit
+// pas encore la nouvelle ligne (elle n'apparaissait qu'après un refresh). On
+// fusionne ce cache avec les résultats DB pour un affichage immédiat (dédup token).
+let _recentShareLinks = [];
+
 function generateShareToken(){
   const arr = new Uint8Array(9);
   crypto.getRandomValues(arr);
@@ -3991,7 +3997,13 @@ async function createShareLink(bassinId){
     token, owner_id: _authUser.id, bassin_id: bassinId, bassin_name: b.nom || 'Bassin',
   });
   if(error){ toast('Erreur création lien', 'err'); console.warn(error); return null; }
-  return token;
+  // Renvoie la ligne complète (mêmes champs que listShareLinks) pour l'affichage
+  // optimiste immédiat, sans attendre que le SELECT DB soit cohérent.
+  return {
+    token, bassin_id: bassinId, bassin_name: b.nom || 'Bassin',
+    created_at: new Date().toISOString(), revoked_at: null,
+    last_accessed_at: null, access_count: 0,
+  };
 }
 
 async function listShareLinks(bassinId){
@@ -4014,6 +4026,11 @@ window.revokeShareLink = async function(token){
   if(!confirm('Révoquer ce lien ? Il deviendra inaccessible immédiatement.')) return;
   const { error } = await supa.from('cp_share_links').update({ revoked_at: new Date().toISOString() }).eq('token', token);
   if(error){ toast('Erreur révocation', 'err'); console.warn(error); return; }
+  // Reflète la révocation dans le cache de session (sinon un lien créé puis
+  // révoqué dans la même session réapparaîtrait actif tant que la DB n'est pas
+  // cohérente).
+  const cached = _recentShareLinks.find(l => l.token === token);
+  if(cached) cached.revoked_at = new Date().toISOString();
   toast('Lien révoqué', 'ok');
   renderShareLinksList();
 };
@@ -4050,7 +4067,12 @@ async function renderShareLinksList(){
   const titleEl = document.getElementById('shareModalTitle');
   if(titleEl) titleEl.textContent = `Partager « ${b ? (b.emoji + ' ' + b.nom) : 'bassin'} »`;
   body.innerHTML = '<div style="color:var(--shallow);opacity:.7;font-size:13px;padding:12px 0">Chargement…</div>';
-  const links = await listShareLinks(bassinId);
+  const dbLinks = await listShareLinks(bassinId);
+  // Fusionne les liens DB avec ceux créés/révoqués dans cette session que la DB
+  // ne renvoie pas encore (délai de cohérence). La version DB prime si présente.
+  const dbTokens = new Set(dbLinks.map(l => l.token));
+  const pending = _recentShareLinks.filter(l => l.bassin_id === bassinId && !dbTokens.has(l.token));
+  const links = [...pending, ...dbLinks].sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
   if(!links.length){
     body.innerHTML = `<div style="text-align:center;color:var(--shallow);font-size:13px;padding:18px 0;line-height:1.55;opacity:.85">
       Aucun lien actif pour ce bassin.<br>
@@ -4092,8 +4114,10 @@ window.createNewShareLink = async function(){
   if(!ov) return;
   const bassinId = ov.dataset.bassinId;
   if(!bassinId) return;
-  const token = await createShareLink(bassinId);
-  if(token){
+  const row = await createShareLink(bassinId);
+  if(row){
+    _recentShareLinks = _recentShareLinks.filter(l => l.token !== row.token);
+    _recentShareLinks.unshift(row);
     toast('Lien créé');
     renderShareLinksList();
   }
@@ -4704,11 +4728,11 @@ function shareHistEntry(){
   shareControl(m, {view: measureVisible ? 'measures' : 'actions'});
 }
 
-function reloadHistEntry(){
-  if(__histDetailIdx === null) return;
-  const list = loadActiveMeasurements();
-  const m = list[__histDetailIdx];
-  if(!m) return;
+// Remplit les champs du formulaire Mesure (+ miroirs Paramètres) à partir d'un
+// objet mesure. Utilisé par "Recharger" (historique) ET le mode lecture seule
+// (?share=TOKEN) — sans ça, readInputs() renvoie des null en mode viewer et les
+// cartes pH/Chloration/Pouvoir désinfectant n'apparaissent pas.
+function applyMeasurementToInputs(m){
   const fieldMap = {
     volume:'volume', phMesure:'ph', phSouhaite:'phSouhaite',
     fcl:'fcl', tcl:'tcl', tacMesure:'tac', tacSouhaite:'tacSouhaite',
@@ -4727,6 +4751,14 @@ function reloadHistEntry(){
   if($('cfgTacSouhaite')) $('cfgTacSouhaite').value = m.tacSouhaite ?? '';
   if($('cfgCya')) $('cfgCya').value = m.cya ?? '';
   if($('cfgCyaSouhaite')) $('cfgCyaSouhaite').value = m.cyaSouhaite ?? '';
+}
+
+function reloadHistEntry(){
+  if(__histDetailIdx === null) return;
+  const list = loadActiveMeasurements();
+  const m = list[__histDetailIdx];
+  if(!m) return;
+  applyMeasurementToInputs(m);
   updateCclBadge(m);
   closeHistDetail();
   switchTab('mesure');
@@ -4766,6 +4798,15 @@ document.addEventListener('DOMContentLoaded', ()=>{
   // toute action dépendante de l'utilisateur (wizard, popups, sync auto).
   checkShareMode().then(isViewer => {
     if(isViewer){
+      // Remplit le formulaire avec la dernière mesure partagée AVANT le rendu :
+      // renderCorrections() lit readInputs() (le formulaire), pas la mesure. Sans
+      // ça, ph/fcl/tac restaient null et seules les cartes basées sur le CYA/volume
+      // locaux s'affichaient (cartes pH/Chloration/Chlore combiné/Pouvoir
+      // désinfectant manquantes en lecture seule).
+      try{
+        const latest = loadActiveMeasurements()[0];
+        if(latest){ applyMeasurementToInputs(latest); updateCclBadge(latest); }
+      }catch(e){}
       // En mode viewer on bascule directement sur la page Doses (vue d'analyse)
       try{ switchTab('correction'); }catch(e){}
       try{ renderWeatherCard(); }catch(e){}
