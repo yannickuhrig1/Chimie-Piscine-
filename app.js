@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.22.5';
+const APP_VERSION = '1.22.6';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -2672,7 +2672,19 @@ document.addEventListener('DOMContentLoaded', ()=>{
 // ============== Service worker ==============
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW failed', err));
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      if(!reg) return;
+      // Vérifie une nouvelle version immédiatement, périodiquement, et à chaque
+      // retour au premier plan. Sans ça, le navigateur ne re-vérifie sw.js qu'au
+      // chargement : une PWA/app Android qui reste ouverte ne voyait la maj qu'au
+      // prochain lancement complet. La bannière "Nouvelle version dispo ·
+      // Recharger" (plus bas, via updatefound) fait le reste — un clic suffit.
+      reg.update().catch(()=>{});
+      setInterval(() => reg.update().catch(()=>{}), 30 * 60 * 1000); // 30 min
+      document.addEventListener('visibilitychange', () => {
+        if(document.visibilityState === 'visible') reg.update().catch(()=>{});
+      });
+    }).catch(err => console.warn('SW failed', err));
   });
 }
 
