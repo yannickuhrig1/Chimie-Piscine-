@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.22.4';
+const APP_VERSION = '1.22.5';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -4517,15 +4517,27 @@ function shareControl(measurement, opts){
 
   const W = 1080;
   const ccl = (m.fcl !== null && m.tcl !== null) ? (m.tcl - m.fcl) : null;
+  const modeLabel = {chlore:'Chlore', sel:'Sel (électrolyse)', brome:'Brome'}[m.modeDesinf] || m.modeDesinf;
+  // Mêmes champs et même filtrage que l'écran (renderHistEntryMeasurements) :
+  // l'image partagée reflète exactement les mesures renseignées — cibles, volume
+  // et mesures avancées (Sel/TH/Phosphates/Brome) inclus, champs vides masqués.
   const items = [
-    {label:'pH', value: m.ph!==null?fmt(m.ph,1):'—'},
-    {label:'Chlore libre (Fcl)', value: m.fcl!==null?fmt(m.fcl,2)+' ppm':'—'},
-    {label:'Chlore total (Tcl)', value: m.tcl!==null?fmt(m.tcl,2)+' ppm':'—'},
-    {label:'Chloramines (Ccl)', value: ccl!==null?fmt(ccl,2)+' ppm':'—'},
-    {label:'TAC', value: m.tac!==null?fmt(m.tac,0)+' ppm':'—'},
-    {label:'CYA', value: m.cya!==null?fmt(m.cya,0)+' ppm':'—'},
-    {label:'Température', value: m.temp!==null?fmt(m.temp,1)+' °C':'—'}
-  ];
+    {label:'pH mesuré',            value: m.ph!==null ? fmt(m.ph,1) : null},
+    {label:'pH souhaité',          value: (m.phSouhaite!==null && m.phSouhaite!==undefined) ? fmt(m.phSouhaite,1) : null},
+    {label:'Chlore libre (Fcl)',   value: m.fcl!==null ? fmt(m.fcl,2)+' ppm' : null},
+    {label:'Chlore total (Tcl)',   value: m.tcl!==null ? fmt(m.tcl,2)+' ppm' : null},
+    {label:'Chloramines (Ccl)',    value: ccl!==null ? fmt(ccl,2)+' ppm' : null},
+    {label:'TAC mesuré',           value: m.tac!==null ? fmt(m.tac,0)+' ppm' : null},
+    {label:'TAC visé',             value: (m.tacSouhaite!==null && m.tacSouhaite!==undefined) ? fmt(m.tacSouhaite,0)+' ppm' : null},
+    {label:'CYA',                  value: m.cya!==null ? fmt(m.cya,0)+' ppm' : null},
+    {label:'Volume du bassin',     value: m.volume!==null ? fmt(m.volume,1)+' m³' : null},
+    {label:'Température',           value: (m.temp!==null && m.temp!==undefined) ? fmt(m.temp,1)+' °C' : null},
+    {label:'Sel',                  value: (m.sel!==null && m.sel!==undefined) ? fmt(m.sel,2)+' g/L' : null},
+    {label:'TH (dureté)',          value: (m.th!==null && m.th!==undefined) ? fmt(m.th,0)+' °f' : null},
+    {label:'Phosphates',           value: (m.phosphate!==null && m.phosphate!==undefined) ? fmt(m.phosphate,0)+' ppb' : null},
+    {label:'Brome',                value: (m.brome!==null && m.brome!==undefined) ? fmt(m.brome,1)+' ppm' : null},
+    {label:'Mode de désinfection', value: modeLabel || null},
+  ].filter(it => it.value !== null && it.value !== undefined && it.value !== 'null');
   const actions = getActionsTextList(m).slice(0, 6);
   const measuresStart = 400, measuresRowH = 95;
   const measuresEnd = showMeasures ? measuresStart + items.length * measuresRowH : measuresStart;
