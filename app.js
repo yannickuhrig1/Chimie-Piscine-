@@ -3059,19 +3059,43 @@ function calcHealthScore(m){
   else if(score >= 35){ label = 'À surveiller'; color = '#fb923c'; }
   else { label = 'Urgent'; color = '#f87171'; }
 
-  return {score, label, color, breakdown};
+  // Trop peu de paramètres notés → un "100 Excellent" sur 1 seule valeur est
+  // faussement rassurant. On marque "données insuffisantes" (< 3 paramètres),
+  // SAUF si le chlore est critique (un Fcl ≈ 0 reste un danger affichable seul).
+  const insufficient = !chlorineCritical && breakdown.length < 3;
+
+  return {score, label, color, breakdown, insufficient};
 }
 
 function renderHealthScoreCard(){
   const wrap = document.getElementById('healthScoreCard');
   if(!wrap) return;
   if(!isHealthScoreEnabled()){ wrap.style.display = 'none'; return; }
-  const measurements = loadActiveMeasurements();
-  const latest = measurements.slice(-1)[0];
+  const latest = loadActiveMeasurements().slice(-1)[0];
   if(!latest){ wrap.style.display = 'none'; return; }
   const result = calcHealthScore(latest);
-  if(!result || !result.breakdown.length){ wrap.style.display = 'none'; return; }
+  if(!result){ wrap.style.display = 'none'; return; }
   wrap.style.display = 'block';
+  wrap.innerHTML = healthScoreInnerHTML(result);
+}
+
+// HTML interne de la carte Score (jauge OU état "données insuffisantes").
+// Réutilisé par la carte Doses ET la modale détail d'historique.
+function healthScoreInnerHTML(result){
+  const nb = result.breakdown.length;
+  if(result.insufficient){
+    return `<div class="card-header">
+      <div class="card-title"><span class="dot" style="background:#94a3b8;box-shadow:0 0 10px #94a3b8"></span>Score santé global</div>
+      <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">${nb} paramètre${nb>1?'s':''}</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:14px;margin:8px 0 4px">
+      <div style="font-size:34px;flex:0 0 auto;opacity:.85">📋</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:17px;font-weight:600;color:#cbd5e1;font-family:'Fraunces',serif;margin-bottom:4px">Données insuffisantes</div>
+        <div style="font-size:12px;color:var(--shallow);opacity:.75;line-height:1.5">Renseigne au moins 3 paramètres (pH, chlore, TAC, CYA…) pour un score fiable. ${nb===0?'Aucune valeur notable sur cette mesure.':`Seulement ${nb} paramètre${nb>1?'s':''} connu${nb>1?'s':''}.`}</div>
+      </div>
+    </div>`;
+  }
   const r = 52;
   const c = 2 * Math.PI * r;
   const dashoffset = c * (1 - result.score / 100);
@@ -3083,9 +3107,9 @@ function renderHealthScoreCard(){
       <span style="font-family:'JetBrains Mono',monospace;color:#fff;font-size:12px">${b.value}</span>
       <span style="font-size:11px;color:var(--shallow);opacity:.55;font-family:'JetBrains Mono',monospace;min-width:36px;text-align:right">${b.penalty === 0 ? '✓' : '−'+b.penalty}</span>
     </div>`).join('');
-  wrap.innerHTML = `<div class="card-header">
+  return `<div class="card-header">
     <div class="card-title"><span class="dot" style="background:${result.color};box-shadow:0 0 10px ${result.color}"></span>Score santé global</div>
-    <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">${result.breakdown.length} paramètres</span>
+    <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">${nb} paramètres</span>
   </div>
   <div style="display:flex;align-items:center;gap:18px;margin:8px 0 6px">
     <div style="position:relative;width:120px;height:120px;flex:0 0 auto">
@@ -4659,6 +4683,21 @@ function shareControl(measurement, opts){
   ctx.font = '600 28px "Manrope", sans-serif';
   ctx.fillText('● ' + st.text, 80, 305);
 
+  // Score santé du contrôle (sous le statut), si la fonctionnalité est activée
+  if(isHealthScoreEnabled()){
+    const hs = calcHealthScore(m);
+    if(hs){
+      ctx.font = '600 26px "Manrope", sans-serif';
+      if(hs.insufficient){
+        ctx.fillStyle = 'rgba(255,255,255,.55)';
+        ctx.fillText('Score santé · données insuffisantes', 80, 352);
+      } else {
+        ctx.fillStyle = hs.color;
+        ctx.fillText(`Score santé ${hs.score}/100 · ${hs.label}`, 80, 352);
+      }
+    }
+  }
+
   if(showMeasures){
     items.forEach((it, i) => {
       const y = measuresStart + i*measuresRowH;
@@ -4748,7 +4787,13 @@ function renderHistEntryMeasurements(m){
     {label:'Brome', value: m.brome !== null && m.brome !== undefined ? fmt(m.brome,1)+' ppm' : null},
     {label:'Mode de désinfection', value: modeLabel || null}
   ].filter(r => r.value !== null && r.value !== undefined && r.value !== 'null');
-  return rows.map(r => `<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07);font-size:13px;gap:10px">
+  // Score santé de CETTE mesure (en tête), si la fonctionnalité est activée.
+  let scoreHTML = '';
+  if(isHealthScoreEnabled()){
+    const res = calcHealthScore(m);
+    if(res) scoreHTML = `<div class="card" style="margin:0 0 14px">${healthScoreInnerHTML(res)}</div>`;
+  }
+  return scoreHTML + rows.map(r => `<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07);font-size:13px;gap:10px">
     <span style="color:var(--shallow);opacity:.85">${r.label}</span>
     <span style="color:#fff;font-family:'JetBrains Mono',monospace;font-weight:500;text-align:right">${r.value}</span>
   </div>`).join('');
