@@ -1131,7 +1131,25 @@ function renderCorrections(measurement, targetContainer){
   } else if(m.ph !== null && m.phSouhaite !== null && m.ph < m.phSouhaite - 0.05){
     // pH sous la cible → recommander pH+ (carbonate de sodium)
     const phPlus = calcPhPlus(m.volume, m.ph, m.phSouhaite);
-    if(phPlus){
+    const phDelta = m.phSouhaite - m.ph;
+    const tacBas = m.tac !== null && m.tacSouhaite !== null && m.tac < m.tacSouhaite;
+    if(phDelta < 0.2){
+      // Doctrine SOS Piscine : on ne court pas après un pH légèrement bas.
+      // Si le TAC est aussi sous la cible, on le règle d'abord (bicarbonate,
+      // carte « Augmentation TAC » plus bas) — le pH remonte naturellement avec.
+      const msg = tacBas
+        ? `pH légèrement bas (Δ +${fmt(phDelta,2)}). Règle d'abord ton <strong>TAC</strong> au bicarbonate de sodium (voir « Augmentation TAC » ci-dessous) : le pH remontera naturellement. Inutile de courir après le pH.`
+        : `pH légèrement bas (Δ +${fmt(phDelta,2)}). Souvent inutile de corriger — le pH remonte seul avec l'aération. Surveille${phPlus ? ` ; au besoin une 1/2 dose de carbonate de sodium (~${fmt(phPlus.totalG/2,0)} g) suffit` : ''}.`;
+      html += `<div class="card">
+        <div class="card-header">
+          <div class="card-title"><span class="dot"></span>pH légèrement bas</div>
+          <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">Δ ${fmt(m.ph - m.phSouhaite, 2)}</span>
+        </div>
+        <div class="result">
+          <div class="result-note">${msg}</div>
+        </div>
+      </div>`;
+    } else if(phPlus){
       const splitNote = phPlus.delta > 0.6
         ? "⚠️ Écart important — applique en 2 fois, séparées de 24 h, en remesurant entre."
         : "⚠️ Applique 1/2 dose, mesure le lendemain, complète au besoin.";
@@ -1278,25 +1296,28 @@ function renderCorrections(measurement, targetContainer){
           </div>`;
         }
       }
+      const chlNorm = calcJavelChloration(m.volume, m.fcl, m.cya);
       html += `<div class="card">
         <div class="card-header">
-          <div class="card-title" style="color:var(--lemon)"><span class="dot" style="background:var(--lemon);box-shadow:0 0 10px var(--lemon)"></span>Choc curatif</div>
-          <span class="status-pill warn"><span class="pulse"></span>Fcl très bas</span>
+          <div class="card-title" style="color:var(--lemon)"><span class="dot" style="background:var(--lemon);box-shadow:0 0 10px var(--lemon)"></span>Chlore très bas</div>
+          <span class="status-pill warn"><span class="pulse"></span>Fcl ${fmt(m.fcl,2)} ppm</span>
         </div>
         <div class="result warn">
-          <div class="result-label">Choc curatif — remplace la chloration quotidienne</div>
+          <div class="result-label">Deux options selon l'état de l'eau</div>
           <div class="result-multi-or" style="margin-top:8px">
             <div class="item">
-              <div class="result-label">Javel 9.6°</div>
-              <div class="result-value">${fmt(choc.javel, 2)}<span class="unit">L</span></div>
+              <div class="result-label">💧 Eau claire · remise à niveau</div>
+              <div class="result-value">${fmt(chlNorm.litres, 2)}<span class="unit">L</span></div>
+              <div class="result-note">Javel 9.6° → cible CYA/10 = ${fmt(chlNorm.fclVise,2)} ppm</div>
             </div>
             <div class="or-sep">OU</div>
             <div class="item">
-              <div class="result-label">Hypochlorite Ca</div>
-              <div class="result-value">${fmt(choc.hypocalcium, 0)}<span class="unit">g</span></div>
+              <div class="result-label">🟢 Eau verte · choc curatif</div>
+              <div class="result-value">${fmt(choc.javel, 2)}<span class="unit">L</span></div>
+              <div class="result-note">Javel 9.6° (ou Hypochlorite Ca ${fmt(choc.hypocalcium, 0)} g) → CYA/2 ≈ ${fmt(m.cya/2,0)} ppm</div>
             </div>
           </div>
-          <div class="result-note">Fcl ${fmt(m.fcl,2)} ppm &lt; 50 % de la cible (${fmt(calcFclVise(m.cya),2)} ppm). Trop bas pour rattraper avec une dose quotidienne : on passe directement au choc, qui ramène Fcl à <strong>CYA/2 ≈ ${fmt(m.cya/2,0)} ppm</strong>.</div>
+          <div class="result-note">Fcl ${fmt(m.fcl,2)} ppm &lt; 50 % de la cible (${fmt(calcFclVise(m.cya),2)} ppm). <strong>Eau claire</strong> (pompe coupée, oubli) → la remise à niveau suffit. <strong>Eau verte ou trouble</strong> (prolifération d'algues) → choc curatif.</div>
           ${boostHtml}
         </div>
       </div>`;
