@@ -579,7 +579,8 @@ function computeDrainActions(m){
   };
   // CYA : vidange si on dépasse la cible utilisateur de plus de 5 ppm, OU au-delà de 40 (seuil critique).
   // Le CYA ne se dégrade pas (sauf dilution), donc dès qu'on dépasse durablement la cible, faut vidanger.
-  if(m.cya != null){
+  // Le CYA ne concerne pas le brome → pas de vidange CYA en mode brome.
+  if(m.cya != null && m.modeDesinf !== 'brome'){
     const cible = m.cyaSouhaite ?? 30;
     if(m.cya > cible + 5 || m.cya > 40){
       const vol = computeDrain(m.cya, cible);
