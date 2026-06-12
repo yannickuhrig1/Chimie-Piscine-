@@ -47,13 +47,14 @@ function applyModeFieldDefaults(mode, opts){
   opts = opts || {};
   const cfg = MODE_FIELD_DEFAULTS[mode] || MODE_FIELD_DEFAULTS.chlore;
   setOptionalField('sel', cfg.sel);
-  setOptionalField('brome', cfg.brome);
   const s = $('optField_sel'); if(s) s.checked = cfg.sel;
-  const b = $('optField_brome'); if(b) b.checked = cfg.brome;
-  // Bloc de saisie "Chlore" (Fcl/Tcl) masqué en mode brome : le brome remplace
-  // le chlore comme désinfectant. Réaffiché pour chlore et sel (électrolyse).
-  const chloreBlock = $('chloreInputBlock');
-  if(chloreBlock) chloreBlock.style.display = (mode === 'brome') ? 'none' : '';
+  // En mode brome, le brome remplace le chlore : on masque le bloc de saisie
+  // "Chlore" (Fcl/Tcl) et la saisie CYA (sans objet en brome), et on affiche le
+  // bloc "Brome". Mode "sel" (électrolyse) = traité comme du chlore.
+  const brome = (mode === 'brome');
+  const chloreBlock = $('chloreInputBlock'); if(chloreBlock) chloreBlock.style.display = brome ? 'none' : '';
+  const bromeBlock  = $('bromeInputBlock');  if(bromeBlock)  bromeBlock.style.display  = brome ? '' : 'none';
+  const cyaRow      = $('cyaInputRow');      if(cyaRow)      cyaRow.style.display      = brome ? 'none' : '';
   // Un changement de mode (pas un load auto) réinitialise le flag manuel
   if(!opts.silent) localStorage.removeItem(OPT_MANUAL_KEY);
 }
@@ -593,11 +594,17 @@ function computeDrainActions(m){
     const vol = computeDrain(m.sel, cible);
     if(vol > 0.5) out.push({label:'Sel trop haut', actuel:m.sel, cible, unit:'g/L', volume:vol});
   }
-  // TH : cible 25 °f (au-delà de 30 °f, entartrant + risque dépôts)
+  // TH : vidange uniquement si l'eau est réellement entartrante (LSI > +0,3).
+  // Un TH élevé avec un LSI équilibré n'impose pas de vidange. Si le LSI n'est
+  // pas calculable (données manquantes), on conserve le seuil absolu prudent.
   if(m.th != null && m.th > 30){
-    const cible = m.thSouhaite ?? 25;
-    const vol = computeDrain(m.th, cible);
-    if(vol > 0.5) out.push({label:'TH trop haut', actuel:m.th, cible, unit:'°f', volume:vol});
+    const lsi = (m.ph!=null && m.temp!=null && m.tac!=null)
+      ? calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel') : null;
+    if(lsi === null || lsi > 0.3){
+      const cible = m.thSouhaite ?? 25;
+      const vol = computeDrain(m.th, cible);
+      if(vol > 0.5) out.push({label:'TH trop haut', actuel:m.th, cible, unit:'°f', volume:vol});
+    }
   }
   return out;
 }
@@ -630,14 +637,22 @@ function calcHOClPctFromCYA(fcl, pH, cya){
   return (ppmHOCl / fcl) * 100;
 }
 
+// Plage pH saine selon le mode de désinfection. Le brome reste efficace sur une
+// plage un peu plus haute que le chlore (il est moins sensible au pH).
+function phRangeForMode(mode){
+  if(mode === 'brome') return {warnLow:7.0, warnHigh:7.6, dangerLow:6.8, dangerHigh:7.8, ideal:7.4};
+  return {warnLow:7.0, warnHigh:7.4, dangerLow:6.8, dangerHigh:7.6, ideal:7.2}; // chlore / sel
+}
+
 // ============== Évaluation globale ==============
 // Tous les seuils proviennent du Guide SOS Piscine V3 (groupe FB éponyme).
 function evaluateStatus(m){
   const issues = [];
-  // pH : 6.8 - 7.4 (idéalement 7.2)
+  // pH : plage selon le mode (idéal 7.2 en chlore, 7.4 en brome).
   if(m.ph !== null){
-    if(m.ph < 6.8 || m.ph > 7.6) issues.push({level:'danger', msg:'pH'});
-    else if(m.ph < 6.8 || m.ph > 7.4) issues.push({level:'warn', msg:'pH'});
+    const pr = phRangeForMode(m.modeDesinf);
+    if(m.ph < pr.dangerLow || m.ph > pr.dangerHigh) issues.push({level:'danger', msg:'pH'});
+    else if(m.ph < pr.warnLow || m.ph > pr.warnHigh) issues.push({level:'warn', msg:'pH'});
   }
   // Chlore : ~10 % du CYA si dispo, sinon 1-3 ppm. Max 5 ppm (ARS France).
   if(m.fcl !== null){
@@ -755,7 +770,7 @@ function readInputs(){
     th: opt.th === false ? null : num('thMesure'),
     thSouhaite: opt.th === false ? null : num('thSouhaite'),
     phosphate: opt.phosphate === false ? null : num('phosphate'),
-    brome: opt.brome === false ? null : num('brome'),
+    brome: num('brome'),
     modeDesinf: modeEl ? modeEl.value : 'chlore',
     date: new Date().toISOString()
   };
@@ -1101,6 +1116,21 @@ function renderCorrections(measurement, targetContainer){
   const isBrome = m.modeDesinf === 'brome';
 
   // ===== pH =====
+  // Garde-fou : si la cible pH configurée est hors plage saine pour le mode,
+  // les doses ci-dessous chasseraient une valeur inopérante → on alerte.
+  if(m.phSouhaite !== null && m.phSouhaite !== undefined){
+    const pr = phRangeForMode(m.modeDesinf);
+    if(m.phSouhaite < pr.dangerLow || m.phSouhaite > pr.dangerHigh){
+      const modeLbl = {chlore:'chlore', brome:'brome', sel:'sel'}[m.modeDesinf] || 'chlore';
+      html += `<div class="card">
+        <div class="card-header"><div class="card-title" style="color:var(--coral)"><span class="dot" style="background:var(--coral);box-shadow:0 0 10px var(--coral)"></span>Cible pH hors plage</div></div>
+        <div class="result warn">
+          <div class="result-label">Cible pH inopérante</div>
+          <div class="result-note">Ta cible pH (${fmt(m.phSouhaite,1)}) est hors de la plage recommandée en mode ${modeLbl} (${fmt(pr.dangerLow,1)}–${fmt(pr.dangerHigh,1)}, idéal ${fmt(pr.ideal,1)}). Ajuste-la avant de suivre les doses pH ci-dessous.</div>
+        </div>
+      </div>`;
+    }
+  }
   if(m.ph !== null && m.phSouhaite !== null && m.ph > m.phSouhaite){
     const hcl = calcHcl(m.volume, m.ph, m.phSouhaite);
     const poudre = calcPhPoudre(m.volume, m.ph, m.phSouhaite);
@@ -1336,7 +1366,19 @@ function renderCorrections(measurement, targetContainer){
   // ===== TAC+ =====
   if(m.tac !== null && m.tacSouhaite !== null){
     const tacPlus = calcTacPlus(m.volume, m.tac, m.tacSouhaite);
-    if(tacPlus){
+    // Monter le TAC remonte le LSI : on ne le recommande pas si l'eau est déjà
+    // entartrante (LSI > +0,3), sinon on aggrave le risque de dépôts calcaires.
+    const lsiTAC = (m.ph!==null && m.temp!==null && m.th!==null && m.tac!==null)
+      ? calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel') : null;
+    if(tacPlus && lsiTAC !== null && lsiTAC > 0.3){
+      html += `<div class="card">
+        <div class="card-header"><div class="card-title"><span class="dot"></span>TAC</div></div>
+        <div class="result warn">
+          <div class="result-label">TAC bas, mais eau entartrante</div>
+          <div class="result-note">TAC ${fmt(m.tac,0)} &lt; cible (${fmt(m.tacSouhaite,0)} ppm), mais le LSI (${lsiTAC>=0?'+':''}${fmt(lsiTAC,2)}) est entartrant : monter le TAC aggraverait les dépôts. Baisse plutôt le pH (ou le TH) avant d'ajuster le TAC.</div>
+        </div>
+      </div>`;
+    } else if(tacPlus){
       html += `<div class="card">
         <div class="card-header">
           <div class="card-title"><span class="dot"></span>Augmentation TAC</div>
@@ -1443,23 +1485,36 @@ function renderCorrections(measurement, targetContainer){
   if(m.thSouhaite !== null || m.th !== null){
     const cible = m.thSouhaite ?? 25;
     const ca = calcCalcium(m.volume, m.th, cible);
+    // LSI (si calculable) : les recos de dureté ne se déclenchent que si le TH
+    // déséquilibre réellement l'eau — corrosive (LSI < −0,3) ou entartrante (> +0,3).
+    const lsiTH = (m.ph!==null && m.temp!==null && m.th!==null && m.tac!==null)
+      ? calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel') : null;
     if(ca && ca.action === 'ajout'){
-      html += `<div class="card">
-        <div class="card-header">
-          <div class="card-title"><span class="dot"></span>Dureté (TH)</div>
-          <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">+${fmt(ca.delta,0)} °f</span>
-        </div>
-        <div class="result">
-          <div class="result-label">Chlorure de calcium (CaCl₂)</div>
-          <div class="result-value">${fmt(ca.gCaCl2, 0)}<span class="unit">g</span></div>
-          <div class="result-note">Augmenter progressivement (max +10 °f / semaine) · diluer dans seau avant ajout.</div>
-        </div>
-      </div>`;
+      if(lsiTH !== null && lsiTH >= -0.3){
+        // TH sous la cible mais eau non corrosive → apport de calcium non urgent.
+        html += `<div class="card">
+          <div class="card-header"><div class="card-title"><span class="dot"></span>Dureté (TH)</div></div>
+          <div class="result ok">
+            <div class="result-label">TH bas mais eau équilibrée</div>
+            <div class="result-note">TH ${fmt(m.th,0)} °f &lt; cible (${fmt(cible,0)} °f), mais le LSI (${lsiTH>=0?'+':''}${fmt(lsiTH,2)}) reste dans la zone saine : l'eau n'est pas corrosive, apport de calcium non urgent.</div>
+          </div>
+        </div>`;
+      } else {
+        html += `<div class="card">
+          <div class="card-header">
+            <div class="card-title"><span class="dot"></span>Dureté (TH)</div>
+            <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">+${fmt(ca.delta,0)} °f</span>
+          </div>
+          <div class="result">
+            <div class="result-label">Chlorure de calcium (CaCl₂)</div>
+            <div class="result-value">${fmt(ca.gCaCl2, 0)}<span class="unit">g</span></div>
+            <div class="result-note">Augmenter progressivement (max +10 °f / semaine) · diluer dans seau avant ajout.${lsiTH!==null?` LSI ${lsiTH>=0?'+':''}${fmt(lsiTH,2)} (corrosive).`:''}</div>
+          </div>
+        </div>`;
+      }
     } else if(ca && ca.action === 'haut'){
       // Le séquestrant/anti-calcaire ne se justifie que si l'eau est réellement
       // entartrante (LSI > +0,3). Un TH élevé avec un LSI équilibré n'entartre pas.
-      const lsiTH = (m.ph!==null && m.temp!==null && m.th!==null && m.tac!==null)
-        ? calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel') : null;
       if(lsiTH !== null && lsiTH <= 0.3){
         html += `<div class="card">
           <div class="card-header"><div class="card-title"><span class="dot"></span>Dureté (TH)</div></div>
@@ -4965,14 +5020,14 @@ document.addEventListener('DOMContentLoaded', ()=>{
   if(m.fcl!==null && m.tcl!==null) updateCclBadge(m);
 
   // Toggles "Champs avancés affichés" — init + listeners
-  ['sel','th','phosphate','brome'].forEach(k => {
+  ['sel','th','phosphate'].forEach(k => {
     const cb = $('optField_' + k);
     if(!cb) return;
     cb.checked = getOptionalFields()[k] !== false;
     cb.addEventListener('change', () => {
       setOptionalField(k, cb.checked);
-      // Toggle manuel sur sel/brome → mémorise l'override pour ne pas être écrasé au prochain load
-      if(k === 'sel' || k === 'brome') markOptionalFieldsManual();
+      // Toggle manuel sur sel → mémorise l'override pour ne pas être écrasé au prochain load
+      if(k === 'sel') markOptionalFieldsManual();
     });
   });
   applyOptionalFieldsVisibility();

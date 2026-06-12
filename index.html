@@ -1349,6 +1349,22 @@
       <div id="cclBadge" style="display:none;margin-top:6px"></div>
     </div>
 
+    <!-- Bloc Brome : remplace le bloc Chlore en mode brome (géré par applyModeFieldDefaults) -->
+    <div class="card" id="bromeInputBlock" style="display:none">
+      <div class="card-header">
+        <div class="card-title"><span class="dot"></span>Brome</div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Brome mesuré</label>
+          <div class="input-wrap">
+            <input type="number" id="brome" step="0.1" placeholder="2.5" inputmode="decimal">
+            <span class="input-unit">ppm</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-header">
         <div class="card-title"><span class="dot"></span>TAC &amp; CYA</div>
@@ -1369,7 +1385,7 @@
           </div>
         </div>
       </div>
-      <div class="field-row">
+      <div class="field-row" id="cyaInputRow">
         <div class="field">
           <label>CYA mesuré</label>
           <div class="input-wrap">
@@ -1452,13 +1468,6 @@
             <div class="input-wrap">
               <input type="number" id="phosphate" step="10" placeholder="200" inputmode="decimal">
               <span class="input-unit">ppb</span>
-            </div>
-          </div>
-          <div class="field" data-optional-field="brome">
-            <label>Brome mesuré</label>
-            <div class="input-wrap">
-              <input type="number" id="brome" step="0.1" placeholder="2.5" inputmode="decimal">
-              <span class="input-unit">ppm</span>
             </div>
           </div>
         </div>
@@ -1763,7 +1772,7 @@
         <div class="card-title"><span class="dot"></span>Champs avancés affichés</div>
       </div>
       <p style="font-size:12px;color:var(--shallow);opacity:.85;line-height:1.6;margin-bottom:12px">
-        Sel et brome sont auto-masqués selon le <strong>mode désinfection</strong>. Tu peux forcer leur affichage ici.
+        Le sel est auto-masqué selon le <strong>mode désinfection</strong>. Tu peux forcer son affichage ici. (Le brome s'affiche automatiquement en mode brome.)
       </p>
       <div style="display:flex;flex-direction:column;gap:10px">
         <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;cursor:pointer">
@@ -1777,10 +1786,6 @@
         <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;cursor:pointer">
           <span>Phosphates</span>
           <span class="switch"><input type="checkbox" id="optField_phosphate"><span class="switch-slider"></span></span>
-        </label>
-        <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;cursor:pointer">
-          <span>Brome <span style="opacity:.6;font-size:12px">(alternative au chlore)</span></span>
-          <span class="switch"><input type="checkbox" id="optField_brome"><span class="switch-slider"></span></span>
         </label>
       </div>
     </div>
