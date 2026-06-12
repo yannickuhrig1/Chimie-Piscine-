@@ -2967,17 +2967,34 @@ function calcHealthScore(m){
     breakdown.push({key:'ph', name:'pH', value:fmt(m.ph,1), penalty:p, status: p < 5 ? 'ok' : p < 25 ? 'warn' : 'bad'});
   }
 
-  if(m.fcl != null && m.cya != null){
-    const target = m.cya / 10;
-    const ratio = m.fcl / Math.max(0.5, target);
-    let p = 0;
-    if(ratio < 0.3) p = 30;
-    else if(ratio < 0.6) p = 20;
-    else if(ratio < 0.9) p = 8;
-    else if(ratio > 2.5) p = 15;
-    else if(ratio > 1.8) p = 6;
-    score -= p;
-    breakdown.push({key:'fcl', name:'Chlore libre', value:fmt(m.fcl,1)+' ppm', penalty:p, status: p < 5 ? 'ok' : p < 20 ? 'warn' : 'bad'});
+  let chlorineCritical = false;
+  if(m.fcl != null){
+    if(m.fcl < 0.3){
+      // Chlore quasi nul = aucune désinfection. Critique quel que soit le CYA :
+      // l'eau n'est plus protégée. On écrase le score (voir cap plus bas).
+      chlorineCritical = true;
+      const p = 70;
+      score -= p;
+      breakdown.push({key:'fcl', name:'Chlore libre', value:fmt(m.fcl,1)+' ppm', penalty:p, status:'bad'});
+    } else if(m.cya != null){
+      const target = m.cya / 10;
+      const ratio = m.fcl / Math.max(0.5, target);
+      let p = 0;
+      if(ratio < 0.3) p = 30;
+      else if(ratio < 0.6) p = 20;
+      else if(ratio < 0.9) p = 8;
+      else if(ratio > 2.5) p = 15;
+      else if(ratio > 1.8) p = 6;
+      score -= p;
+      breakdown.push({key:'fcl', name:'Chlore libre', value:fmt(m.fcl,1)+' ppm', penalty:p, status: p < 5 ? 'ok' : p < 20 ? 'warn' : 'bad'});
+    } else {
+      // Pas de CYA renseigné : cible désinfection 0,5–1 ppm.
+      let p = 0;
+      if(m.fcl < 0.5) p = 25;
+      else if(m.fcl < 1) p = 8;
+      score -= p;
+      breakdown.push({key:'fcl', name:'Chlore libre', value:fmt(m.fcl,1)+' ppm', penalty:p, status: p < 5 ? 'ok' : p < 20 ? 'warn' : 'bad'});
+    }
   }
 
   if(m.tac != null){
@@ -3011,6 +3028,9 @@ function calcHealthScore(m){
   }
 
   score = Math.max(0, Math.min(100, Math.round(score)));
+  // Chlore quasi nul : l'eau n'est pas désinfectée → on force la zone "Urgent"
+  // même si tous les autres paramètres sont parfaits.
+  if(chlorineCritical) score = Math.min(score, 25);
   let label, color;
   if(score >= 85){ label = 'Excellent'; color = '#5eead4'; }
   else if(score >= 70){ label = 'Bon'; color = '#a8d8ea'; }
