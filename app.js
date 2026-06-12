@@ -1642,9 +1642,12 @@ function renderCorrections(measurement, targetContainer){
   }
 
   // ===== Indice de Langelier (LSI) =====
-  if(m.ph !== null && m.temp !== null && m.th !== null && m.tac !== null){
+  // != null (et non !==) pour ignorer aussi les champs absents (undefined) :
+  // une mesure sans temp/th/tac ferait sinon planter calcLSI → st null.
+  if(m.ph != null && m.temp != null && m.th != null && m.tac != null){
     const lsi = calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel');
-    const st = lsiStatus(lsi);
+    const st = lsi != null ? lsiStatus(lsi) : null;
+    if(lsi != null && st){
     const phCible = calcPhCibleLSI(m.ph, lsi);
     // Suggestion pH cible uniquement si correction utile (LSI hors plage saine) et pH cible réaliste
     const showSuggest = Math.abs(lsi) > 0.15 && phCible >= 6.9 && phCible <= 7.9;
@@ -1671,6 +1674,7 @@ function renderCorrections(measurement, targetContainer){
     </div>`;
     // Rendu différé (le canvas doit exister dans le DOM)
     setTimeout(() => drawTaylorChart(taylorId, m), 50);
+    }
   }
 
   // ===== Vidange partielle (CYA / sel / TH trop élevés — non corrigeables chimiquement) =====
