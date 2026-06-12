@@ -50,6 +50,10 @@ function applyModeFieldDefaults(mode, opts){
   setOptionalField('brome', cfg.brome);
   const s = $('optField_sel'); if(s) s.checked = cfg.sel;
   const b = $('optField_brome'); if(b) b.checked = cfg.brome;
+  // Bloc de saisie "Chlore" (Fcl/Tcl) masqué en mode brome : le brome remplace
+  // le chlore comme désinfectant. Réaffiché pour chlore et sel (électrolyse).
+  const chloreBlock = $('chloreInputBlock');
+  if(chloreBlock) chloreBlock.style.display = (mode === 'brome') ? 'none' : '';
   // Un changement de mode (pas un load auto) réinitialise le flag manuel
   if(!opts.silent) localStorage.removeItem(OPT_MANUAL_KEY);
 }
@@ -1090,6 +1094,10 @@ function renderCorrections(measurement, targetContainer){
   }
 
   let html = '';
+  // Mode brome : les cartes chlore (Chloration, Choc, Superchloration, CYA,
+  // Pouvoir désinfectant HOCl) ne s'appliquent pas. Le mode "sel" reste traité
+  // comme du chlore (l'électrolyse produit du chlore → CYA/chloration pertinents).
+  const isBrome = m.modeDesinf === 'brome';
 
   // ===== pH =====
   if(m.ph !== null && m.phSouhaite !== null && m.ph > m.phSouhaite){
@@ -1192,7 +1200,7 @@ function renderCorrections(measurement, targetContainer){
   // ===== Chlore - Chloration normale =====
   // Si Fcl < 50 % de la cible, on saute cette carte : le choc curatif (plus bas)
   // prend le relais — afficher les deux dosages simultanément serait trompeur.
-  if(m.fcl !== null && m.cya !== null && m.fcl >= calcFclVise(m.cya) * 0.5){
+  if(!isBrome && m.fcl !== null && m.cya !== null && m.fcl >= calcFclVise(m.cya) * 0.5){
     const chl = calcJavelChloration(m.volume, m.fcl, m.cya);
     if(chl.litres > 0){
       html += `<div class="card">
@@ -1238,7 +1246,7 @@ function renderCorrections(measurement, targetContainer){
   }
 
   // ===== Superchloration (Ccl > 0.6) =====
-  if(m.fcl !== null && m.tcl !== null){
+  if(!isBrome && m.fcl !== null && m.tcl !== null){
     const ccl = m.tcl - m.fcl;
     const sc = calcSuperchloration(m.volume, ccl);
     if(sc){
@@ -1277,7 +1285,7 @@ function renderCorrections(measurement, targetContainer){
   // ===== Chloration choc (curative, alternative à la chloration quotidienne) =====
   // Ne s'affiche QUE si Fcl très bas (< 50 % de la cible) — signal de prolifération.
   // Ne s'ajoute PAS à la chloration quotidienne : c'est SOIT l'un SOIT l'autre.
-  if(m.fcl !== null && m.cya !== null && m.fcl < calcFclVise(m.cya) * 0.5){
+  if(!isBrome && m.fcl !== null && m.cya !== null && m.fcl < calcFclVise(m.cya) * 0.5){
     const choc = calcChlorationChoc(m.volume, m.fcl, m.cya, 5);
     if(choc.javel > 0 || choc.hypocalcium > 0){
       // Boost pH : si pH actuel > 6.9, calculer le gain HOCl en pré-baissant à 6.8
@@ -1351,7 +1359,7 @@ function renderCorrections(measurement, targetContainer){
   }
 
   // ===== Désinfection (HOCl actif + seuils Fcl PoolLab) =====
-  if(m.ph !== null && m.fcl !== null){
+  if(!isBrome && m.ph !== null && m.fcl !== null){
     const hocl = calcHOClFromCYA(m.fcl, m.ph, m.cya || 0);
     const t = fcThresholds(m.cya || 0);
     let tone = 'ok', label = 'Désinfection optimale';
@@ -1447,13 +1455,27 @@ function renderCorrections(measurement, targetContainer){
         </div>
       </div>`;
     } else if(ca && ca.action === 'haut'){
-      html += `<div class="card">
-        <div class="card-header"><div class="card-title" style="color:var(--coral)"><span class="dot" style="background:var(--coral);box-shadow:0 0 10px var(--coral)"></span>TH trop élevé</div></div>
-        <div class="result warn">
-          <div class="result-label">Risque d'entartrage</div>
-          <div class="result-note">TH ${fmt(m.th,0)} °f &gt; cible (${fmt(cible,0)} °f). Diluer (vidange partielle) ou séquestrer (anti-calcaire).</div>
-        </div>
-      </div>`;
+      // Le séquestrant/anti-calcaire ne se justifie que si l'eau est réellement
+      // entartrante (LSI > +0,3). Un TH élevé avec un LSI équilibré n'entartre pas.
+      const lsiTH = (m.ph!==null && m.temp!==null && m.th!==null && m.tac!==null)
+        ? calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel') : null;
+      if(lsiTH !== null && lsiTH <= 0.3){
+        html += `<div class="card">
+          <div class="card-header"><div class="card-title"><span class="dot"></span>Dureté (TH)</div></div>
+          <div class="result ok">
+            <div class="result-label">TH élevé mais eau équilibrée</div>
+            <div class="result-note">TH ${fmt(m.th,0)} °f &gt; cible (${fmt(cible,0)} °f), mais le LSI (${lsiTH>=0?'+':''}${fmt(lsiTH,2)}) reste dans la zone saine : pas de risque d'entartrage, séquestrant inutile pour l'instant.</div>
+          </div>
+        </div>`;
+      } else {
+        html += `<div class="card">
+          <div class="card-header"><div class="card-title" style="color:var(--coral)"><span class="dot" style="background:var(--coral);box-shadow:0 0 10px var(--coral)"></span>TH trop élevé</div></div>
+          <div class="result warn">
+            <div class="result-label">Risque d'entartrage</div>
+            <div class="result-note">TH ${fmt(m.th,0)} °f &gt; cible (${fmt(cible,0)} °f)${lsiTH!==null?` · LSI ${lsiTH>=0?'+':''}${fmt(lsiTH,2)} (entartrant)`:''}. Diluer (vidange partielle) ou séquestrer (anti-calcaire).</div>
+          </div>
+        </div>`;
+      }
     } else if(m.th !== null){
       html += `<div class="card">
         <div class="card-header"><div class="card-title"><span class="dot"></span>TH</div></div>
@@ -1466,7 +1488,8 @@ function renderCorrections(measurement, targetContainer){
   }
 
   // ===== CYA (stabilisant) — ajout si trop bas ; vidange gérée par computeDrainActions =====
-  if(m.cya !== null){
+  // Le CYA ne concerne pas le brome (pas de stabilisation UV du brome).
+  if(!isBrome && m.cya !== null){
     const cible = m.cyaSouhaite ?? 30;
     const c = calcCYA(m.volume, m.cya, cible);
     if(c && c.action === 'ajout' && c.g >= 5){
