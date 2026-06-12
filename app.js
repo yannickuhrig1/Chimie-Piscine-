@@ -1242,7 +1242,7 @@ function renderCorrections(measurement, targetContainer){
         <div class="result">
           <div class="result-label">Javel 9.6° à ajouter</div>
           <div class="result-value">${fmt(chl.litres, 2)}<span class="unit">L</span></div>
-          <div class="result-note">Pour atteindre Fcl visé = CYA/10 = ${fmt(chl.fclVise, 2)} ppm</div>
+          <div class="result-note">Pour atteindre Fcl visé = CYA/10 = ${fmt(chl.fclVise, 2)} ppm${m.modeDesinf === 'sel' ? ' · <strong>Électrolyse :</strong> augmente plutôt la production de la cellule (ou mode boost) ; le chlore liquide reste un dépannage rapide.' : ''}</div>
         </div>
       </div>`;
     } else {
@@ -1356,7 +1356,7 @@ function renderCorrections(measurement, targetContainer){
               <div class="result-note">Javel 9.6° (ou Hypochlorite Ca ${fmt(choc.hypocalcium, 0)} g) → CYA/2 ≈ ${fmt(m.cya/2,0)} ppm</div>
             </div>
           </div>
-          <div class="result-note">Fcl ${fmt(m.fcl,2)} ppm &lt; 50 % de la cible (${fmt(calcFclVise(m.cya),2)} ppm). <strong>Eau claire</strong> (pompe coupée, oubli) → la remise à niveau suffit. <strong>Eau verte ou trouble</strong> (prolifération d'algues) → choc curatif.</div>
+          <div class="result-note">Fcl ${fmt(m.fcl,2)} ppm &lt; 50 % de la cible (${fmt(calcFclVise(m.cya),2)} ppm). <strong>Eau claire</strong> (pompe coupée, oubli) → la remise à niveau suffit. <strong>Eau verte ou trouble</strong> (prolifération d'algues) → choc curatif.${m.modeDesinf === 'sel' ? ' <strong>Électrolyse :</strong> remonte la production de la cellule pour l\'entretien ; pour un choc, le chlore liquide ci-dessus est le plus rapide.' : ''}</div>
           ${boostHtml}
         </div>
       </div>`;
