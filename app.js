@@ -2996,7 +2996,7 @@ function calcHealthScore(m){
       chlorineCritical = true;
       const p = 70;
       score -= p;
-      breakdown.push({key:'fcl', name:'Chlore libre', value:fmt(m.fcl,1)+' ppm', penalty:p, status:'bad'});
+      breakdown.push({key:'fcl', name:'Chlore libre', value:fmt(m.fcl,2)+' ppm', penalty:p, status:'bad'});
     } else if(m.cya != null){
       const target = m.cya / 10;
       const ratio = m.fcl / Math.max(0.5, target);
@@ -3007,14 +3007,14 @@ function calcHealthScore(m){
       else if(ratio > 2.5) p = 15;
       else if(ratio > 1.8) p = 6;
       score -= p;
-      breakdown.push({key:'fcl', name:'Chlore libre', value:fmt(m.fcl,1)+' ppm', penalty:p, status: p < 5 ? 'ok' : p < 20 ? 'warn' : 'bad'});
+      breakdown.push({key:'fcl', name:'Chlore libre', value:fmt(m.fcl,2)+' ppm', penalty:p, status: p < 5 ? 'ok' : p < 20 ? 'warn' : 'bad'});
     } else {
       // Pas de CYA renseigné : cible désinfection 0,5–1 ppm.
       let p = 0;
       if(m.fcl < 0.5) p = 25;
       else if(m.fcl < 1) p = 8;
       score -= p;
-      breakdown.push({key:'fcl', name:'Chlore libre', value:fmt(m.fcl,1)+' ppm', penalty:p, status: p < 5 ? 'ok' : p < 20 ? 'warn' : 'bad'});
+      breakdown.push({key:'fcl', name:'Chlore libre', value:fmt(m.fcl,2)+' ppm', penalty:p, status: p < 5 ? 'ok' : p < 20 ? 'warn' : 'bad'});
     }
   }
 
