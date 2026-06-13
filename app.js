@@ -2449,37 +2449,12 @@ function renderBackupUI(){
 const SUPABASE_URL = 'https://tfitkyuvkdogiatglxzr.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_BYHvWjbjIXYdt3OkSQtXXQ_luaxs3PI';
 
-// Chatwoot self-hosted — API publique du channel "Formulaire site Chimie Piscine"
-const CHATWOOT_URL = 'https://tickets.yannick-uhrig.com';
-const CHATWOOT_INBOX = 'socZ7ZeDiw7qvGVs3UYPZXVh';
-
-async function sendToChatwoot(nom, email, sujet, message){
-  try{
-    const base = `${CHATWOOT_URL}/public/api/v1/inboxes/${CHATWOOT_INBOX}`;
-    const cResp = await fetch(`${base}/contacts`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({name: nom, email})
-    });
-    if(!cResp.ok) throw new Error(`contact HTTP ${cResp.status}`);
-    const {source_id} = await cResp.json();
-
-    const convResp = await fetch(`${base}/contacts/${source_id}/conversations`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({additional_attributes:{subject: sujet}})
-    });
-    if(!convResp.ok) throw new Error(`conversation HTTP ${convResp.status}`);
-    const {id: convId} = await convResp.json();
-
-    const msgResp = await fetch(`${base}/contacts/${source_id}/conversations/${convId}/messages`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({content: `**${sujet}**\n\n${message}`})
-    });
-    if(!msgResp.ok) throw new Error(`message HTTP ${msgResp.status}`);
-    console.log('Chatwoot ticket créé', {convId});
-  }catch(err){
-    console.warn('Chatwoot send failed', err);
-  }
-}
+// Chatwoot self-hosted — la création des tickets est déléguée à l'edge function
+// `chatwoot-ticket` (côté serveur), qui crée la conversation dans l'inbox Email
+// (id 3) via l'API Application. Ainsi la réponse de l'agent part via le SMTP de
+// l'inbox et la réponse du client revient via IMAP dans la même conversation.
+// L'ancien envoi via l'API publique du canal "Formulaire site" est retiré car
+// cette inbox API ne gérait pas le threading des réponses e-mail.
 
 async function sendContactMessage(){
   const nom = $('contactNom').value.trim();
@@ -2542,8 +2517,14 @@ async function sendContactMessage(){
       }).catch(e => console.warn('notify-ticket failed', e));
     }
 
-    // En parallèle : crée aussi une conversation Chatwoot (test ; ne bloque pas l'UX)
-    sendToChatwoot(nom, email, sujet, message);
+    // En parallèle : crée la conversation dans l'inbox Email Chatwoot (threading complet)
+    if(ticketId){
+      fetch(`${SUPABASE_URL}/functions/v1/chatwoot-ticket`, {
+        method: 'POST',
+        headers: {'apikey': SUPABASE_KEY, 'Content-Type': 'application/json'},
+        body: JSON.stringify({id: ticketId})
+      }).catch(e => console.warn('chatwoot-ticket failed', e));
+    }
 
     result.innerHTML = `<div class="result ok">
       <div class="result-label">Message envoyé ✓</div>
