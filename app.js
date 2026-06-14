@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.22.6';
+const APP_VERSION = '1.22.7';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -3454,7 +3454,7 @@ function renderChloreProjectionCard(){
 
   wrap.style.display = 'block';
   wrap.innerHTML = `<div class="card-header">
-    <div class="card-title"><span class="dot" style="background:#a78bfa;box-shadow:0 0 10px #a78bfa"></span>Projection chlore</div>
+    <div class="card-title"><span class="dot" style="background:#a78bfa;box-shadow:0 0 10px #a78bfa"></span>Projection chlore <span style="opacity:.55;font-weight:400;font-size:12px">· sans ajout</span></div>
     <span style="font-size:11px;color:var(--shallow);font-family:'JetBrains Mono',monospace">3 jours · ${rateSource}</span>
   </div>
   <div id="chloreProjectionContent" style="color:var(--shallow);font-size:13px;padding:8px 0">Calcul…</div>`;
@@ -3476,23 +3476,28 @@ function renderChloreProjectionCard(){
         <div style="font-size:10px;color:var(--shallow);opacity:.65;margin-top:4px;font-family:'JetBrains Mono',monospace">ppm Fcl</div>
         <div style="font-size:10px;color:var(--shallow);opacity:.55;margin-top:6px;line-height:1.3">${fmt(day.tempMax,0)}°C · UV${fmt(day.uvMax,0)}${day.rain>=5?` · ${fmt(day.rain,0)}mm`:''}</div>
       </div>`).join('');
-    // Recommandation : si un jour passe sous la cible, calcule la dose préventive à ajouter maintenant
+    // Dose de maintien quotidienne : compense la conso moyenne d'une journée (mL/jour de Javel 9.6°)
+    const avgDailyLoss = proj.days.reduce((s, d) => s + d.loss, 0) / proj.days.length;
+    const maintMl = volume ? Math.round(avgDailyLoss * volume * 10) : null;
+    const maintBlock = maintMl ? `<div style="margin-top:14px;padding:12px;background:rgba(94,234,212,.07);border:1px solid rgba(94,234,212,.22);border-radius:10px;font-size:13px;line-height:1.55;color:#cdfdf3">
+        <strong>🧪 Dose de maintien : ~${maintMl} mL/jour</strong> de Javel 9.6° pour compenser la conso quotidienne et tenir ~${fmt(proj.target,1)} ppm (conditions actuelles). Idéal si tu doses chaque jour (pompe doseuse).
+      </div>` : '';
+    // Rattrapage en une fois : si un jour passe sous la cible, dose à ajouter maintenant pour tenir 3 jours
     const firstDrop = proj.days.find(d => d.status !== 'ok');
     let action;
     if(firstDrop){
-      // Combien faut-il ajouter pour tenir 3 jours au-dessus de target ?
       const totalLoss3d = proj.days.reduce((s, d) => s + d.loss, 0);
       const need = Math.max(0, (proj.target + 0.2) - latest.fcl + totalLoss3d);
       const javelMl = volume ? Math.round((need * volume / 100) * 1000) : null;
-      action = `<div style="margin-top:14px;padding:12px;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.25);border-radius:10px;font-size:13px;line-height:1.55;color:#e4d9ff">
-        <strong>💡 ${firstDrop.label === 'Auj.' ? "Aujourd'hui" : firstDrop.label.replace('.', '')}</strong> ton chlore va passer sous ${fmt(proj.target,1)} ppm (cible CYA/10).<br>
-        ${javelMl ? `Ajoute <strong>~${javelMl} mL de Javel 9.6°</strong> maintenant pour tenir 3 jours.` : 'Ajoute du chlore préventif.'}
+      action = `<div style="margin-top:10px;padding:12px;background:rgba(167,139,250,.08);border:1px solid rgba(167,139,250,.25);border-radius:10px;font-size:13px;line-height:1.55;color:#e4d9ff">
+        <strong>💡 Ou en une fois</strong> — pour repartir au-dessus de ${fmt(proj.target,1)} ppm et tenir 3 jours : ${javelMl ? `ajoute <strong>~${javelMl} mL de Javel 9.6°</strong> maintenant.` : 'ajoute du chlore préventif.'}
       </div>`;
     } else {
-      action = `<div style="margin-top:14px;color:var(--leaf);font-size:13px">✓ Niveau Fcl tient les 3 prochains jours sans ajout préventif.</div>`;
+      action = `<div style="margin-top:10px;color:var(--leaf);font-size:13px">✓ Niveau Fcl tient les 3 prochains jours sans ajout préventif.</div>`;
     }
+    const intro = `<div style="font-size:12px;color:var(--shallow);opacity:.7;margin-bottom:8px">Niveau de chlore prévu <strong>si tu n'ajoutes rien</strong> — le chlore se dégrade chaque jour (UV, chaleur, baigneurs) :</div>`;
     const baseRateHint = `<div style="margin-top:10px;font-size:11px;color:var(--shallow);opacity:.55;line-height:1.45">Conso ${rateSource} : ~${fmt(proj.baseRate,2)} ppm/jour · cible CYA/10 = ${fmt(proj.target,1)} ppm</div>`;
-    content.innerHTML = `<div style="display:flex;gap:8px">${cols}</div>${action}${baseRateHint}`;
+    content.innerHTML = `${intro}<div style="display:flex;gap:8px">${cols}</div>${maintBlock}${action}${baseRateHint}`;
   }).catch(err => {
     const content = document.getElementById('chloreProjectionContent');
     if(content) content.innerHTML = '<div style="opacity:.7">Météo indisponible, projection impossible.</div>';
@@ -5668,6 +5673,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 const RELEASE_NOTES_KEY = 'cp_release_notes_seen_v1';
 
 const RELEASE_NOTES = [
+  {
+    version: '1.22.7',
+    icon: '🧪',
+    color: '#5eead4',
+    title: 'Dose de chlore de maintien par jour',
+    body: "La carte « Projection chlore » affiche maintenant une dose de maintien quotidienne (mL/jour) pour compenser la conso et tenir la cible — pratique si tu doses chaque jour (pompe doseuse). Et les 3 chiffres sont clairement étiquetés « niveau prévu sans ajout » : c'est une prévision de l'évolution, pas un planning de dosage.",
+  },
   {
     version: '1.21.0',
     icon: '🔗',
