@@ -5,6 +5,11 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.24.1] — 2026-06-26
+
+### Corrigé
+- **Sync Supabase robuste à l'édition de date** : la fusion au pull/réimport déduplique désormais les mesures par identifiant stable (`id`) plutôt que par date seule, avec arbitrage sur `updated_at`. Sans ça, modifier la date d'une mesure (nouveauté 1.23.0) laissait une ligne orpheline à l'ancienne date côté cloud, qui réapparaissait en double à la réimportation. Les nouveaux champs (`note`, actions « Fait », `id`) sont stockés tels quels dans la colonne `jsonb` — aucune migration de schéma nécessaire.
+
 ## [1.24.0] — 2026-06-26
 
 ### Ajouté

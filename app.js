@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.24.0';
+const APP_VERSION = '1.24.1';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -5690,16 +5690,27 @@ async function syncPullAll(){
       _rawSetItem(STORAGE_KEYS.reminders, JSON.stringify(rem.data.data));
     }
     if(meas.data && meas.data.length){
-      // Merge dédupliqué par date (cloud gagne pour mêmes dates)
+      // Merge dédupliqué par id stable (fallback date pour les entrées legacy).
+      // Clé par id : si la date d'une mesure a été modifiée, le cloud contient une
+      // ligne orpheline à l'ancienne date (upsert par measured_at) — dédupliquer par
+      // date la garderait en double. On garde la version au updated_at le plus récent.
       const local = loadJSON(STORAGE_KEYS.measurements, []);
+      const keyFor = (m, row) => (m && m.id) || (m && m.date) || (row && row.measured_at);
       const byKey = new Map();
-      local.forEach(m => { if(m && m.date) byKey.set(m.date, m); });
+      // Le local est la base (updated inconnu → 0, le cloud l'emporte à clé égale)
+      local.forEach(m => { const k = keyFor(m, null); if(k) byKey.set(k, { m, updated: 0 }); });
       meas.data.forEach(row => {
         const m = row.data;
-        const k = (m && m.date) || row.measured_at;
-        if(k) byKey.set(k, m);
+        const k = keyFor(m, row);
+        if(!k) return;
+        const updated = row.updated_at ? new Date(row.updated_at).getTime() : 1;
+        const existing = byKey.get(k);
+        if(!existing || updated >= existing.updated) byKey.set(k, { m, updated });
       });
-      const merged = Array.from(byKey.values()).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      const merged = Array.from(byKey.values())
+        .map(x => x.m)
+        .filter(m => m && m.date)
+        .sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       _rawSetItem(STORAGE_KEYS.measurements, JSON.stringify(merged));
     }
     const nowIso = new Date().toISOString();
