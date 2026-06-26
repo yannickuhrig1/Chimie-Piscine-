@@ -5,6 +5,12 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.23.0] — 2026-06-26
+
+### Ajouté
+- **Date de mesure modifiable** : nouvelle carte « Date & note » en bas du formulaire de saisie avec un champ date/heure (par défaut l'instant présent). On peut désormais reculer la date d'une mesure faite un autre jour pour qu'elle apparaisse au bon endroit dans l'historique et les graphiques. La date est aussi modifiable a posteriori depuis le détail d'une mesure dans l'historique. _(Demande de Daniel A. via le formulaire de contact.)_
+- **Note / annotation par mesure** : champ texte libre pour consigner les produits ajoutés et observations suite à une mesure et ses corrections (ex. « ajout 500 g pH−, 1 galet chlore lent »). La note s'affiche dans le détail de la mesure et est éditable a posteriori. _(Demande de Daniel A.)_
+
 ## [1.7.1] — 2026-05-24
 
 ### Ajouté

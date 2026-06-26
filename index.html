@@ -1142,6 +1142,19 @@
       </div>
       <div style="flex:1 1 auto;overflow-y:auto;min-height:0;margin-bottom:14px">
         <div id="histDetailMeasure"></div>
+        <div id="histDetailEdit" style="margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,.1)">
+          <div class="field">
+            <label>Date de la mesure</label>
+            <div class="input-wrap">
+              <input type="datetime-local" id="histEditDate">
+            </div>
+          </div>
+          <div class="field">
+            <label>Note (produits ajoutés, observations…)</label>
+            <textarea id="histEditNote" rows="3" placeholder="Ex. : ajout 500 g pH−, 1 galet chlore lent…" style="width:100%;resize:vertical;font-family:inherit;font-size:14px;padding:10px 12px;border-radius:10px;border:1px solid var(--glass-border,rgba(255,255,255,.12));background:var(--glass,rgba(255,255,255,.04));color:#fff;line-height:1.5"></textarea>
+          </div>
+          <button onclick="saveHistEntryEdits()" class="btn-ghost" style="width:100%;font-size:13px">Enregistrer date &amp; note</button>
+        </div>
         <div id="histDetailActions" style="display:none"></div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;flex:0 0 auto">
@@ -1486,6 +1499,26 @@
       </div>
       <div class="result-multi" id="filtrationStats"></div>
       <p class="result-note" id="filtrationNote" style="margin-top:12px"></p>
+    </div>
+
+    <!-- Date de la mesure (modifiable) + note libre (produits ajoutés, observations) -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span class="dot"></span>Date &amp; note</div>
+      </div>
+      <div class="field">
+        <label>Date de la mesure</label>
+        <div class="input-wrap">
+          <input type="datetime-local" id="mesureDate">
+        </div>
+        <p style="font-size:11px;color:var(--shallow);opacity:.7;line-height:1.5;margin-top:6px">
+          Par défaut maintenant — recule la date si tu saisis une mesure faite un autre jour.
+        </p>
+      </div>
+      <div class="field">
+        <label>Note (produits ajoutés, observations…)</label>
+        <textarea id="mesureNote" rows="3" placeholder="Ex. : ajout 500 g pH−, 1 galet chlore lent…" style="width:100%;resize:vertical;font-family:inherit;font-size:14px;padding:10px 12px;border-radius:10px;border:1px solid var(--glass-border,rgba(255,255,255,.12));background:var(--glass,rgba(255,255,255,.04));color:#fff;line-height:1.5"></textarea>
+      </div>
     </div>
 
     <div class="btn-row">

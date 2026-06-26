@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.22.7';
+const APP_VERSION = '1.23.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -735,7 +735,7 @@ function switchTab(name){
     try{ renderInsightsCard(); }catch(e){}
     try{ renderChloreProjectionCard(); }catch(e){}
   }
-  if(name==='mesure'){ try{ renderSeasonPromo(); }catch(e){} }
+  if(name==='mesure'){ try{ renderSeasonPromo(); }catch(e){} setMesureDateNow(); }
   window.scrollTo({top:0, behavior:'smooth'});
 }
 
@@ -772,8 +772,44 @@ function readInputs(){
     phosphate: opt.phosphate === false ? null : num('phosphate'),
     brome: num('brome'),
     modeDesinf: modeEl ? modeEl.value : 'chlore',
-    date: new Date().toISOString()
+    date: readMesureDate(),
+    note: readMesureNote()
   };
+}
+
+// Convertit un objet/chaîne Date en valeur d'<input type="datetime-local"> (heure locale)
+function toLocalDatetimeValue(d){
+  const dt = new Date(d);
+  if(isNaN(dt.getTime())) return '';
+  const local = new Date(dt.getTime() - dt.getTimezoneOffset()*60000);
+  return local.toISOString().slice(0,16);
+}
+
+// Date de saisie : valeur du champ datetime-local si renseignée (interprétée en heure
+// locale), sinon l'instant présent. Permet d'antidater une mesure faite un autre jour.
+function readMesureDate(){
+  const el = $('mesureDate');
+  if(el && el.value){
+    const d = new Date(el.value);
+    if(!isNaN(d.getTime())) return d.toISOString();
+  }
+  return new Date().toISOString();
+}
+
+function readMesureNote(){
+  const el = $('mesureNote');
+  const v = el ? el.value.trim() : '';
+  return v ? v : null;
+}
+
+// Réinitialise le champ date du formulaire sur l'instant présent (s'il est vide)
+function setMesureDateNow(force){
+  const el = $('mesureDate');
+  if(el && (force || !el.value)) el.value = toLocalDatetimeValue(new Date());
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 function loadLastInputs(){
@@ -972,6 +1008,9 @@ function saveAndCalc(){
   try{ renderInsightsCard(); }catch(e){}
   try{ renderChloreProjectionCard(); }catch(e){}
   cloudBackupSync();
+  // Réinitialise la note et remet la date sur l'instant présent pour la prochaine saisie
+  if($('mesureNote')) $('mesureNote').value = '';
+  setMesureDateNow(true);
   toast('Mesure enregistrée');
   setTimeout(()=>switchTab('correction'), 600);
 }
@@ -4862,10 +4901,13 @@ function renderHistEntryMeasurements(m){
     const res = calcHealthScore(m);
     if(res) scoreHTML = `<div class="card" style="margin:0 0 14px">${healthScoreInnerHTML(res)}</div>`;
   }
+  const noteHTML = (m.note && String(m.note).trim())
+    ? `<div style="margin-top:14px;padding:12px 14px;background:rgba(255,255,255,.05);border-left:3px solid var(--water);border-radius:8px;font-size:13px;line-height:1.5;color:var(--foam);white-space:pre-wrap">📝 ${escapeHtml(m.note)}</div>`
+    : '';
   return scoreHTML + rows.map(r => `<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.07);font-size:13px;gap:10px">
     <span style="color:var(--shallow);opacity:.85">${r.label}</span>
     <span style="color:#fff;font-family:'JetBrains Mono',monospace;font-weight:500;text-align:right">${r.value}</span>
-  </div>`).join('');
+  </div>`).join('') + noteHTML;
 }
 
 function openHistDetail(idx){
@@ -4878,9 +4920,34 @@ function openHistDetail(idx){
   const timeStr = d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
   if($('histDetailTitle')) $('histDetailTitle').textContent = `${dateStr} · ${timeStr}`;
   if($('histDetailMeasure')) $('histDetailMeasure').innerHTML = renderHistEntryMeasurements(m);
+  if($('histEditDate')) $('histEditDate').value = toLocalDatetimeValue(m.date);
+  if($('histEditNote')) $('histEditNote').value = m.note || '';
   renderCorrections(m, $('histDetailActions'));
   switchHistTab('measure');
   $('histDetailOverlay').style.display = 'flex';
+}
+
+// Enregistre une nouvelle date et/ou une note pour la mesure ouverte dans la modale.
+// Répond à la demande utilisateur : antidater une mesure + annoter les ajouts de produits.
+function saveHistEntryEdits(){
+  if(__histDetailIdx === null) return;
+  const list = loadActiveMeasurements();
+  const m = list[__histDetailIdx];
+  if(!m) return;
+  const dEl = $('histEditDate'), nEl = $('histEditNote');
+  if(dEl && dEl.value){
+    const d = new Date(dEl.value);
+    if(!isNaN(d.getTime())) m.date = d.toISOString();
+  }
+  if(nEl){ const t = nEl.value.trim(); m.note = t ? t : null; }
+  saveActiveMeasurements(list);
+  renderHistory();
+  try{ renderCharts(); }catch(e){}
+  updateLastControlInfo();
+  cloudBackupSync();
+  // Rafraîchit la modale (titre/date + affichage de la note)
+  openHistDetail(__histDetailIdx);
+  toast('Mesure mise à jour');
 }
 
 function closeHistDetail(){
@@ -4891,6 +4958,7 @@ function closeHistDetail(){
 function switchHistTab(tab){
   const isM = tab === 'measure';
   if($('histDetailMeasure')) $('histDetailMeasure').style.display = isM ? 'block' : 'none';
+  if($('histDetailEdit')) $('histDetailEdit').style.display = isM ? 'block' : 'none';
   if($('histDetailActions')) $('histDetailActions').style.display = isM ? 'none' : 'block';
   const btnM = $('histTabMeasure'), btnA = $('histTabActions');
   if(btnM) btnM.style.background = isM ? 'var(--glass-strong)' : 'var(--glass)';
@@ -4939,6 +5007,9 @@ function reloadHistEntry(){
   if(!m) return;
   applyMeasurementToInputs(m);
   updateCclBadge(m);
+  // Nouvelle saisie : date à l'instant présent, note vierge
+  if($('mesureNote')) $('mesureNote').value = '';
+  setMesureDateNow(true);
   closeHistDetail();
   switchTab('mesure');
   toast('Valeurs chargées — vérifie et saisis tes nouvelles mesures');
@@ -4963,6 +5034,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   updateLastControlInfo();
   renderWeatherCard();
   try{ renderSeasonPromo(); }catch(e){}
+  setMesureDateNow();
 
   if($('shareBtn')) $('shareBtn').addEventListener('click', () => shareControl());
 
@@ -5673,6 +5745,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 const RELEASE_NOTES_KEY = 'cp_release_notes_seen_v1';
 
 const RELEASE_NOTES = [
+  {
+    version: '1.23.0',
+    icon: '🗓️',
+    color: '#7fdbda',
+    title: 'Date de mesure modifiable + notes',
+    body: "Tu peux maintenant choisir la date d'une mesure (carte « Date & note » en bas de la saisie) : pratique quand tu relèves tes valeurs un jour et les saisis plus tard — elles se rangent au bon endroit dans l'historique et les graphiques. Et un champ note libre pour consigner les produits ajoutés et tes observations. Date et note restent modifiables après coup depuis le détail d'une mesure.",
+  },
   {
     version: '1.22.7',
     icon: '🧪',
