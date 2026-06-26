@@ -169,6 +169,17 @@
     line-height:1.5;
   }
   input[type="text"].contact-input,input[type="email"].contact-input{padding-right:14px}
+  /* Lien contact/support en bas des pages */
+  .contact-footer{margin:26px 0 8px;padding-top:18px;border-top:1px solid var(--depth-line,rgba(255,255,255,.08));text-align:center}
+  .contact-footer button{background:none;border:none;cursor:pointer;font-family:inherit;font-size:13px;color:var(--shallow);opacity:.85;display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:10px;transition:opacity .15s,background .15s}
+  .contact-footer button:hover{opacity:1;background:var(--glass,rgba(255,255,255,.04))}
+  .contact-footer button strong{color:var(--water,#7fdbda);font-weight:600}
+  /* Coche "Fait" sur les cartes de doses */
+  .action-done{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:12px;padding-top:11px;border-top:1px dashed var(--depth-line,rgba(255,255,255,.1));font-size:12px;color:var(--shallow);cursor:pointer;user-select:none;letter-spacing:.02em}
+  .action-done input{width:18px;height:18px;accent-color:var(--leaf,#34d399);cursor:pointer;margin:0}
+  .action-done.is-done{color:var(--leaf,#34d399)}
+  .action-done.is-done span{font-weight:600}
+  .card.action-done-card{box-shadow:inset 3px 0 0 var(--leaf,#34d399)}
   .input-unit{
     position:absolute;right:14px;top:50%;transform:translateY(-50%);
     font-size:11px;color:var(--shallow);opacity:.7;font-family:'JetBrains Mono',monospace;
@@ -485,6 +496,7 @@
   body.viewer-mode #page-mesure,
   body.viewer-mode #page-parametres,
   body.viewer-mode #page-contact,
+  body.viewer-mode .contact-footer,
   body.viewer-mode #page-admin,
   body.viewer-mode #syncPromoOverlay,
   body.viewer-mode #seasonPromoCard,

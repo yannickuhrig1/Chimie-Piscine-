@@ -5,6 +5,12 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.24.0] — 2026-06-26
+
+### Ajouté
+- **Coche « Fait » sur les doses proposées** : chaque carte de la page Doses qui recommande un produit chiffré affiche une coche « Fait ? » pour valider que l'ajout a réellement été effectué. Non bloquant (ne pas cocher n'empêche rien). L'état est rattaché à la mesure : il réapparaît dans le détail de l'entrée d'historique (onglet « Actions à suivre ») et un compteur ✓ s'affiche sur la ligne d'historique. _(Demande de Daniel A.)_
+- **Lien « Contacter le support » en bas des pages** : footer discret sur les pages Mesure, Doses, Historique, Apprendre et Paramètres, ouvrant directement le formulaire de tickets — plus besoin de chercher dans les Paramètres. Masqué en mode lecture seule.
+
 ## [1.23.0] — 2026-06-26
 
 ### Ajouté

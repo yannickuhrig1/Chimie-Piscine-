@@ -1,4 +1,4 @@
-const CACHE = 'chimie-piscine-v83';
+const CACHE = 'chimie-piscine-v84';
 const ASSETS = [
   './',
   './app.js',

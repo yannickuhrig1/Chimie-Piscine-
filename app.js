@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.23.0';
+const APP_VERSION = '1.24.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -210,6 +210,21 @@ function loadActiveMeasurements(){
   const id = getActiveBassinId();
   if(!id) return [];
   return loadJSON(STORAGE_KEYS.measurements, []).filter(m => m.bassinId === id);
+}
+
+// Identifiant stable d'une mesure — sert à rattacher les coches "Fait" des doses
+// à la bonne entrée d'historique (cf. decorateActionChecks / toggleActionDone).
+function genMeasureId(){
+  return 'm_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+// Migration douce : attribue un id aux mesures qui n'en ont pas encore (anciennes
+// entrées créées avant la fonctionnalité "Fait"). No-op si tout est déjà taggé.
+function ensureMeasureIds(){
+  const all = loadJSON(STORAGE_KEYS.measurements, []);
+  let dirty = false;
+  all.forEach(m => { if(m && !m.id){ m.id = genMeasureId(); dirty = true; } });
+  if(dirty) saveJSON(STORAGE_KEYS.measurements, all);
 }
 
 /**
@@ -730,7 +745,7 @@ function switchTab(name){
   }
   if(name==='historique') renderCharts();
   if(name==='correction'){
-    renderCorrections();
+    renderDosesTab();
     try{ renderHealthScoreCard(); }catch(e){}
     try{ renderInsightsCard(); }catch(e){}
     try{ renderChloreProjectionCard(); }catch(e){}
@@ -995,15 +1010,18 @@ function saveAndCalc(){
   });
 
   // Sauvegarder dans l'historique du bassin actif
+  m.id = genMeasureId();
   m.bassinId = getActiveBassinId();
   const list = loadActiveMeasurements();
   list.push(m);
   saveActiveMeasurements(list);
 
+  // La page Doses rendra ses recommandations (et les coches "Fait") pour CETTE mesure
+  __activeMeasureId = m.id;
   updateStatus(m);
   updateCclBadge(m);
   updateLastControlInfo();
-  renderCorrections();
+  renderCorrections(m);
   try{ renderHealthScoreCard(); }catch(e){}
   try{ renderInsightsCard(); }catch(e){}
   try{ renderChloreProjectionCard(); }catch(e){}
@@ -1136,6 +1154,28 @@ function renderFiltration(){
 }
 
 // ============== Rendu Corrections ==============
+// Id de la mesure stockée à laquelle rattacher la page Doses (et ses coches "Fait").
+// Mis à jour à chaque sauvegarde et au chargement (dernière mesure du bassin).
+let __activeMeasureId = null;
+
+// Mesure stockée à utiliser pour la page Doses : la dernière sauvegardée du bassin
+// actif. Renvoie null s'il n'y a aucune mesure (on retombe alors sur readInputs()).
+function dosesContextMeasure(){
+  const list = loadActiveMeasurements();
+  if(!list.length) return null;
+  if(__activeMeasureId){
+    const found = list.find(x => x.id === __activeMeasureId);
+    if(found) return found;
+  }
+  return list.slice().sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+}
+
+// Rend la page Doses contre la dernière mesure stockée (coches "Fait" actives) ;
+// à défaut, contre la saisie en cours (live preview, sans coches).
+function renderDosesTab(){
+  renderCorrections(dosesContextMeasure() || readInputs());
+}
+
 function renderCorrections(measurement, targetContainer){
   const m = measurement || readInputs();
   const container = targetContainer || $('correctionContent');
@@ -1760,6 +1800,61 @@ function renderCorrections(measurement, targetContainer){
   }
 
   container.innerHTML = html;
+  decorateActionChecks(container, m);
+}
+
+// Ajoute une coche "Fait" (non bloquante) sur chaque carte qui propose un produit
+// chiffré, rattachée à la mesure stockée. L'état est persisté dans m.doneActions
+// et réapparaît dans le détail de la mesure (Historique). Ignoré pour une saisie
+// live non encore enregistrée (pas d'id) et en mode lecture seule.
+function decorateActionChecks(container, m){
+  if(!m || !m.id || (typeof isViewerMode === 'function' && isViewerMode())) return;
+  const all = loadJSON(STORAGE_KEYS.measurements, []);
+  const stored = all.find(x => x.id === m.id);
+  if(!stored) return;
+  const done = stored.doneActions || {};
+  const usedKeys = {};
+  container.querySelectorAll('.card').forEach(card => {
+    // Actionnable = contient une dose chiffrée avec une unité (g, L, ppm, m³…).
+    // Exclut les cartes informatives "Niveau correct" / "Tout est bon".
+    if(!card.querySelector('.result-value .unit')) return;
+    let base = (card.querySelector('.card-title')?.textContent || 'action')
+      .trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\-]/g, '') || 'action';
+    usedKeys[base] = (usedKeys[base] || 0) + 1;
+    const key = usedKeys[base] > 1 ? `${base}-${usedKeys[base]}` : base;
+    const checked = !!done[key];
+    const label = document.createElement('label');
+    label.className = 'action-done' + (checked ? ' is-done' : '');
+    label.innerHTML = `<input type="checkbox" ${checked ? 'checked' : ''} aria-label="Marquer comme fait"><span>${checked ? 'Fait ✓' : 'Fait ?'}</span>`;
+    label.querySelector('input').addEventListener('change', e => toggleActionDone(m.id, key, e.target.checked, e.target));
+    if(checked) card.classList.add('action-done-card');
+    card.appendChild(label);
+  });
+}
+
+// Coche/décoche une action sur une mesure stockée. Met à jour le store global
+// (tous bassins), resynchronise le cloud et rafraîchit l'affichage de la carte.
+function toggleActionDone(measureId, key, checked, inputEl){
+  const all = loadJSON(STORAGE_KEYS.measurements, []);
+  const m = all.find(x => x.id === measureId);
+  if(!m) return;
+  if(!m.doneActions) m.doneActions = {};
+  if(checked) m.doneActions[key] = true; else delete m.doneActions[key];
+  if(Object.keys(m.doneActions).length === 0) delete m.doneActions;
+  saveJSON(STORAGE_KEYS.measurements, all);
+  try{ cloudBackupSync(); }catch(e){}
+  // Rafraîchit la pastille du label cliqué
+  const label = inputEl && inputEl.closest('.action-done');
+  if(label){
+    label.classList.toggle('is-done', checked);
+    const span = label.querySelector('span');
+    if(span) span.textContent = checked ? 'Fait ✓' : 'Fait ?';
+    const card = label.closest('.card');
+    if(card) card.classList.toggle('action-done-card', checked);
+  }
+  // Reflète le compteur d'actions faites dans la liste d'historique
+  try{ renderHistory(); }catch(e){}
+  toast(checked ? 'Marqué comme fait ✓' : 'Décoché');
 }
 
 // ============== Historique ==============
@@ -1783,6 +1878,13 @@ function renderHistory(){
     .slice(0, 50);
   wrap.innerHTML = sortedWithIdx.map(({ m, idx }) => {
     const d = new Date(m.date);
+    const badges = [];
+    if(m.note && String(m.note).trim()) badges.push(`<span title="Note">📝</span>`);
+    const doneCount = m.doneActions ? Object.keys(m.doneActions).length : 0;
+    if(doneCount) badges.push(`<span title="Action(s) faite(s)" style="color:var(--leaf,#34d399);font-weight:600">✓${doneCount}</span>`);
+    const badgesHtml = badges.length
+      ? `<div class="h-badges" style="display:flex;gap:7px;align-items:center;font-size:12px;flex:0 0 auto;margin-right:4px">${badges.join('')}</div>`
+      : '';
     return `<div class="history-item" onclick="openHistDetail(${idx})" style="cursor:pointer">
       <div class="history-date">
         <div class="day">${d.getDate()}</div>
@@ -1793,6 +1895,7 @@ function renderHistory(){
         <div class="h-item"><div class="h-label">Fcl</div><div class="h-value">${m.fcl!==null?fmt(m.fcl,2):'—'}</div></div>
         <div class="h-item"><div class="h-label">TAC</div><div class="h-value">${m.tac!==null?fmt(m.tac,0):'—'}</div></div>
       </div>
+      ${badgesHtml}
       <button class="history-delete" onclick="event.stopPropagation();deleteMeasurement(${idx})" aria-label="Supprimer">×</button>
     </div>`;
   }).join('');
@@ -3636,7 +3739,8 @@ function switchBassin(id){
   updateLastControlInfo();
   renderHistory();
   renderTrends();
-  if(typeof renderCorrections === 'function') renderCorrections();
+  __activeMeasureId = null; // la dernière mesure dépend désormais du nouveau bassin
+  if(typeof renderDosesTab === 'function') renderDosesTab();
   if(typeof renderCharts === 'function') renderCharts();
   if(typeof renderWeatherCard === 'function') renderWeatherCard();
   toast(`Bassin actif : ${b.emoji||''} ${b.nom}`);
@@ -5015,11 +5119,27 @@ function reloadHistEntry(){
   toast('Valeurs chargées — vérifie et saisis tes nouvelles mesures');
 }
 
+// Ajoute un lien "Contacter le support" en bas des pages principales, pour ouvrir
+// le formulaire de tickets sans passer par Paramètres. Masqué en lecture seule via CSS.
+function injectContactFooters(){
+  const pages = ['page-mesure', 'page-correction', 'page-historique', 'page-apprendre', 'page-parametres'];
+  pages.forEach(pid => {
+    const p = document.getElementById(pid);
+    if(!p || p.querySelector('.contact-footer')) return;
+    const f = document.createElement('div');
+    f.className = 'contact-footer';
+    f.innerHTML = `<button type="button" onclick="switchTab('contact')">💬 Une question, un bug, une idée ? <strong>Contacter le support</strong></button>`;
+    p.appendChild(f);
+  });
+}
+
 // ============== Init ==============
 document.addEventListener('DOMContentLoaded', ()=>{
   if($('appVersion')) $('appVersion').textContent = 'v' + APP_VERSION;
   // Migration multi-bassins (no-op si déjà fait) — DOIT s'exécuter avant loadLastInputs
   migrateToMultiBassinsIfNeeded();
+  // Attribue un id aux anciennes mesures (support des coches "Fait")
+  ensureMeasureIds();
   // Si un bassin existe, sa config prime sur lastInputs
   const activeB = getActiveBassin();
   if(activeB) applyBassinConfigToInputs(activeB);
@@ -5035,6 +5155,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   renderWeatherCard();
   try{ renderSeasonPromo(); }catch(e){}
   setMesureDateNow();
+  injectContactFooters();
 
   if($('shareBtn')) $('shareBtn').addEventListener('click', () => shareControl());
 
@@ -5745,6 +5866,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 const RELEASE_NOTES_KEY = 'cp_release_notes_seen_v1';
 
 const RELEASE_NOTES = [
+  {
+    version: '1.24.0',
+    icon: '✅',
+    color: '#34d399',
+    title: 'Coche « Fait » sur les doses + accès contact',
+    body: "Quand l'app te propose d'ajouter un produit, une coche « Fait » apparaît sur la carte : marque ce que tu as réellement appliqué (non bloquant — libre à toi de cocher ou non). Ces actions faites se retrouvent dans le détail de la mesure et dans l'historique (pastille ✓). Et un lien « Contacter le support » est désormais en bas de chaque page pour ouvrir un ticket en deux clics.",
+  },
   {
     version: '1.23.0',
     icon: '🗓️',
