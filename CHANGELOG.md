@@ -5,6 +5,11 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.24.2] — 2026-06-29
+
+### Corrigé
+- **HOCl surestimé quand le CYA n'est pas re-saisi** : la carte « Pouvoir désinfectant » et la courbe HOCl de l'historique supposaient un CYA de 0 dès que le champ « CYA mesuré » était laissé vide — affichant alors un HOCl proche du maximum théorique (ex. Fcl 0,9 / placeholder CYA 30 → **0,6 ppm « Très efficace »** au lieu de **~0,03 ppm**, en contradiction avec PoolLab/Toollab). Le CYA évoluant très lentement, l'app reprend désormais la dernière valeur connue (dernier relevé → config du bassin → cible) au lieu de retomber à 0. Si aucun CYA n'est connu, la carte affiche « CYA non renseigné — efficacité incertaine » plutôt qu'un faux « Très efficace ». La courbe HOCl de l'historique applique le même report (plus de pics artificiels). _(Bug remonté par Daniel A.)_
+
 ## [1.24.1] — 2026-06-26
 
 ### Corrigé

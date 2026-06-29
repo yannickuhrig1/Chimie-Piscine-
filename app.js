@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.24.1';
+const APP_VERSION = '1.24.2';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -515,6 +515,41 @@ function calcHOClFromCYA(fcl, pH, cya){
   const baseRatio = 0.5 * Math.pow(cya, -0.89);
   const phCorr = Math.pow(10, (7.5 - pH) * 0.25);
   return fcl * baseRatio * phCorr;
+}
+
+/**
+ * CYA effectif pour le modèle de désinfection / les seuils Fcl.
+ *
+ * Le CYA évolue très lentement (stable des semaines). S'il n'est PAS re-saisi
+ * sur le relevé courant (champ laissé vide → placeholder), on réutilise la
+ * dernière valeur connue plutôt que de supposer 0 — sinon le HOCl est
+ * gravement surestimé : une piscine stabilisée afficherait "très efficace" à
+ * tort (bug remonté : Fcl 0,9 / CYA 30 → HOCl 0,6 ppm au lieu de ~0,03).
+ *
+ * Renvoie {cya, assumed, source} :
+ *   - assumed=false → valeur saisie sur ce relevé
+ *   - assumed=true  → valeur héritée (dernier relevé / config / cible)
+ *   - cya=null      → aucun CYA connu : estimation non fiable
+ */
+function resolveCya(m){
+  if(m && m.cya != null && m.cya >= 0) return {cya:m.cya, assumed:false, source:'mesuré'};
+  // 1) Carry-forward : dernier relevé du bassin actif renseignant le CYA (≤ date du relevé courant)
+  try{
+    const md = (m && m.date) ? new Date(m.date).getTime() : Infinity;
+    const prev = loadActiveMeasurements()
+      .filter(x => x && x.cya != null && x.cya >= 0 && (!m || x.id !== m.id)
+                   && new Date(x.date || 0).getTime() <= md)
+      .sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
+    if(prev.length) return {cya:prev[0].cya, assumed:true, source:'dernier relevé'};
+  }catch(e){ /* localStorage indispo : on continue sur les fallbacks suivants */ }
+  // 2) CYA enregistré dans la config du bassin actif
+  const b = getActiveBassin();
+  if(b && b.config && b.config.cya != null && b.config.cya >= 0)
+    return {cya:b.config.cya, assumed:true, source:'config bassin'};
+  // 3) Cible CYA (dernier recours)
+  if(m && m.cyaSouhaite != null && m.cyaSouhaite >= 0)
+    return {cya:m.cyaSouhaite, assumed:true, source:'cible'};
+  return {cya:null, assumed:false, source:null};
 }
 
 /**
@@ -1482,8 +1517,11 @@ function renderCorrections(measurement, targetContainer){
 
   // ===== Désinfection (HOCl actif + seuils Fcl PoolLab) =====
   if(!isBrome && m.ph !== null && m.fcl !== null){
-    const hocl = calcHOClFromCYA(m.fcl, m.ph, m.cya || 0);
-    const t = fcThresholds(m.cya || 0);
+    const cyaInfo = resolveCya(m);
+    const cyaEff  = cyaInfo.cya;          // CYA effectif : saisi ou dernière valeur connue
+    const cyaUnknown = cyaEff == null;    // aucun CYA connu → estimation sans stabilisant, non fiable
+    const hocl = calcHOClFromCYA(m.fcl, m.ph, cyaEff || 0);
+    const t = fcThresholds(cyaEff || 0);
     let tone = 'ok', label = 'Désinfection optimale';
     if(m.fcl < t.min){ tone='danger'; label='Fcl insuffisant pour le CYA'; }
     else if(m.fcl < t.target){ tone='warn'; label='Fcl sous la cible'; }
@@ -1494,6 +1532,8 @@ function renderCorrections(measurement, targetContainer){
     else if(hocl >= 0.05){ hoclVerdict = '✓ Suffisant'; hoclColor = 'var(--leaf)'; }
     else if(hocl >= 0.03){ hoclVerdict = '⚠ Limite — vire vite à l\'algue'; hoclColor = 'var(--lemon)'; }
     else { hoclVerdict = '✗ Insuffisant — risque bactérien'; hoclColor = 'var(--coral)'; }
+    // Sans CYA connu, le HOCl est calculé sans stabilisant (optimiste) : on ne promet rien
+    if(cyaUnknown){ hoclVerdict = '? CYA non renseigné — efficacité incertaine'; hoclColor = 'var(--lemon)'; if(tone === 'ok') tone = 'warn'; }
     // Part de Fcl réellement active (en %)
     const actifPct = m.fcl > 0 ? Math.min(100, (hocl/m.fcl)*100) : 0;
     html += `<div class="card">
@@ -1516,8 +1556,12 @@ function renderCorrections(measurement, targetContainer){
         </div>
         <div class="result-note" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--depth-line);line-height:1.5">
           <strong>Ce que ça veut dire</strong> — sur tes ${fmt(m.fcl,2)} ppm de Fcl mesurés, seuls <strong>${fmt(hocl,3)} ppm (${fmt(actifPct,1)}&nbsp;%)</strong> désinfectent vraiment.
-          ${m.cya >= 5 ? `Le reste est séquestré par le CYA (${fmt(m.cya,0)} ppm) — utile pour résister au soleil, mais ça réduit l'efficacité immédiate.` : 'Sans stabilisant (CYA), tout le Fcl est actif mais brûle vite au soleil.'}
-          ${tone !== 'ok' ? `<br><span style="color:var(--lemon)">⚠ ${label}.</span>` : ''}
+          ${cyaUnknown
+            ? '<span style="color:var(--lemon)">⚠ Aucun CYA renseigné. Sans stabilisant, le chlore paraît très actif — mais si ta piscine est stabilisée (la plupart le sont), le HOCl réel est bien plus bas. Saisis ton CYA mesuré pour une estimation fiable.</span>'
+            : (cyaEff >= 5
+                ? `Le reste est séquestré par le CYA (${fmt(cyaEff,0)} ppm${cyaInfo.assumed ? ' — repris de ton dernier relevé, ressaisis-le s\'il a changé' : ''}) — utile pour résister au soleil, mais ça réduit l'efficacité immédiate.`
+                : `CYA quasi nul (${fmt(cyaEff,0)} ppm) : tout le Fcl est actif mais brûle vite au soleil.`)}
+          ${tone !== 'ok' && !cyaUnknown ? `<br><span style="color:var(--lemon)">⚠ ${label}.</span>` : ''}
         </div>
       </div>
     </div>`;
@@ -2083,13 +2127,16 @@ function renderCharts(){
   const ctxDesinf = $('chartDesinf');
   if(ctxDesinf){
     if(chartDesinf) chartDesinf.destroy();
-    // Pour chaque mesure, calcule les seuils Fcl à partir du CYA enregistré
-    const thr = list.map(m => fcThresholds(m.cya || 0));
+    // Pour chaque mesure, calcule les seuils Fcl à partir du CYA effectif :
+    // si le CYA n'a pas été re-saisi ce jour-là, on reprend la dernière valeur
+    // connue (carry-forward) — évite les pics HOCl artificiels (CYA supposé 0).
+    const cyaEffList = list.map(m => resolveCya(m).cya);
+    const thr = cyaEffList.map(c => fcThresholds(c || 0));
     const fcMin    = thr.map(t => +t.min.toFixed(2));
     const fcTarget = thr.map(t => +t.target.toFixed(2));
     const fcShock  = thr.map(t => +t.shock.toFixed(2));
     const fcMeasured = list.map(m => m.fcl);
-    const hoclActif  = list.map(m => (m.ph != null && m.fcl != null) ? +calcHOClFromCYA(m.fcl, m.ph, m.cya || 0).toFixed(3) : null);
+    const hoclActif  = list.map((m, i) => (m.ph != null && m.fcl != null) ? +calcHOClFromCYA(m.fcl, m.ph, cyaEffList[i] || 0).toFixed(3) : null);
     const yMax = Math.max(10, ...fcShock.map(v => v*1.1));
 
     // Cap visuel : on montre confortablement min/cible/choc + Fcl mesuré
