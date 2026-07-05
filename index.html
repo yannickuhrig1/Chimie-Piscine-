@@ -2246,6 +2246,19 @@
   </div>
 </div>
 
+<!-- Confirmation maison (remplace confirm() natif : évite la case navigateur "bloquer les dialogues") -->
+<div id="confirmOverlay" class="account-modal-overlay" style="display:none" onclick="if(event.target===this)uiConfirmResolve(false)">
+  <div class="account-modal" role="dialog" aria-labelledby="confirmTitle" aria-modal="true" style="max-width:420px">
+    <div id="confirmIcon" class="account-modal-icon" style="background:linear-gradient(135deg,#f87171,#ef4444)">🗑️</div>
+    <h2 id="confirmTitle" class="account-modal-title">Confirmer</h2>
+    <p id="confirmMessage" class="account-modal-sub"></p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:20px">
+      <button id="confirmOkBtn" type="button" class="btn-primary" onclick="uiConfirmResolve(true)">Confirmer</button>
+      <button type="button" class="btn-ghost" onclick="uiConfirmResolve(false)">Annuler</button>
+    </div>
+  </div>
+</div>
+
 <script src="app.js"></script>
 </body>
 </html>

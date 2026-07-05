@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.24.2';
+const APP_VERSION = '1.25.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -1920,7 +1920,11 @@ function renderHistory(){
     .filter(x => x.m && x.m.date)
     .sort((a, b) => new Date(b.m.date).getTime() - new Date(a.m.date).getTime())
     .slice(0, 50);
-  wrap.innerHTML = sortedWithIdx.map(({ m, idx }) => {
+  const toolbar = `<div class="history-toolbar" style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
+      <span style="font-size:12px;color:var(--shallow);opacity:.75">${list.length} mesure${list.length>1?'s':''}</span>
+      <button type="button" class="btn-ghost" style="width:auto;padding:6px 12px;font-size:12px;color:var(--coral,#ef4444)" onclick="deleteAllMeasurements()">Tout supprimer</button>
+    </div>`;
+  wrap.innerHTML = toolbar + sortedWithIdx.map(({ m, idx }) => {
     const d = new Date(m.date);
     const badges = [];
     if(m.note && String(m.note).trim()) badges.push(`<span title="Note">📝</span>`);
@@ -1945,8 +1949,45 @@ function renderHistory(){
   }).join('');
 }
 
-function deleteMeasurement(idx){
-  if(!confirm('Supprimer cette mesure ?')) return;
+// ---- Confirmation maison (Promise) ----
+// Remplace window.confirm() : le confirm natif fait apparaître, après plusieurs
+// appels d'affilée, une case navigateur « Empêcher cette page d'afficher d'autres
+// boîtes de dialogue ». Une fois cochée, elle bloque TOUTES les confirmations
+// suivantes sans moyen de la décocher depuis l'app. Ce modal évite ce piège.
+let _uiConfirmResolver = null;
+let _uiConfirmKeyHandler = null;
+function uiConfirm(opts){
+  opts = (typeof opts === 'string') ? { message: opts } : (opts || {});
+  return new Promise(resolve => {
+    const ov = document.getElementById('confirmOverlay');
+    if(!ov){ resolve(window.confirm(opts.message || 'Confirmer ?')); return; }
+    _uiConfirmResolver = resolve;
+    $('confirmTitle').textContent = opts.title || 'Confirmer';
+    $('confirmMessage').innerHTML = String(opts.message || '').replace(/\n/g, '<br>');
+    $('confirmIcon').textContent = opts.icon || '🗑️';
+    const okBtn = $('confirmOkBtn');
+    okBtn.textContent = opts.confirmLabel || 'Confirmer';
+    // Danger (rouge) par défaut ; opts.danger === false => bouton primaire normal
+    okBtn.style.background = (opts.danger === false) ? '' : 'linear-gradient(135deg,#f87171,#ef4444)';
+    ov.style.display = 'flex';
+    _uiConfirmKeyHandler = (e) => {
+      if(e.key === 'Escape') uiConfirmResolve(false);
+      else if(e.key === 'Enter'){ e.preventDefault(); uiConfirmResolve(true); }
+    };
+    document.addEventListener('keydown', _uiConfirmKeyHandler);
+    setTimeout(() => { try{ okBtn.focus(); }catch(e){} }, 50);
+  });
+}
+function uiConfirmResolve(val){
+  const ov = document.getElementById('confirmOverlay');
+  if(ov) ov.style.display = 'none';
+  if(_uiConfirmKeyHandler){ document.removeEventListener('keydown', _uiConfirmKeyHandler); _uiConfirmKeyHandler = null; }
+  const r = _uiConfirmResolver; _uiConfirmResolver = null;
+  if(r) r(!!val);
+}
+
+async function deleteMeasurement(idx){
+  if(!(await uiConfirm({ message: 'Supprimer cette mesure ?', confirmLabel: 'Supprimer' }))) return;
   const list = loadActiveMeasurements();
   list.splice(idx, 1);
   saveActiveMeasurements(list);
@@ -1955,6 +1996,26 @@ function deleteMeasurement(idx){
   updateLastControlInfo();
   cloudBackupSync();
   toast('Mesure supprimée');
+}
+
+// Suppression groupée : efface toutes les mesures du bassin actif d'un coup
+// (le faire une par une était pénible — cf. retour Daniel A.).
+async function deleteAllMeasurements(){
+  const list = loadActiveMeasurements();
+  const n = list.length;
+  if(n === 0) return;
+  const b = getActiveBassin();
+  if(!(await uiConfirm({
+    title: 'Tout supprimer',
+    message: `Supprimer les ${n} mesure${n>1?'s':''} de « ${b ? b.nom : 'ce bassin'} » ?\n\nCette action est irréversible.`,
+    confirmLabel: 'Tout supprimer'
+  }))) return;
+  saveActiveMeasurements([]);
+  renderHistory();
+  renderCharts();
+  updateLastControlInfo();
+  cloudBackupSync();
+  toast(`${n} mesure${n>1?'s':''} supprimée${n>1?'s':''}`);
 }
 
 // ============== Graphiques ==============
@@ -3918,18 +3979,34 @@ function archiveBassinFromModal(){
   cloudBackupSync();
 }
 
-function deleteBassinFromModal(){
+async function deleteBassinFromModal(){
   if(!_bassinModalEditingId) return;
   const b = getBassinById(_bassinModalEditingId);
   if(!b) return;
-  if(getActiveBassins().length <= 1 && !b.archived){
-    toast('Impossible de supprimer le dernier bassin actif','warn');
-    return;
-  }
   const measureCount = loadJSON(STORAGE_KEYS.measurements, []).filter(m => m.bassinId === b.id).length;
-  if(!confirm(`Supprimer "${b.nom}" définitivement ?\n\n${measureCount} mesure${measureCount>1?'s':''} ${measureCount>1?'seront':'sera'} aussi effacée${measureCount>1?'s':''}. Cette action est irréversible.`)) return;
+  // Cas particulier : c'est le dernier bassin. On l'autorise désormais (repartir
+  // de zéro), mais on prévient que l'app repassera par l'écran de création.
+  const isLast = getBassins().length <= 1;
+  const plural = measureCount > 1;
+  const mesures = `${measureCount} mesure${plural?'s':''} ${plural?'seront':'sera'} ${plural?'effacées':'effacée'}`;
+  const msg = isLast
+    ? `Supprimer "${b.nom}" et repartir de zéro ?\n\n${mesures} et l'application rouvrira l'écran de création d'un bassin. Cette action est irréversible.`
+    : `Supprimer "${b.nom}" définitivement ?\n\n${mesures} aussi. Cette action est irréversible.`;
+  if(!(await uiConfirm({ message: msg, confirmLabel: 'Supprimer' }))) return;
   deleteBassinAndData(b.id);
   closeBassinModal();
+  if(getBassins().length === 0){
+    // Plus aucun bassin : on relance l'onboarding pour un vrai redémarrage propre.
+    try{ localStorage.removeItem('cp_wizard_done'); }catch(e){}
+    renderBassinSwitcher();
+    updateLastControlInfo();
+    renderHistory();
+    renderTrends();
+    cloudBackupSync();
+    toast('Bassin supprimé');
+    maybeOpenWizard();
+    return;
+  }
   // Recharge config du nouveau bassin actif
   const newActive = getActiveBassin();
   if(newActive) applyBassinConfigToInputs(newActive);
@@ -5924,6 +6001,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 const RELEASE_NOTES_KEY = 'cp_release_notes_seen_v1';
 
 const RELEASE_NOTES = [
+  {
+    version: '1.25.0',
+    icon: '🧹',
+    color: '#f59e0b',
+    title: 'Suppression plus simple (et débloquée)',
+    body: "Un bouton « Tout supprimer » en haut de l'historique efface toutes les mesures d'un bassin d'un coup. Les confirmations passent maintenant par une fenêtre intégrée à l'app : fini la case du navigateur qui, après plusieurs suppressions d'affilée, pouvait tout bloquer. Et tu peux désormais supprimer ton dernier bassin pour repartir de zéro — l'app rouvre alors l'écran de création.",
+  },
   {
     version: '1.24.0',
     icon: '✅',
