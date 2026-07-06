@@ -5,6 +5,15 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.26.0] — 2026-07-06
+
+### Corrigé
+- **Plus de dose calculée depuis une mesure absente** : `calcSel`, `calcCalcium`, `calcBrome` (et `calcCYA` par cohérence) renvoient désormais `null` quand la mesure n'est pas saisie, au lieu de supposer « 0 ». Avant, un bassin en électrolyse avec la cible sel pré-remplie (4 g/L) et la salinité non mesurée affichait « Sel à ajouter : cible × volume » (ex. **280 kg pour 70 m³**) ; même travers pour le TH (kilos de CaCl₂) et le brome. En modes sel et brome, une carte « non mesuré » invite à saisir la mesure plutôt que de doser à l'aveugle.
+- **Les mesures supprimées ne ressuscitent plus (comptes synchronisés)** : le push de sync ne faisait que des upserts — une mesure supprimée localement restait dans `cp_measurements` et revenait au pull suivant. Les suppressions sont maintenant tracées (tombstones `cp_deleted_measures_v1`), effacées côté cloud au push (par `data->>id`, par date pour les entrées legacy), filtrées au pull, et propagées aux autres appareils via `cp_pool_config.deleted_measures` (TTL 6 mois, plafond 500). L'édition de la date d'une mesure nettoie aussi la ligne cloud orpheline à l'ancienne date.
+
+### Ajouté
+- **Validation des plages de saisie** : bornes physiques plausibles par champ (pH 4–10, température 0–45 °C, Fcl/Tcl 0–30 ppm, etc.) appliquées en `min`/`max` HTML et bloquantes à l'enregistrement avec message explicite. Contrôle de cohérence Tcl ≥ Fcl (tolérance 0,3 ppm). Un pH de 14 ou une température négative ne peut plus polluer l'historique ni générer des doses absurdes.
+
 ## [1.24.2] — 2026-06-29
 
 ### Corrigé

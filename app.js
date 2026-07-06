@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.25.1';
+const APP_VERSION = '1.26.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -11,7 +11,8 @@ const STORAGE_KEYS = {
   lastInputs: 'cp_last_inputs_v1',
   bassins: 'cp_bassins_v1',
   activeBassin: 'cp_active_bassin_id',
-  optionalFields: 'cp_optional_fields_v1'
+  optionalFields: 'cp_optional_fields_v1',
+  deletedMeasures: 'cp_deleted_measures_v1'
 };
 
 // Champs avancés activables/désactivables depuis Paramètres
@@ -155,8 +156,10 @@ function restoreBassin(id){ return updateBassin(id, {archived: false}); }
 function deleteBassinAndData(id){
   const list = getBassins().filter(b => b.id !== id);
   saveBassins(list);
-  // Purge des mesures rattachées
-  const measures = loadJSON(STORAGE_KEYS.measurements, []).filter(m => m.bassinId !== id);
+  // Purge des mesures rattachées (+ tombstones pour la suppression cloud)
+  const all = loadJSON(STORAGE_KEYS.measurements, []);
+  addMeasureTombstones(all.filter(m => m.bassinId === id));
+  const measures = all.filter(m => m.bassinId !== id);
   saveJSON(STORAGE_KEYS.measurements, measures);
   // Si c'était l'actif, basculer sur le premier non-archivé
   if(getActiveBassinId() === id){
@@ -238,6 +241,46 @@ function saveActiveMeasurements(list){
   // S'assurer que les mesures sauvées portent bien le bassinId
   list.forEach(m => { if(!m.bassinId) m.bassinId = id; });
   saveJSON(STORAGE_KEYS.measurements, [...others, ...list]);
+}
+
+// ============== Tombstones de suppression ==============
+// Trace les mesures supprimées pour que la sync compte (cp_measurements) les
+// efface aussi côté cloud et ne les ressuscite pas au pull. Sans ça, une mesure
+// supprimée revenait à la session suivante (le push ne fait que des upserts).
+// Propagé entre appareils via cp_pool_config (champ deleted_measures).
+const TOMBSTONE_MAX = 500;
+const TOMBSTONE_TTL_MS = 180 * 24 * 3600 * 1000; // 6 mois puis oubli
+
+function getMeasureTombstones(){
+  const now = Date.now();
+  return loadJSON(STORAGE_KEYS.deletedMeasures, [])
+    .filter(t => t && (t.id || t.date)
+      && (!t.deletedAt || now - new Date(t.deletedAt).getTime() < TOMBSTONE_TTL_MS));
+}
+
+function addMeasureTombstones(measures){
+  if(!measures || !measures.length) return;
+  const deletedAt = new Date().toISOString();
+  const list = getMeasureTombstones();
+  measures.forEach(m => {
+    if(!m || (!m.id && !m.date)) return;
+    if(list.some(t => (m.id && t.id === m.id) || (!m.id && !t.id && t.date === m.date))) return;
+    list.push({id: m.id || null, date: m.date || null, deletedAt});
+  });
+  saveJSON(STORAGE_KEYS.deletedMeasures, list.slice(-TOMBSTONE_MAX));
+}
+
+// Une mesure (locale ou ligne cloud) correspond-elle à une tombstone ?
+// Match par id quand les deux en ont un ; par date sinon (mesures legacy sans id).
+// Une mesure re-créée à la même date qu'une supprimée a un id neuf → survit.
+function isMeasureTombstoned(tombstones, m, measuredAt){
+  if(!m) return false;
+  const sameDate = (a, b) => !!a && !!b && new Date(a).getTime() === new Date(b).getTime();
+  const md = m.date || measuredAt || null;
+  return tombstones.some(t => {
+    if(t.id && m.id) return t.id === m.id;
+    return sameDate(t.date, md);
+  });
 }
 
 // ============== Utilitaires ==============
@@ -424,10 +467,12 @@ function calcTacPlus(volume, tacMesure, tacSouhaite){
  * Sel (NaCl) à ajouter pour électrolyse
  * 1 g/L = 1 kg/m³ → kg = (cible − actuel) × volume
  * Si > cible : pas d'ajout, signaler dilution.
+ * Mesure absente → null : on ne dose JAMAIS depuis un "0 supposé"
+ * (bug : cible pré-remplie + mesure vide recommandait cible×volume kg de sel).
  */
 function calcSel(volume, selMesure, selSouhaite){
-  if(volume == null || selSouhaite == null) return null;
-  const actuel = selMesure ?? 0;
+  if(volume == null || selSouhaite == null || selMesure == null) return null;
+  const actuel = selMesure;
   const delta = selSouhaite - actuel;
   if(delta <= 0){
     if(actuel - selSouhaite > 0.5) return {action:'dilution', delta: actuel - selSouhaite, kg:0};
@@ -442,8 +487,8 @@ function calcSel(volume, selMesure, selSouhaite){
  * Au-delà de cyaSouhaite + 10, on ne propose pas d'ajout (gestion via vidange — computeDrainActions).
  */
 function calcCYA(volume, cyaMesure, cyaSouhaite){
-  if(volume == null || cyaSouhaite == null) return null;
-  const actuel = cyaMesure ?? 0;
+  if(volume == null || cyaSouhaite == null || cyaMesure == null) return null;
+  const actuel = cyaMesure;
   const delta = cyaSouhaite - actuel;
   if(delta <= 0) return {action:'ok', delta:0, g:0};
   return {action:'ajout', delta, g: delta * volume};
@@ -455,8 +500,8 @@ function calcCYA(volume, cyaMesure, cyaSouhaite){
  * Pour +10 ppm CaCO₃ : ~11 g/m³ de CaCl₂ → ~11 g/m³ par °f
  */
 function calcCalcium(volume, thMesure, thSouhaite){
-  if(volume == null || thSouhaite == null) return null;
-  const actuel = thMesure ?? 0;
+  if(volume == null || thSouhaite == null || thMesure == null) return null;
+  const actuel = thMesure;
   const delta = thSouhaite - actuel;
   if(delta <= 0) return {action: actuel > thSouhaite + 5 ? 'haut' : 'ok', delta:0, gCaCl2:0};
   return {action:'ajout', delta, gCaCl2: 11 * delta * volume};
@@ -478,8 +523,8 @@ function calcAntiPhosphate(volume, phosphate){
  * Cible 2 – 4 ppm. Pastilles BCDMH : 1 g/m³ ≈ 0,5 ppm Br²
  */
 function calcBrome(volume, brome, cible=3){
-  if(volume == null) return null;
-  const actuel = brome ?? 0;
+  if(volume == null || brome == null) return null;
+  const actuel = brome;
   const delta = cible - actuel;
   if(delta <= 0) return {action: actuel > 5 ? 'haut' : 'ok', delta:0, grammes:0};
   return {action:'ajout', delta, grammes: 2 * delta * volume};
@@ -1026,6 +1071,46 @@ function resetForm(){
   toast('Formulaire réinitialisé');
 }
 
+// ============== Validation des plages de saisie ==============
+// Bornes physiques plausibles : au-delà, c'est une erreur de saisie ou de test
+// (pH 14, température négative…). On bloque l'enregistrement — les formules
+// produiraient des doses absurdes et l'historique serait pollué.
+const INPUT_RANGES = {
+  volume:      {min:0.5, max:2000,  label:'Volume',       unit:'m³'},
+  ph:          {min:4,   max:10,    label:'pH mesuré',    unit:''},
+  phSouhaite:  {min:6.8, max:8.2,   label:'pH souhaité',  unit:''},
+  fcl:         {min:0,   max:30,    label:'Chlore libre', unit:'ppm'},
+  tcl:         {min:0,   max:30,    label:'Chlore total', unit:'ppm'},
+  tac:         {min:0,   max:500,   label:'TAC',          unit:'ppm'},
+  tacSouhaite: {min:20,  max:300,   label:'TAC visé',     unit:'ppm'},
+  cya:         {min:0,   max:300,   label:'CYA',          unit:'ppm'},
+  cyaSouhaite: {min:0,   max:150,   label:'CYA visé',     unit:'ppm'},
+  temp:        {min:0,   max:45,    label:'Température',  unit:'°C'},
+  sel:         {min:0,   max:20,    label:'Sel',          unit:'g/L'},
+  selSouhaite: {min:0,   max:10,    label:'Sel visé',     unit:'g/L'},
+  th:          {min:0,   max:200,   label:'TH',           unit:'°f'},
+  thSouhaite:  {min:0,   max:60,    label:'TH visé',      unit:'°f'},
+  phosphate:   {min:0,   max:10000, label:'Phosphates',   unit:'ppb'},
+  brome:       {min:0,   max:30,    label:'Brome',        unit:'ppm'}
+};
+
+function validateMeasurement(m){
+  const errors = [];
+  Object.entries(INPUT_RANGES).forEach(([key, r]) => {
+    const v = m[key];
+    if(v == null) return;
+    if(v < r.min || v > r.max){
+      errors.push(`${r.label} ${fmt(v,2)}${r.unit ? ' '+r.unit : ''} hors plage plausible (${r.min}–${r.max}${r.unit ? ' '+r.unit : ''})`);
+    }
+  });
+  // Tcl < Fcl est physiquement impossible (Tcl = Fcl + chlore combiné).
+  // Tolérance 0,3 ppm pour l'imprécision des tests colorimétriques.
+  if(m.fcl != null && m.tcl != null && m.tcl < m.fcl - 0.3){
+    errors.push(`Chlore total (${fmt(m.tcl,2)}) inférieur au chlore libre (${fmt(m.fcl,2)}) — vérifie tes mesures`);
+  }
+  return errors;
+}
+
 function saveAndCalc(){
   const m = readInputs();
   if(m.volume === null){
@@ -1035,6 +1120,12 @@ function saveAndCalc(){
   const hasMeasure = m.ph!==null || m.fcl!==null || m.tcl!==null || m.tac!==null;
   if(!hasMeasure){
     toast('Saisis au moins une mesure','warn');
+    return;
+  }
+  const errors = validateMeasurement(m);
+  if(errors.length){
+    const extra = errors.length > 1 ? ` (+${errors.length-1} autre${errors.length>2?'s':''})` : '';
+    toast('Valeur aberrante : ' + errors[0] + extra, 'warn', 5000);
     return;
   }
 
@@ -1568,7 +1659,16 @@ function renderCorrections(measurement, targetContainer){
   }
 
   // ===== Sel (électrolyse) =====
-  if(m.selSouhaite !== null || m.sel !== null){
+  if(m.modeDesinf === 'sel' && m.sel == null){
+    // Mesure absente : on ne dose jamais depuis un 0 supposé — on invite à mesurer.
+    html += `<div class="card">
+      <div class="card-header"><div class="card-title"><span class="dot"></span>Sel</div></div>
+      <div class="result">
+        <div class="result-label">Sel non mesuré</div>
+        <div class="result-note">Renseigne la salinité mesurée pour calculer un éventuel apport (cible ${fmt(m.selSouhaite ?? 4.0,1)} g/L). Aucune dose n'est proposée sans mesure.</div>
+      </div>
+    </div>`;
+  } else if(m.selSouhaite != null || m.sel != null){
     const cible = m.selSouhaite ?? 4.0;
     const s = calcSel(m.volume, m.sel, cible);
     if(s){
@@ -1605,7 +1705,7 @@ function renderCorrections(measurement, targetContainer){
   }
 
   // ===== Calcium / TH =====
-  if(m.thSouhaite !== null || m.th !== null){
+  if(m.thSouhaite != null || m.th != null){
     const cible = m.thSouhaite ?? 25;
     const ca = calcCalcium(m.volume, m.th, cible);
     // LSI (si calculable) : les recos de dureté ne se déclenchent que si le TH
@@ -1655,7 +1755,7 @@ function renderCorrections(measurement, targetContainer){
           </div>
         </div>`;
       }
-    } else if(m.th !== null){
+    } else if(m.th != null){
       html += `<div class="card">
         <div class="card-header"><div class="card-title"><span class="dot"></span>TH</div></div>
         <div class="result ok">
@@ -1731,7 +1831,15 @@ function renderCorrections(measurement, targetContainer){
   }
 
   // ===== Brome (si mode brome) =====
-  if(m.modeDesinf === 'brome'){
+  if(m.modeDesinf === 'brome' && m.brome == null){
+    html += `<div class="card">
+      <div class="card-header"><div class="card-title"><span class="dot"></span>Brome</div></div>
+      <div class="result">
+        <div class="result-label">Brome non mesuré</div>
+        <div class="result-note">Renseigne le brome mesuré pour calculer la dose de pastilles BCDMH (cible 3 ppm). Aucune dose n'est proposée sans mesure.</div>
+      </div>
+    </div>`;
+  } else if(m.modeDesinf === 'brome'){
     const br = calcBrome(m.volume, m.brome, 3);
     if(br && br.action === 'ajout'){
       html += `<div class="card">
@@ -1989,7 +2097,8 @@ function uiConfirmResolve(val){
 async function deleteMeasurement(idx){
   if(!(await uiConfirm({ message: 'Supprimer cette mesure ?', confirmLabel: 'Supprimer' }))) return;
   const list = loadActiveMeasurements();
-  list.splice(idx, 1);
+  const removed = list.splice(idx, 1);
+  addMeasureTombstones(removed);
   saveActiveMeasurements(list);
   renderHistory();
   renderCharts();
@@ -2010,6 +2119,7 @@ async function deleteAllMeasurements(){
     message: `Supprimer les ${n} mesure${n>1?'s':''} de « ${b ? b.nom : 'ce bassin'} » ?\n\nCette action est irréversible.`,
     confirmLabel: 'Tout supprimer'
   }))) return;
+  addMeasureTombstones(list);
   saveActiveMeasurements([]);
   renderHistory();
   renderCharts();
@@ -2442,6 +2552,9 @@ function importData(event){
   reader.onload = e => {
     try{
       const data = JSON.parse(e.target.result);
+      // Restauration volontaire : on oublie les suppressions passées, sinon la
+      // sync compte re-supprimerait des mesures présentes dans le fichier importé.
+      localStorage.removeItem(STORAGE_KEYS.deletedMeasures);
       if(data.measurements) saveJSON(STORAGE_KEYS.measurements, data.measurements);
       if(data.reminders) saveJSON(STORAGE_KEYS.reminders, data.reminders);
       if(data.lastInputs) saveJSON(STORAGE_KEYS.lastInputs, data.lastInputs);
@@ -2596,6 +2709,9 @@ async function restoreFromCode(){
   try{
     const res = await backupCall({action:'restore', code});
     const d = res.data || {};
+    // Restauration volontaire : purge des tombstones pour ne pas re-supprimer
+    // des mesures que l'utilisateur vient précisément de restaurer.
+    localStorage.removeItem(STORAGE_KEYS.deletedMeasures);
 
     // Backup d'un bassin unique → fusion (ajouter ce bassin + ses mesures à l'existant)
     if(d.type === 'single-bassin' && d.bassin){
@@ -5168,7 +5284,15 @@ function saveHistEntryEdits(){
   const dEl = $('histEditDate'), nEl = $('histEditNote');
   if(dEl && dEl.value){
     const d = new Date(dEl.value);
-    if(!isNaN(d.getTime())) m.date = d.toISOString();
+    if(!isNaN(d.getTime())){
+      const newIso = d.toISOString();
+      if(m.date && m.date !== newIso){
+        // La ligne cloud est indexée par date (upsert user_id+measured_at) : tombstone
+        // par date (sans id : la mesure garde le sien) pour nettoyer l'orpheline.
+        addMeasureTombstones([{id: null, date: m.date}]);
+      }
+      m.date = newIso;
+    }
   }
   if(nEl){ const t = nEl.value.trim(); m.note = t ? t : null; }
   saveActiveMeasurements(list);
@@ -5557,6 +5681,7 @@ const SYNCABLE_KEYS = new Set([
   STORAGE_KEYS.reminders,
   STORAGE_KEYS.optionalFields,
   STORAGE_KEYS.lastInputs,
+  STORAGE_KEYS.deletedMeasures,
   'cp_theme_mode_v1',
   'cp_hist_metrics_v1',
   'cp_desktop_view_v1',
@@ -5699,6 +5824,8 @@ function collectConfigPayload(){
     bassins: loadJSON(STORAGE_KEYS.bassins, []),
     active_bassin_id: localStorage.getItem(STORAGE_KEYS.activeBassin) || null,
     last_inputs: loadJSON(STORAGE_KEYS.lastInputs, null),
+    // Tombstones : propage les suppressions de mesures aux autres appareils
+    deleted_measures: getMeasureTombstones(),
   };
 }
 function collectPrefsPayload(){
@@ -5755,6 +5882,24 @@ async function syncPushAll(){
     await supa.from('cp_pool_config').upsert({ user_id: uid, data: payload, updated_at: nowIso });
     await supa.from('cp_preferences').upsert({ user_id: uid, data: collectPrefsPayload(), updated_at: nowIso });
     await supa.from('cp_reminders').upsert({ user_id: uid, data: loadJSON(STORAGE_KEYS.reminders, {}), updated_at: nowIso });
+    // Suppressions cloud AVANT les upserts : une mesure re-créée à la même date
+    // (id neuf, hors tombstone par id) ne doit pas être effacée par le delete.
+    const tombs = getMeasureTombstones();
+    if(tombs.length){
+      const ids = [...new Set(tombs.map(t => t.id).filter(Boolean))];
+      for(let i=0; i<ids.length; i+=100){
+        const { error } = await supa.from('cp_measurements').delete()
+          .eq('user_id', uid).in('data->>id', ids.slice(i, i+100));
+        if(error) throw error;
+      }
+      // Tombstones legacy sans id : suppression par date de mesure
+      const dates = [...new Set(tombs.filter(t => !t.id && t.date).map(t => t.date))];
+      for(let i=0; i<dates.length; i+=100){
+        const { error } = await supa.from('cp_measurements').delete()
+          .eq('user_id', uid).in('measured_at', dates.slice(i, i+100));
+        if(error) throw error;
+      }
+    }
     const localMeasures = loadJSON(STORAGE_KEYS.measurements, []);
     if(localMeasures.length){
       const rows = localMeasures.filter(m => m && m.date).map(m => ({
@@ -5801,6 +5946,24 @@ async function syncPullAll(){
       }
       if(d.active_bassin_id) _rawSetItem(STORAGE_KEYS.activeBassin, d.active_bassin_id);
       if(d.last_inputs) _rawSetItem(STORAGE_KEYS.lastInputs, JSON.stringify(d.last_inputs));
+      // Tombstones venus d'un autre appareil : union avec les locales, puis
+      // application immédiate (une mesure supprimée ailleurs disparaît ici aussi).
+      if(Array.isArray(d.deleted_measures) && d.deleted_measures.length){
+        const localTombs = getMeasureTombstones();
+        d.deleted_measures.forEach(t => {
+          if(!t || (!t.id && !t.date)) return;
+          if(localTombs.some(x => (t.id && x.id === t.id) || (!t.id && !x.id && x.date === t.date))) return;
+          localTombs.push(t);
+        });
+        _rawSetItem(STORAGE_KEYS.deletedMeasures, JSON.stringify(localTombs.slice(-TOMBSTONE_MAX)));
+      }
+    }
+    // Purge locale des mesures tombstonées (même sans mesures cloud à merger)
+    const tombsPull = getMeasureTombstones();
+    if(tombsPull.length){
+      const allLocal = loadJSON(STORAGE_KEYS.measurements, []);
+      const kept = allLocal.filter(m => !isMeasureTombstoned(tombsPull, m, null));
+      if(kept.length !== allLocal.length) _rawSetItem(STORAGE_KEYS.measurements, JSON.stringify(kept));
     }
     if(prefs.data && prefs.data.data){
       const d = prefs.data.data;
@@ -5828,6 +5991,8 @@ async function syncPullAll(){
       local.forEach(m => { const k = keyFor(m, null); if(k) byKey.set(k, { m, updated: 0 }); });
       meas.data.forEach(row => {
         const m = row.data;
+        // Ligne cloud tombstonée (supprimée localement, delete pas encore poussé) : on ne la ressuscite pas
+        if(isMeasureTombstoned(tombsPull, m, row.measured_at)) return;
         const k = keyFor(m, row);
         if(!k) return;
         const updated = row.updated_at ? new Date(row.updated_at).getTime() : 1;
@@ -5938,8 +6103,8 @@ async function handleFirstLogin(){
       const geoBackup = {};
       localBassins.forEach(b => { if(b && b.id && b.config && b.config.geo) geoBackup[b.id] = b.config.geo; });
       [STORAGE_KEYS.measurements, STORAGE_KEYS.bassins, STORAGE_KEYS.activeBassin, STORAGE_KEYS.reminders,
-       STORAGE_KEYS.optionalFields, STORAGE_KEYS.lastInputs, 'cp_theme_mode_v1', 'cp_hist_metrics_v1',
-       'cp_desktop_view_v1'].forEach(k => _rawRemoveItem(k));
+       STORAGE_KEYS.optionalFields, STORAGE_KEYS.lastInputs, STORAGE_KEYS.deletedMeasures,
+       'cp_theme_mode_v1', 'cp_hist_metrics_v1', 'cp_desktop_view_v1'].forEach(k => _rawRemoveItem(k));
       await syncPullAll();
       // Restaure le geo pour les bassins qui matchent par id (le cloud les a peut-être sans geo)
       if(Object.keys(geoBackup).length){
@@ -6004,6 +6169,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 const RELEASE_NOTES_KEY = 'cp_release_notes_seen_v1';
 
 const RELEASE_NOTES = [
+  {
+    version: '1.26.0',
+    icon: '🛡️',
+    color: '#34d399',
+    title: 'Doses plus sûres + suppressions définitives',
+    body: "Trois garde-fous importants. 1) L'app ne calcule plus jamais de dose à partir d'une mesure non saisie : un sel ou un TH laissé vide n'est plus traité comme « 0 » (ce qui pouvait suggérer des dizaines de kilos de sel à tort) — une carte t'invite à mesurer d'abord. 2) Les valeurs aberrantes (pH 14, température négative…) sont refusées à l'enregistrement avec un message clair. 3) Pour les comptes synchronisés, les mesures supprimées le sont désormais aussi dans le cloud : fini les mesures qui « ressuscitaient » à la session suivante, y compris sur tes autres appareils.",
+  },
   {
     version: '1.25.1',
     icon: '🔗',

@@ -1325,7 +1325,7 @@
       <div class="field">
         <label>Volume du bassin</label>
         <div class="input-wrap">
-          <input type="number" id="volume" step="0.1" placeholder="70" inputmode="decimal">
+          <input type="number" id="volume" min="0.5" max="2000" step="0.1" placeholder="70" inputmode="decimal">
           <span class="input-unit">m³</span>
         </div>
       </div>
@@ -1339,13 +1339,13 @@
         <div class="field">
           <label>pH mesuré</label>
           <div class="input-wrap">
-            <input type="number" id="phMesure" step="0.1" placeholder="7.5" inputmode="decimal">
+            <input type="number" id="phMesure" min="4" max="10" step="0.1" placeholder="7.5" inputmode="decimal">
           </div>
         </div>
         <div class="field">
           <label>pH souhaité</label>
           <div class="input-wrap">
-            <input type="number" id="phSouhaite" step="0.1" placeholder="7.2" inputmode="decimal">
+            <input type="number" id="phSouhaite" min="6.8" max="8.2" step="0.1" placeholder="7.2" inputmode="decimal">
           </div>
         </div>
       </div>
@@ -1359,14 +1359,14 @@
         <div class="field">
           <label>Chlore libre (Fcl)</label>
           <div class="input-wrap">
-            <input type="number" id="fcl" step="0.01" placeholder="0.21" inputmode="decimal">
+            <input type="number" id="fcl" min="0" max="30" step="0.01" placeholder="0.21" inputmode="decimal">
             <span class="input-unit">ppm</span>
           </div>
         </div>
         <div class="field">
           <label>Chlore total (Tcl)</label>
           <div class="input-wrap">
-            <input type="number" id="tcl" step="0.01" placeholder="2.52" inputmode="decimal">
+            <input type="number" id="tcl" min="0" max="30" step="0.01" placeholder="2.52" inputmode="decimal">
             <span class="input-unit">ppm</span>
           </div>
         </div>
@@ -1383,7 +1383,7 @@
         <div class="field">
           <label>Brome mesuré</label>
           <div class="input-wrap">
-            <input type="number" id="brome" step="0.1" placeholder="2.5" inputmode="decimal">
+            <input type="number" id="brome" min="0" max="30" step="0.1" placeholder="2.5" inputmode="decimal">
             <span class="input-unit">ppm</span>
           </div>
         </div>
@@ -1398,14 +1398,14 @@
         <div class="field">
           <label>TAC mesuré</label>
           <div class="input-wrap">
-            <input type="number" id="tacMesure" step="1" placeholder="41" inputmode="decimal">
+            <input type="number" id="tacMesure" min="0" max="500" step="1" placeholder="41" inputmode="decimal">
             <span class="input-unit">ppm</span>
           </div>
         </div>
         <div class="field">
           <label>TAC visé</label>
           <div class="input-wrap">
-            <input type="number" id="tacSouhaite" step="1" placeholder="80" inputmode="decimal">
+            <input type="number" id="tacSouhaite" min="20" max="300" step="1" placeholder="80" inputmode="decimal">
             <span class="input-unit">ppm</span>
           </div>
         </div>
@@ -1414,14 +1414,14 @@
         <div class="field">
           <label>CYA mesuré</label>
           <div class="input-wrap">
-            <input type="number" id="cya" step="1" placeholder="30" inputmode="decimal">
+            <input type="number" id="cya" min="0" max="300" step="1" placeholder="30" inputmode="decimal">
             <span class="input-unit">ppm</span>
           </div>
         </div>
         <div class="field">
           <label>CYA visé</label>
           <div class="input-wrap">
-            <input type="number" id="cyaSouhaite" step="1" placeholder="30" inputmode="decimal">
+            <input type="number" id="cyaSouhaite" min="0" max="150" step="1" placeholder="30" inputmode="decimal">
             <span class="input-unit">ppm</span>
           </div>
         </div>
@@ -1439,7 +1439,7 @@
           <div class="field">
             <label>Température eau</label>
             <div class="input-wrap">
-              <input type="number" id="temp" step="0.5" placeholder="26" inputmode="decimal">
+              <input type="number" id="temp" min="0" max="45" step="0.5" placeholder="26" inputmode="decimal">
               <span class="input-unit">°C</span>
             </div>
           </div>
@@ -1457,14 +1457,14 @@
           <div class="field">
             <label>Sel mesuré</label>
             <div class="input-wrap">
-              <input type="number" id="selMesure" step="0.1" placeholder="3.5" inputmode="decimal">
+              <input type="number" id="selMesure" min="0" max="20" step="0.1" placeholder="3.5" inputmode="decimal">
               <span class="input-unit">g/L</span>
             </div>
           </div>
           <div class="field">
             <label>Sel cible</label>
             <div class="input-wrap">
-              <input type="number" id="selSouhaite" step="0.1" placeholder="4.0" inputmode="decimal">
+              <input type="number" id="selSouhaite" min="0" max="10" step="0.1" placeholder="4.0" inputmode="decimal">
               <span class="input-unit">g/L</span>
             </div>
           </div>
@@ -1474,14 +1474,14 @@
           <div class="field">
             <label>TH mesuré</label>
             <div class="input-wrap">
-              <input type="number" id="thMesure" step="1" placeholder="15" inputmode="decimal">
+              <input type="number" id="thMesure" min="0" max="200" step="1" placeholder="15" inputmode="decimal">
               <span class="input-unit">°f</span>
             </div>
           </div>
           <div class="field">
             <label>TH visé</label>
             <div class="input-wrap">
-              <input type="number" id="thSouhaite" step="1" placeholder="25" inputmode="decimal">
+              <input type="number" id="thSouhaite" min="0" max="60" step="1" placeholder="25" inputmode="decimal">
               <span class="input-unit">°f</span>
             </div>
           </div>
@@ -1491,7 +1491,7 @@
           <div class="field" data-optional-field="phosphate">
             <label>Phosphates</label>
             <div class="input-wrap">
-              <input type="number" id="phosphate" step="10" placeholder="200" inputmode="decimal">
+              <input type="number" id="phosphate" min="0" max="10000" step="10" placeholder="200" inputmode="decimal">
               <span class="input-unit">ppb</span>
             </div>
           </div>
@@ -1723,14 +1723,14 @@
         <div class="field">
           <label>Volume du bassin</label>
           <div class="input-wrap">
-            <input type="number" id="cfgVolume" step="0.1" placeholder="70" inputmode="decimal">
+            <input type="number" id="cfgVolume" min="0.5" max="2000" step="0.1" placeholder="70" inputmode="decimal">
             <span class="input-unit">m³</span>
           </div>
         </div>
         <div class="field">
           <label>Débit pompe <span style="opacity:.5;font-size:10px">(filtration)</span></label>
           <div class="input-wrap">
-            <input type="number" id="cfgDebit" step="0.5" placeholder="12" inputmode="decimal">
+            <input type="number" id="cfgDebit" min="0.5" max="200" step="0.5" placeholder="12" inputmode="decimal">
             <span class="input-unit">m³/h</span>
           </div>
         </div>
@@ -1739,13 +1739,13 @@
         <div class="field">
           <label>pH souhaité</label>
           <div class="input-wrap">
-            <input type="number" id="cfgPhSouhaite" step="0.1" placeholder="7.2" inputmode="decimal">
+            <input type="number" id="cfgPhSouhaite" min="6.8" max="8.2" step="0.1" placeholder="7.2" inputmode="decimal">
           </div>
         </div>
         <div class="field">
           <label>TAC visé</label>
           <div class="input-wrap">
-            <input type="number" id="cfgTacSouhaite" step="1" placeholder="80" inputmode="decimal">
+            <input type="number" id="cfgTacSouhaite" min="20" max="300" step="1" placeholder="80" inputmode="decimal">
             <span class="input-unit">ppm</span>
           </div>
         </div>
@@ -1753,7 +1753,7 @@
       <div class="field">
         <label>CYA visé <span style="opacity:.5;font-size:10px">(stabilisant)</span></label>
         <div class="input-wrap">
-          <input type="number" id="cfgCyaSouhaite" step="1" placeholder="30" inputmode="decimal">
+          <input type="number" id="cfgCyaSouhaite" min="0" max="150" step="1" placeholder="30" inputmode="decimal">
           <span class="input-unit">ppm</span>
         </div>
       </div>
@@ -1772,14 +1772,14 @@
             <div class="field">
               <label>Sel cible</label>
               <div class="input-wrap">
-                <input type="number" id="cfgSelSouhaite" step="0.1" placeholder="4.0" inputmode="decimal">
+                <input type="number" id="cfgSelSouhaite" min="0" max="10" step="0.1" placeholder="4.0" inputmode="decimal">
                 <span class="input-unit">g/L</span>
               </div>
             </div>
             <div class="field">
               <label>TH visé</label>
               <div class="input-wrap">
-                <input type="number" id="cfgThSouhaite" step="1" placeholder="25" inputmode="decimal">
+                <input type="number" id="cfgThSouhaite" min="0" max="60" step="1" placeholder="25" inputmode="decimal">
                 <span class="input-unit">°f</span>
               </div>
             </div>
