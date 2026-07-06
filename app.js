@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.25.0';
+const APP_VERSION = '1.25.1';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -4553,7 +4553,10 @@ async function checkShareMode(){
     const data = await resp.json();
     _viewerMode = true;
     _viewerBassin = data.bassin;
-    _viewerMeasurements = (data.measurements || []).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+    // Tri chronologique CROISSANT (plus ancienne -> plus récente), comme en mode normal :
+    // le reste de l'app lit la dernière mesure via list.slice(-1)[0]. Trier décroissant
+    // ici faisait afficher la mesure la PLUS ANCIENNE comme "dernier contrôle" (bug lien partagé).
+    _viewerMeasurements = (data.measurements || []).slice().sort((a, b) => new Date(a.date) - new Date(b.date));
     _viewerOwnerLabel = data.bassinName;
     document.body.classList.add('viewer-mode');
     showViewerBanner();
@@ -6001,6 +6004,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 const RELEASE_NOTES_KEY = 'cp_release_notes_seen_v1';
 
 const RELEASE_NOTES = [
+  {
+    version: '1.25.1',
+    icon: '🔗',
+    color: '#7fdbda',
+    title: 'Lien partagé : bonne dernière mesure',
+    body: "Correction d'un bug d'affichage sur les liens de partage en lecture seule : la vue partagée pouvait montrer la mesure la plus ancienne comme « dernier contrôle » au lieu de la plus récente (écart de score et de valeurs, notamment le CYA, par rapport à ta page récap). Le lien affiche désormais exactement la même dernière mesure que ta page récap. Aucune donnée n'était touchée — c'était uniquement l'affichage.",
+  },
   {
     version: '1.25.0',
     icon: '🧹',
