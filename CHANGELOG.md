@@ -5,6 +5,15 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.27.0] — 2026-07-06
+
+### Corrigé
+- **Image partagée alignée sur la page Doses (moteur de règles unique)** : les recommandations étaient dupliquées entre `renderCorrections` (écran) et `getActionsTextList` (image « Mon contrôle du jour ») et avaient divergé — l'image proposait de la javel en mode brome, une dose normale au lieu du choc quand Fcl < 50 % de la cible, ignorait les garde-fous LSI du TAC et de la dureté, et omettait le pH+, l'apport de stabilisant, la dose d'entretien et les vidanges partielles. Les deux consomment désormais un moteur commun `computeCorrectionPlan(m)` ; le refactor de l'écran est validé par comparaison HTML byte-à-byte sur 35 scénarios (aucun changement visuel). La liste d'actions de l'image passe de 6 lignes coupées en silence à 8 lignes + mention « +N autres » et réduit/ellipse les lignes trop longues.
+- **Lint CI réparé** : suppression du doublon `escapeHtml` (écrasé par hoisting) et déclaration des globals `window.*` dans `.eslintrc.json` — le workflow Lint échouait sur ces 7 erreurs depuis plusieurs versions.
+
+### Ajouté
+- **Suite de tests `tests/run.js`** (Node pur, zéro dépendance, branchée dans le workflow CI) : non-régression des formules chimiques, garde « jamais de dose sans mesure », validation des plages, tombstones de suppression, et 600+ assertions de cohérence écran ↔ image partagée sur une matrice de 35 scénarios — toute règle de dose ajoutée hors du moteur commun fait échouer la CI.
+
 ## [1.26.0] — 2026-07-06
 
 ### Corrigé

@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.26.0';
+const APP_VERSION = '1.27.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -903,9 +903,8 @@ function setMesureDateNow(force){
   if(el && (force || !el.value)) el.value = toLocalDatetimeValue(new Date());
 }
 
-function escapeHtml(str){
-  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
+// escapeHtml : définition unique dans la section Admin (gère aussi null/undefined).
+// L'ancienne copie ici était écrasée par hoisting — supprimée (no-redeclare).
 
 function loadLastInputs(){
   const last = loadJSON(STORAGE_KEYS.lastInputs, null);
@@ -1302,6 +1301,164 @@ function renderDosesTab(){
   renderCorrections(dosesContextMeasure() || readInputs());
 }
 
+/**
+ * MOTEUR DE RÈGLES UNIQUE des recommandations de doses.
+ *
+ * Toutes les décisions (quelle carte, quelle dose, quels garde-fous LSI/mode)
+ * sont calculées ICI, puis consommées par :
+ *   - renderCorrections (page Doses, HTML)
+ *   - getActionsTextList (image partagée, texte)
+ * Avant, les deux dupliquaient les règles et divergeaient (l'image proposait de
+ * la javel en mode brome, une dose normale au lieu du choc, ignorait les gardes
+ * LSI…). Ne JAMAIS ajouter une règle de dose ailleurs que dans cette fonction.
+ *
+ * Retourne un "plan" : une entrée par section, null si la section ne s'applique
+ * pas, sinon {type, …données}. Les types par section :
+ *   phTargetOut : {range}                          cible pH hors plage saine
+ *   ph          : down | slightly-low | up | ok
+ *   chloration  : dose | maintenance | ok           (Fcl ≥ 50 % de la cible)
+ *   superchloration : dose | ok                     (Ccl mesurable)
+ *   choc        : options                           (Fcl < 50 % de la cible)
+ *   tac         : blocked-lsi | dose | ok
+ *   sel         : missing | ajout | dilution | ok
+ *   th          : low-balanced | dose | high-balanced | high | ok
+ *   cya         : dose | ok
+ *   phosphate   : traiter | surveiller | ok
+ *   brome       : missing | dose | haut | ok
+ *   drains      : liste computeDrainActions (toujours un tableau)
+ */
+function computeCorrectionPlan(m){
+  const plan = { isBrome: m.modeDesinf === 'brome', phTargetOut: null, ph: null,
+    chloration: null, superchloration: null, choc: null, tac: null, sel: null,
+    th: null, cya: null, phosphate: null, brome: null, drains: [] };
+  if(m.volume == null) return plan;
+  const isBrome = plan.isBrome;
+
+  // ----- pH : cible hors plage saine pour le mode -----
+  if(m.phSouhaite !== null && m.phSouhaite !== undefined){
+    const pr = phRangeForMode(m.modeDesinf);
+    if(m.phSouhaite < pr.dangerLow || m.phSouhaite > pr.dangerHigh){
+      plan.phTargetOut = { range: pr };
+    }
+  }
+  // ----- pH mesuré vs cible -----
+  if(m.ph !== null && m.phSouhaite !== null && m.ph > m.phSouhaite){
+    plan.ph = { type:'down', delta: m.ph - m.phSouhaite,
+      hcl: calcHcl(m.volume, m.ph, m.phSouhaite),
+      poudre: calcPhPoudre(m.volume, m.ph, m.phSouhaite) };
+  } else if(m.ph !== null && m.phSouhaite !== null && m.ph < m.phSouhaite - 0.05){
+    const phPlus = calcPhPlus(m.volume, m.ph, m.phSouhaite);
+    const phDelta = m.phSouhaite - m.ph;
+    const tacBas = m.tac !== null && m.tacSouhaite !== null && m.tac < m.tacSouhaite;
+    // Doctrine SOS Piscine : Δ < 0,2 → on ne court pas après le pH.
+    if(phDelta < 0.2) plan.ph = { type:'slightly-low', delta: phDelta, phPlus, tacBas };
+    else if(phPlus) plan.ph = { type:'up', delta: phDelta, phPlus };
+  } else if(m.ph !== null && m.phSouhaite !== null){
+    plan.ph = { type:'ok' };
+  }
+  // ----- Chloration normale / entretien (Fcl ≥ 50 % de la cible CYA/10) -----
+  if(!isBrome && m.fcl !== null && m.cya !== null && m.fcl >= calcFclVise(m.cya) * 0.5){
+    const chl = calcJavelChloration(m.volume, m.fcl, m.cya);
+    if(chl.litres > 0){
+      plan.chloration = { type:'dose', chl };
+    } else {
+      // Entretien quotidien en mode chlore uniquement — sel auto-régule, brome exclu plus haut.
+      const maint = (m.modeDesinf === 'chlore' || !m.modeDesinf)
+        ? calcChloreMaintenance(m.volume, m.temp, m.cya) : null;
+      if(maint && maint.javelL >= 0.05) plan.chloration = { type:'maintenance', chl, maint };
+      else plan.chloration = { type:'ok', chl };
+    }
+  }
+  // ----- Superchloration (chloramines) -----
+  if(!isBrome && m.fcl !== null && m.tcl !== null){
+    const ccl = m.tcl - m.fcl;
+    const sc = calcSuperchloration(m.volume, ccl);
+    plan.superchloration = sc ? { type:'dose', ccl, sc } : { type:'ok', ccl };
+  }
+  // ----- Chloration choc (Fcl < 50 % de la cible : remise à niveau OU choc) -----
+  if(!isBrome && m.fcl !== null && m.cya !== null && m.fcl < calcFclVise(m.cya) * 0.5){
+    const choc = calcChlorationChoc(m.volume, m.fcl, m.cya, 5);
+    if(choc.javel > 0 || choc.hypocalcium > 0){
+      // Boost optionnel : pré-baisser le pH à 6,8 si le gain HOCl dépasse +10 %.
+      let boost = null;
+      if(m.ph !== null && m.ph > 6.9){
+        const fclPost = calcFclVise(m.cya) * 5;
+        const pctActuel = calcHOClPctFromCYA(fclPost, m.ph, m.cya);
+        const pct68 = calcHOClPctFromCYA(fclPost, 6.8, m.cya);
+        if(pctActuel && pct68 && pct68 > pctActuel * 1.10){
+          boost = { gain: ((pct68 / pctActuel) - 1) * 100, pctActuel, pct68,
+                    hclTo68: calcHcl(m.volume, m.ph, 6.8) };
+        }
+      }
+      plan.choc = { type:'options', choc,
+        chlNorm: calcJavelChloration(m.volume, m.fcl, m.cya), boost };
+    }
+  }
+  // ----- TAC (monter le TAC est bloqué si l'eau est déjà entartrante) -----
+  if(m.tac !== null && m.tacSouhaite !== null){
+    const tacPlus = calcTacPlus(m.volume, m.tac, m.tacSouhaite);
+    const lsiTAC = (m.ph!==null && m.temp!==null && m.th!==null && m.tac!==null)
+      ? calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel') : null;
+    if(tacPlus && lsiTAC !== null && lsiTAC > 0.3) plan.tac = { type:'blocked-lsi', tacPlus, lsi: lsiTAC };
+    else if(tacPlus) plan.tac = { type:'dose', tacPlus };
+    else plan.tac = { type:'ok' };
+  }
+  // ----- Sel (jamais de dose sans mesure) -----
+  if(m.modeDesinf === 'sel' && m.sel == null){
+    plan.sel = { type:'missing', cible: m.selSouhaite ?? 4.0 };
+  } else if(m.selSouhaite != null || m.sel != null){
+    const cible = m.selSouhaite ?? 4.0;
+    const s = calcSel(m.volume, m.sel, cible);
+    if(s){
+      if(s.action === 'ajout') plan.sel = { type:'ajout', s, cible };
+      else if(s.action === 'dilution') plan.sel = { type:'dilution', s, cible };
+      else if(m.sel !== null) plan.sel = { type:'ok', s, cible };
+    }
+  }
+  // ----- TH (recos conditionnées au LSI dans les deux sens) -----
+  if(m.thSouhaite != null || m.th != null){
+    const cible = m.thSouhaite ?? 25;
+    const ca = calcCalcium(m.volume, m.th, cible);
+    const lsiTH = (m.ph!==null && m.temp!==null && m.th!==null && m.tac!==null)
+      ? calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel') : null;
+    if(ca && ca.action === 'ajout'){
+      if(lsiTH !== null && lsiTH >= -0.3) plan.th = { type:'low-balanced', cible, lsi: lsiTH };
+      else plan.th = { type:'dose', ca, cible, lsi: lsiTH };
+    } else if(ca && ca.action === 'haut'){
+      if(lsiTH !== null && lsiTH <= 0.3) plan.th = { type:'high-balanced', cible, lsi: lsiTH };
+      else plan.th = { type:'high', cible, lsi: lsiTH };
+    } else if(m.th != null){
+      plan.th = { type:'ok', cible };
+    }
+  }
+  // ----- CYA (apport si trop bas ; l'excès est géré par drains) -----
+  if(!isBrome && m.cya !== null){
+    const cible = m.cyaSouhaite ?? 30;
+    const c = calcCYA(m.volume, m.cya, cible);
+    if(c && c.action === 'ajout' && c.g >= 5) plan.cya = { type:'dose', c, cible };
+    else if(c && c.action === 'ok' && m.cya >= cible - 5 && m.cya <= cible + 5) plan.cya = { type:'ok', cible };
+  }
+  // ----- Phosphates -----
+  if(m.phosphate !== null){
+    const p = calcAntiPhosphate(m.volume, m.phosphate);
+    if(p && p.action === 'traiter') plan.phosphate = { type:'traiter', p };
+    else if(p && p.action === 'surveiller') plan.phosphate = { type:'surveiller', p };
+    else if(p) plan.phosphate = { type:'ok', p };
+  }
+  // ----- Brome (jamais de dose sans mesure) -----
+  if(m.modeDesinf === 'brome' && m.brome == null){
+    plan.brome = { type:'missing' };
+  } else if(m.modeDesinf === 'brome'){
+    const br = calcBrome(m.volume, m.brome, 3);
+    if(br && br.action === 'ajout') plan.brome = { type:'dose', br };
+    else if(br && br.action === 'haut') plan.brome = { type:'haut', br };
+    else if(br) plan.brome = { type:'ok', br };
+  }
+  // ----- Vidanges partielles (CYA / sel / TH non corrigeables chimiquement) -----
+  plan.drains = computeDrainActions(m);
+  return plan;
+}
+
 function renderCorrections(measurement, targetContainer){
   const m = measurement || readInputs();
   const container = targetContainer || $('correctionContent');
@@ -1315,30 +1472,27 @@ function renderCorrections(measurement, targetContainer){
   }
 
   let html = '';
-  // Mode brome : les cartes chlore (Chloration, Choc, Superchloration, CYA,
-  // Pouvoir désinfectant HOCl) ne s'appliquent pas. Le mode "sel" reste traité
-  // comme du chlore (l'électrolyse produit du chlore → CYA/chloration pertinents).
-  const isBrome = m.modeDesinf === 'brome';
+  // TOUTES les décisions viennent du moteur partagé (computeCorrectionPlan) —
+  // ici on ne fait que du rendu HTML. Mode brome : les cartes chlore
+  // (Chloration, Choc, Superchloration, CYA) sont exclues par le moteur.
+  const plan = computeCorrectionPlan(m);
+  const isBrome = plan.isBrome;
 
   // ===== pH =====
-  // Garde-fou : si la cible pH configurée est hors plage saine pour le mode,
-  // les doses ci-dessous chasseraient une valeur inopérante → on alerte.
-  if(m.phSouhaite !== null && m.phSouhaite !== undefined){
-    const pr = phRangeForMode(m.modeDesinf);
-    if(m.phSouhaite < pr.dangerLow || m.phSouhaite > pr.dangerHigh){
-      const modeLbl = {chlore:'chlore', brome:'brome', sel:'sel'}[m.modeDesinf] || 'chlore';
-      html += `<div class="card">
+  if(plan.phTargetOut){
+    const pr = plan.phTargetOut.range;
+    const modeLbl = {chlore:'chlore', brome:'brome', sel:'sel'}[m.modeDesinf] || 'chlore';
+    html += `<div class="card">
         <div class="card-header"><div class="card-title" style="color:var(--coral)"><span class="dot" style="background:var(--coral);box-shadow:0 0 10px var(--coral)"></span>Cible pH hors plage</div></div>
         <div class="result warn">
           <div class="result-label">Cible pH inopérante</div>
           <div class="result-note">Ta cible pH (${fmt(m.phSouhaite,1)}) est hors de la plage recommandée en mode ${modeLbl} (${fmt(pr.dangerLow,1)}–${fmt(pr.dangerHigh,1)}, idéal ${fmt(pr.ideal,1)}). Ajuste-la avant de suivre les doses pH ci-dessous.</div>
         </div>
       </div>`;
-    }
   }
-  if(m.ph !== null && m.phSouhaite !== null && m.ph > m.phSouhaite){
-    const hcl = calcHcl(m.volume, m.ph, m.phSouhaite);
-    const poudre = calcPhPoudre(m.volume, m.ph, m.phSouhaite);
+  if(plan.ph && plan.ph.type === 'down'){
+    const hcl = plan.ph.hcl;
+    const poudre = plan.ph.poudre;
 
     html += `<div class="card">
       <div class="card-header">
@@ -1372,12 +1526,12 @@ function renderCorrections(measurement, targetContainer){
       }
     }
     html += `</div>`;
-  } else if(m.ph !== null && m.phSouhaite !== null && m.ph < m.phSouhaite - 0.05){
+  } else if(plan.ph && (plan.ph.type === 'slightly-low' || plan.ph.type === 'up')){
     // pH sous la cible → recommander pH+ (carbonate de sodium)
-    const phPlus = calcPhPlus(m.volume, m.ph, m.phSouhaite);
-    const phDelta = m.phSouhaite - m.ph;
-    const tacBas = m.tac !== null && m.tacSouhaite !== null && m.tac < m.tacSouhaite;
-    if(phDelta < 0.2){
+    const phPlus = plan.ph.phPlus;
+    const phDelta = plan.ph.delta;
+    const tacBas = plan.ph.tacBas;
+    if(plan.ph.type === 'slightly-low'){
       // Doctrine SOS Piscine : on ne court pas après un pH légèrement bas.
       // Si le TAC est aussi sous la cible, on le règle d'abord (bicarbonate,
       // carte « Augmentation TAC » plus bas) — le pH remonte naturellement avec.
@@ -1393,7 +1547,7 @@ function renderCorrections(measurement, targetContainer){
           <div class="result-note">${msg}</div>
         </div>
       </div>`;
-    } else if(phPlus){
+    } else if(plan.ph.type === 'up'){
       const splitNote = phPlus.delta > 0.6
         ? "⚠️ Écart important — applique en 2 fois, séparées de 24 h, en remesurant entre."
         : "⚠️ Applique 1/2 dose, mesure le lendemain, complète au besoin.";
@@ -1423,7 +1577,7 @@ function renderCorrections(measurement, targetContainer){
       }
       html += `</div>`;
     }
-  } else if(m.ph !== null && m.phSouhaite !== null){
+  } else if(plan.ph && plan.ph.type === 'ok'){
     html += `<div class="card">
       <div class="card-header"><div class="card-title"><span class="dot"></span>pH</div></div>
       <div class="result ok">
@@ -1434,11 +1588,11 @@ function renderCorrections(measurement, targetContainer){
   }
 
   // ===== Chlore - Chloration normale =====
-  // Si Fcl < 50 % de la cible, on saute cette carte : le choc curatif (plus bas)
-  // prend le relais — afficher les deux dosages simultanément serait trompeur.
-  if(!isBrome && m.fcl !== null && m.cya !== null && m.fcl >= calcFclVise(m.cya) * 0.5){
-    const chl = calcJavelChloration(m.volume, m.fcl, m.cya);
-    if(chl.litres > 0){
+  // Si Fcl < 50 % de la cible, le moteur ne produit pas cette section : le choc
+  // curatif (plus bas) prend le relais — les deux dosages seraient trompeurs.
+  if(plan.chloration){
+    const chl = plan.chloration.chl;
+    if(plan.chloration.type === 'dose'){
       html += `<div class="card">
         <div class="card-header">
           <div class="card-title"><span class="dot"></span>Chloration</div>
@@ -1451,13 +1605,10 @@ function renderCorrections(measurement, targetContainer){
         </div>
       </div>`;
     } else {
-      // Niveau correct → propose une dose d'entretien préventive pour compenser
-      // la consommation continue (UV, baigneurs, oxydation). En mode chlore
-      // uniquement — sel auto-régule, brome a son propre cycle.
-      const maint = (m.modeDesinf === 'chlore' || !m.modeDesinf)
-        ? calcChloreMaintenance(m.volume, m.temp, m.cya)
-        : null;
-      if(maint && maint.javelL >= 0.05){
+      // Niveau correct → dose d'entretien préventive (UV, baigneurs, oxydation)
+      // si le moteur l'a calculée (mode chlore + température connue).
+      const maint = plan.chloration.maint || null;
+      if(plan.chloration.type === 'maintenance'){
         html += `<div class="card">
           <div class="card-header">
             <div class="card-title"><span class="dot"></span>Chloration · entretien</div>
@@ -1482,10 +1633,10 @@ function renderCorrections(measurement, targetContainer){
   }
 
   // ===== Superchloration (Ccl > 0.6) =====
-  if(!isBrome && m.fcl !== null && m.tcl !== null){
-    const ccl = m.tcl - m.fcl;
-    const sc = calcSuperchloration(m.volume, ccl);
-    if(sc){
+  if(plan.superchloration){
+    const ccl = plan.superchloration.ccl;
+    const sc = plan.superchloration.sc;
+    if(plan.superchloration.type === 'dose'){
       html += `<div class="card">
         <div class="card-header">
           <div class="card-title" style="color:var(--coral)"><span class="dot" style="background:var(--coral);box-shadow:0 0 10px var(--coral)"></span>Superchloration</div>
@@ -1521,26 +1672,19 @@ function renderCorrections(measurement, targetContainer){
   // ===== Chloration choc (curative, alternative à la chloration quotidienne) =====
   // Ne s'affiche QUE si Fcl très bas (< 50 % de la cible) — signal de prolifération.
   // Ne s'ajoute PAS à la chloration quotidienne : c'est SOIT l'un SOIT l'autre.
-  if(!isBrome && m.fcl !== null && m.cya !== null && m.fcl < calcFclVise(m.cya) * 0.5){
-    const choc = calcChlorationChoc(m.volume, m.fcl, m.cya, 5);
-    if(choc.javel > 0 || choc.hypocalcium > 0){
-      // Boost pH : si pH actuel > 6.9, calculer le gain HOCl en pré-baissant à 6.8
+  if(plan.choc){
+    const choc = plan.choc.choc;
+    if(plan.choc.type === 'options'){
+      // Boost pH pré-choc (calculé par le moteur si gain HOCl > +10 %)
       let boostHtml = '';
-      if(m.ph !== null && m.ph > 6.9){
-        // Fcl post-choc (on raisonne sur la cible "post-choc" pour estimer % HOCl)
-        const fclPost = calcFclVise(m.cya) * 5; // cible choc ≈ CYA/2
-        const pctActuel = calcHOClPctFromCYA(fclPost, m.ph, m.cya);
-        const pct68 = calcHOClPctFromCYA(fclPost, 6.8, m.cya);
-        if(pctActuel && pct68 && pct68 > pctActuel * 1.10){
-          const gain = ((pct68 / pctActuel) - 1) * 100;
-          const hclTo68 = calcHcl(m.volume, m.ph, 6.8);
-          boostHtml = `<div class="result-note" style="margin-top:10px;padding:10px;background:rgba(110,231,183,.08);border-left:3px solid var(--leaf);border-radius:6px;color:var(--foam)">
+      if(plan.choc.boost){
+        const {gain, pctActuel, pct68, hclTo68} = plan.choc.boost;
+        boostHtml = `<div class="result-note" style="margin-top:10px;padding:10px;background:rgba(110,231,183,.08);border-left:3px solid var(--leaf);border-radius:6px;color:var(--foam)">
             💡 <strong>Boost efficacité (optionnel)</strong> — Avant le choc, baisser le pH à <strong>6,8</strong> rend le chlore actif (HOCl) <strong>+${fmt(gain, 0)}&nbsp;%</strong> plus efficace (${fmt(pctActuel,1)}&nbsp;% → ${fmt(pct68,1)}&nbsp;% de HOCl).
             <br><span style="opacity:.85">Verser ≈ <strong>${fmt(hclTo68, 2)} L d'HCl</strong>, attendre 30 min, puis injecter la javel. Le pH remontera naturellement avec le chlore. Eau légèrement corrosive pendant 6-12 h — sans risque sur cette durée.</span>
           </div>`;
-        }
       }
-      const chlNorm = calcJavelChloration(m.volume, m.fcl, m.cya);
+      const chlNorm = plan.choc.chlNorm;
       html += `<div class="card">
         <div class="card-header">
           <div class="card-title" style="color:var(--lemon)"><span class="dot" style="background:var(--lemon);box-shadow:0 0 10px var(--lemon)"></span>Chlore très bas</div>
@@ -1569,13 +1713,12 @@ function renderCorrections(measurement, targetContainer){
   }
 
   // ===== TAC+ =====
-  if(m.tac !== null && m.tacSouhaite !== null){
-    const tacPlus = calcTacPlus(m.volume, m.tac, m.tacSouhaite);
-    // Monter le TAC remonte le LSI : on ne le recommande pas si l'eau est déjà
+  if(plan.tac){
+    const tacPlus = plan.tac.tacPlus;
+    // Monter le TAC remonte le LSI : le moteur bloque la reco si l'eau est déjà
     // entartrante (LSI > +0,3), sinon on aggrave le risque de dépôts calcaires.
-    const lsiTAC = (m.ph!==null && m.temp!==null && m.th!==null && m.tac!==null)
-      ? calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel') : null;
-    if(tacPlus && lsiTAC !== null && lsiTAC > 0.3){
+    const lsiTAC = plan.tac.lsi ?? null;
+    if(plan.tac.type === 'blocked-lsi'){
       html += `<div class="card">
         <div class="card-header"><div class="card-title"><span class="dot"></span>TAC</div></div>
         <div class="result warn">
@@ -1583,7 +1726,7 @@ function renderCorrections(measurement, targetContainer){
           <div class="result-note">TAC ${fmt(m.tac,0)} &lt; cible (${fmt(m.tacSouhaite,0)} ppm), mais le LSI (${lsiTAC>=0?'+':''}${fmt(lsiTAC,2)}) est entartrant : monter le TAC aggraverait les dépôts. Baisse plutôt le pH (ou le TH) avant d'ajuster le TAC.</div>
         </div>
       </div>`;
-    } else if(tacPlus){
+    } else if(plan.tac.type === 'dose'){
       html += `<div class="card">
         <div class="card-header">
           <div class="card-title"><span class="dot"></span>Augmentation TAC</div>
@@ -1659,20 +1802,20 @@ function renderCorrections(measurement, targetContainer){
   }
 
   // ===== Sel (électrolyse) =====
-  if(m.modeDesinf === 'sel' && m.sel == null){
+  if(plan.sel && plan.sel.type === 'missing'){
     // Mesure absente : on ne dose jamais depuis un 0 supposé — on invite à mesurer.
     html += `<div class="card">
       <div class="card-header"><div class="card-title"><span class="dot"></span>Sel</div></div>
       <div class="result">
         <div class="result-label">Sel non mesuré</div>
-        <div class="result-note">Renseigne la salinité mesurée pour calculer un éventuel apport (cible ${fmt(m.selSouhaite ?? 4.0,1)} g/L). Aucune dose n'est proposée sans mesure.</div>
+        <div class="result-note">Renseigne la salinité mesurée pour calculer un éventuel apport (cible ${fmt(plan.sel.cible,1)} g/L). Aucune dose n'est proposée sans mesure.</div>
       </div>
     </div>`;
-  } else if(m.selSouhaite != null || m.sel != null){
-    const cible = m.selSouhaite ?? 4.0;
-    const s = calcSel(m.volume, m.sel, cible);
-    if(s){
-      if(s.action === 'ajout'){
+  } else if(plan.sel){
+    const cible = plan.sel.cible;
+    const s = plan.sel.s;
+    {
+      if(plan.sel.type === 'ajout'){
         html += `<div class="card">
           <div class="card-header">
             <div class="card-title"><span class="dot"></span>Apport sel</div>
@@ -1684,7 +1827,7 @@ function renderCorrections(measurement, targetContainer){
             <div class="result-note">Δ +${fmt(s.delta,1)} g/L · Verser sel piscine non iodé, filtration en marche.</div>
           </div>
         </div>`;
-      } else if(s.action === 'dilution'){
+      } else if(plan.sel.type === 'dilution'){
         html += `<div class="card">
           <div class="card-header"><div class="card-title" style="color:var(--coral)"><span class="dot" style="background:var(--coral);box-shadow:0 0 10px var(--coral)"></span>Sel trop élevé</div></div>
           <div class="result warn">
@@ -1692,7 +1835,7 @@ function renderCorrections(measurement, targetContainer){
             <div class="result-note">Sel mesuré ${fmt(m.sel,1)} g/L > cible (Δ +${fmt(s.delta,1)} g/L). Diluer avec eau du réseau pour préserver la cellule.</div>
           </div>
         </div>`;
-      } else if(m.sel !== null){
+      } else if(plan.sel.type === 'ok'){
         html += `<div class="card">
           <div class="card-header"><div class="card-title"><span class="dot"></span>Sel</div></div>
           <div class="result ok">
@@ -1705,15 +1848,13 @@ function renderCorrections(measurement, targetContainer){
   }
 
   // ===== Calcium / TH =====
-  if(m.thSouhaite != null || m.th != null){
-    const cible = m.thSouhaite ?? 25;
-    const ca = calcCalcium(m.volume, m.th, cible);
+  if(plan.th){
+    const cible = plan.th.cible;
+    const ca = plan.th.ca;
     // LSI (si calculable) : les recos de dureté ne se déclenchent que si le TH
     // déséquilibre réellement l'eau — corrosive (LSI < −0,3) ou entartrante (> +0,3).
-    const lsiTH = (m.ph!==null && m.temp!==null && m.th!==null && m.tac!==null)
-      ? calcLSI(m.ph, m.temp, m.th, m.tac, m.cya, m.modeDesinf === 'sel') : null;
-    if(ca && ca.action === 'ajout'){
-      if(lsiTH !== null && lsiTH >= -0.3){
+    const lsiTH = plan.th.lsi ?? null;
+    if(plan.th.type === 'low-balanced'){
         // TH sous la cible mais eau non corrosive → apport de calcium non urgent.
         html += `<div class="card">
           <div class="card-header"><div class="card-title"><span class="dot"></span>Dureté (TH)</div></div>
@@ -1722,7 +1863,7 @@ function renderCorrections(measurement, targetContainer){
             <div class="result-note">TH ${fmt(m.th,0)} °f &lt; cible (${fmt(cible,0)} °f), mais le LSI (${lsiTH>=0?'+':''}${fmt(lsiTH,2)}) reste dans la zone saine : l'eau n'est pas corrosive, apport de calcium non urgent.</div>
           </div>
         </div>`;
-      } else {
+      } else if(plan.th.type === 'dose'){
         html += `<div class="card">
           <div class="card-header">
             <div class="card-title"><span class="dot"></span>Dureté (TH)</div>
@@ -1734,11 +1875,9 @@ function renderCorrections(measurement, targetContainer){
             <div class="result-note">Augmenter progressivement (max +10 °f / semaine) · diluer dans seau avant ajout.${lsiTH!==null?` LSI ${lsiTH>=0?'+':''}${fmt(lsiTH,2)} (corrosive).`:''}</div>
           </div>
         </div>`;
-      }
-    } else if(ca && ca.action === 'haut'){
-      // Le séquestrant/anti-calcaire ne se justifie que si l'eau est réellement
-      // entartrante (LSI > +0,3). Un TH élevé avec un LSI équilibré n'entartre pas.
-      if(lsiTH !== null && lsiTH <= 0.3){
+      } else if(plan.th.type === 'high-balanced'){
+        // Le séquestrant/anti-calcaire ne se justifie que si l'eau est réellement
+        // entartrante (LSI > +0,3) — décision prise par le moteur.
         html += `<div class="card">
           <div class="card-header"><div class="card-title"><span class="dot"></span>Dureté (TH)</div></div>
           <div class="result ok">
@@ -1746,7 +1885,7 @@ function renderCorrections(measurement, targetContainer){
             <div class="result-note">TH ${fmt(m.th,0)} °f &gt; cible (${fmt(cible,0)} °f), mais le LSI (${lsiTH>=0?'+':''}${fmt(lsiTH,2)}) reste dans la zone saine : pas de risque d'entartrage, séquestrant inutile pour l'instant.</div>
           </div>
         </div>`;
-      } else {
+      } else if(plan.th.type === 'high'){
         html += `<div class="card">
           <div class="card-header"><div class="card-title" style="color:var(--coral)"><span class="dot" style="background:var(--coral);box-shadow:0 0 10px var(--coral)"></span>TH trop élevé</div></div>
           <div class="result warn">
@@ -1754,8 +1893,7 @@ function renderCorrections(measurement, targetContainer){
             <div class="result-note">TH ${fmt(m.th,0)} °f &gt; cible (${fmt(cible,0)} °f)${lsiTH!==null?` · LSI ${lsiTH>=0?'+':''}${fmt(lsiTH,2)} (entartrant)`:''}. Diluer (vidange partielle) ou séquestrer (anti-calcaire).</div>
           </div>
         </div>`;
-      }
-    } else if(m.th != null){
+      } else if(plan.th.type === 'ok'){
       html += `<div class="card">
         <div class="card-header"><div class="card-title"><span class="dot"></span>TH</div></div>
         <div class="result ok">
@@ -1768,10 +1906,10 @@ function renderCorrections(measurement, targetContainer){
 
   // ===== CYA (stabilisant) — ajout si trop bas ; vidange gérée par computeDrainActions =====
   // Le CYA ne concerne pas le brome (pas de stabilisation UV du brome).
-  if(!isBrome && m.cya !== null){
-    const cible = m.cyaSouhaite ?? 30;
-    const c = calcCYA(m.volume, m.cya, cible);
-    if(c && c.action === 'ajout' && c.g >= 5){
+  if(plan.cya){
+    const cible = plan.cya.cible;
+    const c = plan.cya.c;
+    if(plan.cya.type === 'dose'){
       html += `<div class="card">
         <div class="card-header">
           <div class="card-title"><span class="dot"></span>Apport stabilisant (CYA)</div>
@@ -1783,7 +1921,7 @@ function renderCorrections(measurement, targetContainer){
           <div class="result-note">Δ +${fmt(c.delta,0)} ppm · Verser les granulés dans le panier du skimmer, filtration en marche · dissolution complète sous 2–5 jours.</div>
         </div>
       </div>`;
-    } else if(c && c.action === 'ok' && m.cya >= cible - 5 && m.cya <= cible + 5){
+    } else if(plan.cya.type === 'ok'){
       // "Correct" affiché uniquement quand on est proche de la cible (±5 ppm).
       // Au-dessus, la carte vidange (computeDrainActions) prend le relais.
       html += `<div class="card">
@@ -1797,9 +1935,9 @@ function renderCorrections(measurement, targetContainer){
   }
 
   // ===== Phosphates =====
-  if(m.phosphate !== null){
-    const p = calcAntiPhosphate(m.volume, m.phosphate);
-    if(p && p.action === 'traiter'){
+  if(plan.phosphate){
+    const p = plan.phosphate.p;
+    if(plan.phosphate.type === 'traiter'){
       html += `<div class="card">
         <div class="card-header">
           <div class="card-title"><span class="dot"></span>Anti-phosphate</div>
@@ -1811,7 +1949,7 @@ function renderCorrections(measurement, targetContainer){
           <div class="result-note">Excès ${fmt(p.ppbExcedent,0)} ppb · Filtrer 24 h puis nettoyer le filtre (les phosphates se fixent dessus).</div>
         </div>
       </div>`;
-    } else if(p && p.action === 'surveiller'){
+    } else if(plan.phosphate.type === 'surveiller'){
       html += `<div class="card">
         <div class="card-header"><div class="card-title"><span class="dot"></span>Phosphates</div></div>
         <div class="result warn">
@@ -1819,7 +1957,7 @@ function renderCorrections(measurement, targetContainer){
           <div class="result-note">${fmt(m.phosphate,0)} ppb · Sous le seuil de traitement (100 ppb), mais à garder à l'œil.</div>
         </div>
       </div>`;
-    } else if(p){
+    } else if(plan.phosphate.type === 'ok'){
       html += `<div class="card">
         <div class="card-header"><div class="card-title"><span class="dot"></span>Phosphates</div></div>
         <div class="result ok">
@@ -1831,7 +1969,7 @@ function renderCorrections(measurement, targetContainer){
   }
 
   // ===== Brome (si mode brome) =====
-  if(m.modeDesinf === 'brome' && m.brome == null){
+  if(plan.brome && plan.brome.type === 'missing'){
     html += `<div class="card">
       <div class="card-header"><div class="card-title"><span class="dot"></span>Brome</div></div>
       <div class="result">
@@ -1839,9 +1977,9 @@ function renderCorrections(measurement, targetContainer){
         <div class="result-note">Renseigne le brome mesuré pour calculer la dose de pastilles BCDMH (cible 3 ppm). Aucune dose n'est proposée sans mesure.</div>
       </div>
     </div>`;
-  } else if(m.modeDesinf === 'brome'){
-    const br = calcBrome(m.volume, m.brome, 3);
-    if(br && br.action === 'ajout'){
+  } else if(plan.brome){
+    const br = plan.brome.br;
+    if(plan.brome.type === 'dose'){
       html += `<div class="card">
         <div class="card-header">
           <div class="card-title"><span class="dot"></span>Brome</div>
@@ -1853,7 +1991,7 @@ function renderCorrections(measurement, targetContainer){
           <div class="result-note">Δ +${fmt(br.delta,1)} ppm · Insérer dans brominateur ou skimmer.</div>
         </div>
       </div>`;
-    } else if(br && br.action === 'haut'){
+    } else if(plan.brome.type === 'haut'){
       html += `<div class="card">
         <div class="card-header"><div class="card-title" style="color:var(--coral)"><span class="dot" style="background:var(--coral);box-shadow:0 0 10px var(--coral)"></span>Brome élevé</div></div>
         <div class="result warn">
@@ -1861,7 +1999,7 @@ function renderCorrections(measurement, targetContainer){
           <div class="result-note">${fmt(m.brome,1)} ppm &gt; 5 ppm. Couper l'alimentation jusqu'à retour ≤ 4 ppm.</div>
         </div>
       </div>`;
-    } else if(br){
+    } else if(plan.brome.type === 'ok'){
       html += `<div class="card">
         <div class="card-header"><div class="card-title"><span class="dot"></span>Brome</div></div>
         <div class="result ok">
@@ -1909,9 +2047,9 @@ function renderCorrections(measurement, targetContainer){
   }
 
   // ===== Vidange partielle (CYA / sel / TH trop élevés — non corrigeables chimiquement) =====
-  if(m.volume){
-    const drains = computeDrainActions(m);
-    if(drains.length){
+  if(plan.drains.length){
+    const drains = plan.drains;
+    {
       const worst = drains.reduce((a, b) => a.volume > b.volume ? a : b);
       const pct = (worst.volume / m.volume) * 100;
       html += `<div class="card">
@@ -4975,64 +5113,75 @@ function toggleHints(e){
 }
 
 // ============== Partage en image ==============
+// Liste texte des actions pour l'image partagée — consomme le MÊME moteur de
+// règles que la page Doses (computeCorrectionPlan). Avant, cette fonction
+// dupliquait les règles et divergeait de l'écran : javel proposée en mode
+// brome, dose normale au lieu du choc, gardes LSI ignorées, pH+ absent…
+// L'ordre des lignes suit l'ordre des cartes de la page Doses.
 function getActionsTextList(m){
   const out = [];
   if(m.volume === null || m.volume === undefined) return out;
+  const plan = computeCorrectionPlan(m);
 
-  if(m.ph !== null && m.phSouhaite !== null && m.phSouhaite !== undefined && m.ph > m.phSouhaite){
-    const hcl = calcHcl(m.volume, m.ph, m.phSouhaite);
-    out.push(`pH ${fmt(m.ph,1)} → ${fmt(m.phSouhaite,1)} · ${fmt(hcl,2)} L acide HCl`);
+  if(plan.phTargetOut){
+    const pr = plan.phTargetOut.range;
+    out.push(`⚠ Cible pH ${fmt(m.phSouhaite,1)} hors plage (${fmt(pr.dangerLow,1)}–${fmt(pr.dangerHigh,1)}) · à corriger`);
   }
-
-  if(m.fcl !== null && m.cya !== null){
-    const chl = calcJavelChloration(m.volume, m.fcl, m.cya);
-    if(chl.litres > 0){
-      out.push(`Chloration · ${fmt(chl.litres,2)} L Javel 9.6° (cible ${fmt(chl.fclVise,2)} ppm)`);
+  if(plan.ph){
+    if(plan.ph.type === 'down'){
+      const alt = plan.ph.poudre ? ` OU ${fmt(plan.ph.poudre.totalG,0)} g pH- poudre` : '';
+      out.push(`pH ${fmt(m.ph,1)} → ${fmt(m.phSouhaite,1)} · ${fmt(plan.ph.hcl,2)} L acide HCl${alt}`);
+    } else if(plan.ph.type === 'up'){
+      out.push(`pH ${fmt(m.ph,1)} → ${fmt(m.phSouhaite,1)} · ${fmt(plan.ph.phPlus.totalG,0)} g carbonate de sodium`);
+    } else if(plan.ph.type === 'slightly-low'){
+      out.push(plan.ph.tacBas
+        ? `pH légèrement bas · régler d'abord le TAC (le pH suivra)`
+        : `pH légèrement bas · pas de correction, surveiller`);
     }
   }
-
-  if(m.fcl !== null && m.tcl !== null){
-    const ccl = m.tcl - m.fcl;
-    const sc = calcSuperchloration(m.volume, ccl);
-    if(sc){
-      out.push(`Superchloration · ${fmt(sc.javelL,2)} L Javel OU ${fmt(sc.hypocalciumG,0)} g hypocalcium`);
+  if(plan.chloration){
+    if(plan.chloration.type === 'dose'){
+      out.push(`Chloration · ${fmt(plan.chloration.chl.litres,2)} L Javel 9.6° (cible ${fmt(plan.chloration.chl.fclVise,2)} ppm)`);
+    } else if(plan.chloration.type === 'maintenance'){
+      out.push(`Entretien · ${fmt(plan.chloration.maint.javelL,2)} L/jour Javel 9.6° (perte ${fmt(plan.chloration.maint.ppmPerDay,2)} ppm/j)`);
     }
   }
-
-  if(m.tac !== null && m.tacSouhaite !== null && m.tacSouhaite !== undefined){
-    const tp = calcTacPlus(m.volume, m.tac, m.tacSouhaite);
-    if(tp){
-      out.push(`TAC + · ${fmt(tp.totalG,0)} g (+${fmt(tp.delta,0)} ppm)`);
+  if(plan.superchloration && plan.superchloration.type === 'dose'){
+    out.push(`Superchloration · ${fmt(plan.superchloration.sc.javelL,2)} L Javel OU ${fmt(plan.superchloration.sc.hypocalciumG,0)} g hypocalcium`);
+  }
+  if(plan.choc){
+    out.push(`Chlore très bas · eau claire : ${fmt(plan.choc.chlNorm.litres,2)} L Javel · eau verte : choc ${fmt(plan.choc.choc.javel,2)} L`);
+  }
+  if(plan.tac){
+    if(plan.tac.type === 'dose'){
+      out.push(`TAC + · ${fmt(plan.tac.tacPlus.totalG,0)} g (+${fmt(plan.tac.tacPlus.delta,0)} ppm)`);
+    } else if(plan.tac.type === 'blocked-lsi'){
+      out.push(`TAC bas mais eau entartrante (LSI +${fmt(plan.tac.lsi,2)}) · baisser le pH d'abord`);
     }
   }
-
-  if(m.sel !== null && m.sel !== undefined){
-    const s = calcSel(m.volume, m.sel, m.selSouhaite ?? 4);
-    if(s && s.action === 'ajout') out.push(`Sel · +${fmt(s.kg,1)} kg`);
-    else if(s && s.action === 'dilution') out.push(`Sel trop élevé · vidange partielle`);
+  if(plan.sel){
+    if(plan.sel.type === 'ajout') out.push(`Sel · +${fmt(plan.sel.s.kg,1)} kg`);
+    else if(plan.sel.type === 'dilution') out.push(`Sel trop élevé · vidange partielle`);
+    else if(plan.sel.type === 'missing') out.push(`Sel non mesuré · mesurer avant tout apport`);
   }
-
-  if(m.th !== null && m.th !== undefined){
-    const ca = calcCalcium(m.volume, m.th, m.thSouhaite ?? 25);
-    if(ca && ca.action === 'ajout') out.push(`Dureté · +${fmt(ca.gCaCl2,0)} g CaCl₂`);
-    else if(ca && ca.action === 'haut') out.push(`TH trop élevé · diluer ou séquestrer`);
+  if(plan.th){
+    if(plan.th.type === 'dose') out.push(`Dureté · +${fmt(plan.th.ca.gCaCl2,0)} g CaCl₂`);
+    else if(plan.th.type === 'high') out.push(`TH trop élevé · diluer ou séquestrer`);
   }
-
-  if(m.cya !== null && m.cya > 40){
-    out.push(`CYA ${fmt(m.cya,0)} ppm > 40 · vidange partielle obligatoire`);
+  if(plan.cya && plan.cya.type === 'dose'){
+    out.push(`Stabilisant · +${fmt(plan.cya.c.g,0)} g CYA (cible ${fmt(plan.cya.cible,0)} ppm)`);
   }
-
-  if(m.phosphate !== null && m.phosphate !== undefined && m.phosphate > 100){
-    const p = calcAntiPhosphate(m.volume, m.phosphate);
-    if(p && p.action === 'traiter') out.push(`Anti-phosphate · ${fmt(p.mL,0)} mL`);
+  if(plan.phosphate && plan.phosphate.type === 'traiter'){
+    out.push(`Anti-phosphate · ${fmt(plan.phosphate.p.mL,0)} mL`);
   }
-
-  if(m.modeDesinf === 'brome' && m.brome !== null && m.brome !== undefined){
-    const br = calcBrome(m.volume, m.brome, 3);
-    if(br && br.action === 'ajout') out.push(`Brome · +${fmt(br.grammes,0)} g BCDMH`);
-    else if(br && br.action === 'haut') out.push(`Brome élevé · couper le brominateur`);
+  if(plan.brome){
+    if(plan.brome.type === 'dose') out.push(`Brome · +${fmt(plan.brome.br.grammes,0)} g BCDMH`);
+    else if(plan.brome.type === 'haut') out.push(`Brome élevé · couper le brominateur`);
+    else if(plan.brome.type === 'missing') out.push(`Brome non mesuré · mesurer avant dosage`);
   }
-
+  plan.drains.forEach(d => {
+    out.push(`${d.label} (${fmt(d.actuel,1)} → ${fmt(d.cible,1)} ${d.unit}) · vidange ${fmt(d.volume,1)} m³`);
+  });
   return out;
 }
 
@@ -5070,7 +5219,13 @@ function shareControl(measurement, opts){
     {label:'Brome',                value: (m.brome!==null && m.brome!==undefined) ? fmt(m.brome,1)+' ppm' : null},
     {label:'Mode de désinfection', value: modeLabel || null},
   ].filter(it => it.value !== null && it.value !== undefined && it.value !== 'null');
-  const actions = getActionsTextList(m).slice(0, 6);
+  // Tronque à 8 lignes en l'annonçant (avant : slice(0,6) silencieux — des
+  // actions pouvaient disparaître de l'image sans indication).
+  const actionsAll = getActionsTextList(m);
+  const actions = actionsAll.slice(0, 8);
+  if(actionsAll.length > actions.length){
+    actions.push(`… + ${actionsAll.length - actions.length} autre(s) action(s) — voir l'app`);
+  }
   const measuresStart = 400, measuresRowH = 95;
   const measuresEnd = showMeasures ? measuresStart + items.length * measuresRowH : measuresStart;
   const actionsHeaderY = showActions ? measuresEnd + (showMeasures ? 30 : 0) : measuresEnd;
@@ -5190,8 +5345,19 @@ function shareControl(measurement, opts){
         ctx.font = '600 28px "Manrope", sans-serif';
         ctx.fillText('•', 110, y + 40);
         ctx.fillStyle = '#fff';
-        ctx.font = '500 24px "Manrope", sans-serif';
-        ctx.fillText(txt, 140, y + 40);
+        // Réduit la police (jusqu'à 19px) puis ellipse si la ligne dépasse la carte
+        const maxW = W - 160 - 60 - 30; // carte − retrait puce − marge droite
+        let fs = 24;
+        ctx.font = `500 ${fs}px "Manrope", sans-serif`;
+        while(fs > 19 && ctx.measureText(txt).width > maxW){
+          fs -= 1;
+          ctx.font = `500 ${fs}px "Manrope", sans-serif`;
+        }
+        let line = txt;
+        while(line.length > 4 && ctx.measureText(line).width > maxW){
+          line = line.slice(0, -2).trimEnd() + '…';
+        }
+        ctx.fillText(line, 140, y + 40);
       });
     }
   }
@@ -6169,6 +6335,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 const RELEASE_NOTES_KEY = 'cp_release_notes_seen_v1';
 
 const RELEASE_NOTES = [
+  {
+    version: '1.27.0',
+    icon: '🖼️',
+    color: '#7fdbda',
+    title: 'Image partagée alignée sur la page Doses',
+    body: "L'image « Mon contrôle du jour » recommande désormais exactement les mêmes actions que la page Doses : plus de javel suggérée en mode brome, le choc remplace la dose normale quand le chlore est très bas, les garde-fous LSI (TAC, dureté) s'appliquent aussi au partage, et le pH+, l'apport de stabilisant, la dose d'entretien et les vidanges partielles y figurent enfin. Si la liste dépasse 8 actions, l'image l'indique au lieu de couper en silence.",
+  },
   {
     version: '1.26.0',
     icon: '🛡️',

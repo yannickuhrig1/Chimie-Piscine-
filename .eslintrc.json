@@ -2,7 +2,13 @@
   "root": true,
   "parserOptions": { "ecmaVersion": 2022, "sourceType": "script" },
   "env": { "browser": true, "es2022": true },
-  "globals": { "Chart": "readonly" },
+  "globals": {
+    "Chart": "readonly",
+    "openAccountLogin": "writable",
+    "closeAccountLogin": "writable",
+    "openReleaseNotes": "writable",
+    "openSyncPromo": "writable"
+  },
   "rules": {
     "no-undef": "error",
     "no-unused-vars": "off",
@@ -17,6 +23,11 @@
       "files": ["sw.js"],
       "env": { "browser": false, "serviceworker": true, "es2022": true },
       "globals": { "clients": "readonly" }
+    },
+    {
+      "files": ["tests/**/*.js"],
+      "env": { "node": true, "browser": true, "es2022": true },
+      "rules": { "no-undef": "off" }
     }
   ]
 }

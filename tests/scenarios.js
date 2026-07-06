@@ -1,0 +1,47 @@
+// Matrice de scénarios couvrant toutes les branches de renderCorrections.
+// Volume 70 m³ partout. Partagé entre le générateur de goldens et les tests.
+const BASE = {
+  volume: 70, ph: null, phSouhaite: null, fcl: null, tcl: null, tac: null,
+  tacSouhaite: null, cya: null, cyaSouhaite: null, temp: null, sel: null,
+  selSouhaite: null, th: null, thSouhaite: null, phosphate: null, brome: null,
+  modeDesinf: 'chlore', date: '2026-07-06T10:00:00.000Z', note: null,
+};
+const S = (patch) => ({ ...BASE, ...patch });
+
+module.exports = {
+  'chlore_tout_ok_avec_temp': S({ ph: 7.2, phSouhaite: 7.2, fcl: 3.2, tcl: 3.3, tac: 100, tacSouhaite: 100, cya: 30, cyaSouhaite: 30, temp: 26 }),
+  'chlore_tout_ok_sans_temp': S({ ph: 7.2, phSouhaite: 7.2, fcl: 3.2, tcl: 3.3, tac: 100, tacSouhaite: 100, cya: 30, cyaSouhaite: 30 }),
+  'ph_haut_avec_lsi': S({ ph: 7.8, phSouhaite: 7.2, tac: 100, tacSouhaite: 100, th: 20, thSouhaite: 25, temp: 26, fcl: 3, tcl: 3.1, cya: 30 }),
+  'ph_legerement_bas_tac_bas': S({ ph: 7.1, phSouhaite: 7.2, tac: 60, tacSouhaite: 100 }),
+  'ph_legerement_bas_tac_ok': S({ ph: 7.1, phSouhaite: 7.2, tac: 110, tacSouhaite: 100 }),
+  'ph_bas_dose': S({ ph: 6.9, phSouhaite: 7.4, tac: 110, tacSouhaite: 100 }),
+  'ph_tres_bas_split': S({ ph: 6.7, phSouhaite: 7.4, th: 20, tac: 110, tacSouhaite: 100, temp: 26 }),
+  'ph_cible_hors_plage': S({ ph: 7.4, phSouhaite: 8.4 }),
+  'chloration_dose': S({ fcl: 2, cya: 30, cyaSouhaite: 30, tcl: 2.1 }),
+  'chlore_tres_bas_choc_boost': S({ fcl: 0.5, cya: 30, cyaSouhaite: 30, ph: 7.4, phSouhaite: 7.4 }),
+  'chlore_tres_bas_choc_sans_ph': S({ fcl: 0.5, cya: 30, cyaSouhaite: 30 }),
+  'superchloration_ccl': S({ fcl: 1, tcl: 2, cya: 30 }),
+  'brome_non_mesure': S({ modeDesinf: 'brome', ph: 7.4, phSouhaite: 7.4, tac: 100, tacSouhaite: 100 }),
+  'brome_dose': S({ modeDesinf: 'brome', brome: 1, ph: 7.4, phSouhaite: 7.4 }),
+  'brome_haut': S({ modeDesinf: 'brome', brome: 6, ph: 7.4, phSouhaite: 7.4 }),
+  'brome_ok': S({ modeDesinf: 'brome', brome: 3, ph: 7.4, phSouhaite: 7.4 }),
+  'sel_non_mesure': S({ modeDesinf: 'sel', selSouhaite: 4, fcl: 3, cya: 30, ph: 7.2, phSouhaite: 7.2 }),
+  'sel_ajout': S({ modeDesinf: 'sel', sel: 2.5, selSouhaite: 4 }),
+  'sel_dilution_drain': S({ modeDesinf: 'sel', sel: 6, selSouhaite: 4 }),
+  'sel_ok': S({ modeDesinf: 'sel', sel: 4, selSouhaite: 4 }),
+  'tac_bas_lsi_entartrant': S({ tac: 60, tacSouhaite: 100, ph: 8.0, th: 40, temp: 30, cya: 0 }),
+  'tac_bas_dose': S({ tac: 60, tacSouhaite: 100, ph: 7.2, th: 15, temp: 20, cya: 30 }),
+  'tac_ok': S({ tac: 110, tacSouhaite: 100 }),
+  'th_bas_equilibre': S({ th: 15, thSouhaite: 25, ph: 7.5, tac: 120, temp: 26, cya: 0 }),
+  'th_bas_corrosif_dose': S({ th: 3, thSouhaite: 25, ph: 6.9, tac: 60, temp: 8, cya: 30 }),
+  'th_haut_equilibre': S({ th: 35, thSouhaite: 25, ph: 7.0, tac: 80, temp: 15, cya: 30 }),
+  'th_haut_entartrant_drain': S({ th: 35, thSouhaite: 25, ph: 8.0, tac: 180, temp: 30, cya: 0 }),
+  'th_sans_lsi_dose': S({ th: 10, thSouhaite: 25 }),
+  'cya_bas_dose': S({ cya: 10, cyaSouhaite: 30, fcl: 1, tcl: 1.1 }),
+  'cya_haut_drain': S({ cya: 50, cyaSouhaite: 30, fcl: 5, tcl: 5.1 }),
+  'phosphate_traiter': S({ phosphate: 300 }),
+  'phosphate_surveiller': S({ phosphate: 80 }),
+  'phosphate_ok': S({ phosphate: 30 }),
+  'legacy_sans_cles': { volume: 70, ph: 7.4, phSouhaite: 7.2, fcl: 1, tcl: 1.2, tac: 100, tacSouhaite: 100, cya: 30, modeDesinf: 'chlore', date: '2026-07-06T10:00:00.000Z' },
+  'volume_seul': S({}),
+};

@@ -21,4 +21,5 @@ jobs:
         with:
           node-version: '20'
       - run: npm install --no-save eslint@8
-      - run: npx eslint app.js sw.js
+      - run: npx eslint app.js sw.js tests
+      - run: node tests/run.js
