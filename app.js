@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.27.0';
+const APP_VERSION = '1.28.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -2683,13 +2683,51 @@ function exportData(){
   toast('Données exportées');
 }
 
+/**
+ * Validation structurelle d'un fichier d'export avant écrasement du localStorage.
+ * Avant, n'importe quel JSON portant les bonnes clés écrasait les données
+ * (measurements: "hello", bassins: 42…) et corrompait l'app au reload.
+ * Vérifie les types, filtre les entrées invalides ; renvoie null si le fichier
+ * ne contient rien d'exploitable (→ import refusé, données locales intactes).
+ */
+function sanitizeImportedData(raw){
+  if(!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out = {};
+  if(raw.measurements !== undefined){
+    if(!Array.isArray(raw.measurements)) return null;
+    out.measurements = raw.measurements.filter(m =>
+      m && typeof m === 'object' && !Array.isArray(m)
+      && (m.date == null || !isNaN(new Date(m.date).getTime())));
+  }
+  if(raw.bassins !== undefined){
+    if(!Array.isArray(raw.bassins)) return null;
+    out.bassins = raw.bassins.filter(b => b && typeof b === 'object' && typeof b.id === 'string' && b.id);
+  }
+  if(raw.reminders !== undefined){
+    if(!raw.reminders || typeof raw.reminders !== 'object' || Array.isArray(raw.reminders)) return null;
+    out.reminders = raw.reminders;
+  }
+  if(raw.lastInputs !== undefined){
+    if(!raw.lastInputs || typeof raw.lastInputs !== 'object' || Array.isArray(raw.lastInputs)) return null;
+    out.lastInputs = raw.lastInputs;
+  }
+  if(typeof raw.activeBassin === 'string' && raw.activeBassin) out.activeBassin = raw.activeBassin;
+  const hasAny = (out.measurements && out.measurements.length) || (out.bassins && out.bassins.length)
+    || out.reminders || out.lastInputs;
+  return hasAny ? out : null;
+}
+
 function importData(event){
   const file = event.target.files[0];
   if(!file) return;
   const reader = new FileReader();
   reader.onload = e => {
     try{
-      const data = JSON.parse(e.target.result);
+      const data = sanitizeImportedData(JSON.parse(e.target.result));
+      if(!data){
+        toast("Fichier invalide — ce n'est pas un export Chimie Piscine", 'warn', 4000);
+        return;
+      }
       // Restauration volontaire : on oublie les suppressions passées, sinon la
       // sync compte re-supprimerait des mesures présentes dans le fichier importé.
       localStorage.removeItem(STORAGE_KEYS.deletedMeasures);
@@ -2707,8 +2745,12 @@ function importData(event){
   reader.readAsText(file);
 }
 
-function confirmReset(){
-  if(!confirm('Supprimer toutes les données (mesures, rappels, paramètres) ? Cette action est irréversible.')) return;
+async function confirmReset(){
+  if(!(await uiConfirm({
+    title: 'Tout effacer',
+    message: 'Supprimer toutes les données (mesures, rappels, paramètres) ?\n\nCette action est irréversible.',
+    confirmLabel: 'Tout effacer'
+  }))) return;
   Object.values(STORAGE_KEYS).forEach(k => localStorage.removeItem(k));
   localStorage.removeItem('cp_last_notif');
   localStorage.removeItem(BACKUP_CODE_KEY); // déconnecte la sauvegarde cloud (la sauvegarde distante est conservée)
@@ -2806,8 +2848,12 @@ async function enableCloudBackup(){
   }
 }
 
-function disableCloudBackup(){
-  if(!confirm('Désactiver la sauvegarde cloud ?\n\nTes données restent sur cet appareil. La sauvegarde en ligne est conservée et reste récupérable avec ton code.')) return;
+async function disableCloudBackup(){
+  if(!(await uiConfirm({
+    title: 'Sauvegarde cloud',
+    message: 'Désactiver la sauvegarde cloud ?\n\nTes données restent sur cet appareil. La sauvegarde en ligne est conservée et reste récupérable avec ton code.',
+    confirmLabel: 'Désactiver', icon: '☁️', danger: false
+  }))) return;
   localStorage.removeItem(BACKUP_CODE_KEY);
   renderBackupUI();
   toast('Sauvegarde cloud désactivée');
@@ -2843,7 +2889,11 @@ async function restoreFromCode(){
   const input = $('restoreCode');
   const code = input.value.trim().toUpperCase();
   if(code.length < 12){ toast('Code invalide','warn'); return; }
-  if(!confirm('Restaurer cette sauvegarde ?\n\nTes mesures et réglages actuels sur cet appareil seront remplacés.')) return;
+  if(!(await uiConfirm({
+    title: 'Restaurer',
+    message: 'Restaurer cette sauvegarde ?\n\nTes mesures et réglages actuels sur cet appareil seront remplacés.',
+    confirmLabel: 'Restaurer', icon: '♻️'
+  }))) return;
   try{
     const res = await backupCall({action:'restore', code});
     const d = res.data || {};
@@ -2856,7 +2906,11 @@ async function restoreFromCode(){
       const existing = getBassins();
       // Si le bassin existe déjà (même id) on demande quoi faire
       if(existing.some(b => b.id === d.bassin.id)){
-        if(!confirm('Ce bassin existe déjà dans tes données. Écraser sa config et ses mesures ?')) return;
+        if(!(await uiConfirm({
+          title: 'Bassin existant',
+          message: 'Ce bassin existe déjà dans tes données. Écraser sa config et ses mesures ?',
+          confirmLabel: 'Écraser'
+        }))) return;
         // Remplace le bassin et ses mesures
         const others = existing.filter(b => b.id !== d.bassin.id);
         saveBassins([...others, d.bassin]);
@@ -3219,7 +3273,7 @@ async function adminUpdateTicket(id, statut){
 
 async function adminDeleteTicket(id){
   if(!adminPassword) return;
-  if(!confirm('Supprimer définitivement ce ticket ?')) return;
+  if(!(await uiConfirm({ message: 'Supprimer définitivement ce ticket ?', confirmLabel: 'Supprimer' }))) return;
   try{
     await adminCall({password: adminPassword, action:'delete', id});
     adminLoadTickets();
@@ -4690,7 +4744,11 @@ window.revokeShareLink = async function(token){
   if(!_authUser) return;
   const supa = getSupa();
   if(!supa) return;
-  if(!confirm('Révoquer ce lien ? Il deviendra inaccessible immédiatement.')) return;
+  if(!(await uiConfirm({
+    title: 'Révoquer le lien',
+    message: 'Révoquer ce lien ? Il deviendra inaccessible immédiatement.',
+    confirmLabel: 'Révoquer', icon: '🔗'
+  }))) return;
   const { error } = await supa.from('cp_share_links').update({ revoked_at: new Date().toISOString() }).eq('token', token);
   if(error){ toast('Erreur révocation', 'err'); console.warn(error); return; }
   // Reflète la révocation dans le cache de session (sinon un lien créé puis
@@ -4706,9 +4764,13 @@ function shareUrl(token){
   return `${window.location.origin}${window.location.pathname}?share=${token}`;
 }
 
-window.openShareModal = function(bassinId){
+window.openShareModal = async function(bassinId){
   if(!_authUser){
-    if(confirm("Pour partager un lien de lecture seule, il faut un compte (gratuit, magic link). Te connecter maintenant ?")){
+    if(await uiConfirm({
+      title: 'Compte requis',
+      message: 'Pour partager un lien de lecture seule, il faut un compte (gratuit, magic link). Te connecter maintenant ?',
+      confirmLabel: 'Se connecter', icon: '🔗', danger: false
+    })){
       openAccountLogin();
     }
     return;
@@ -5961,7 +6023,11 @@ window.sendMagicLink = async function(){
 };
 
 window.accountLogout = async function(){
-  if(!confirm('Te déconnecter ? Tes données restent sur cet appareil.')) return;
+  if(!(await uiConfirm({
+    title: 'Déconnexion',
+    message: 'Te déconnecter ? Tes données restent sur cet appareil.',
+    confirmLabel: 'Se déconnecter', icon: '👋', danger: false
+  }))) return;
   const supa = getSupa();
   if(supa){ try{ await supa.auth.signOut(); }catch(e){} }
   _authUser = null;
@@ -6335,6 +6401,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 const RELEASE_NOTES_KEY = 'cp_release_notes_seen_v1';
 
 const RELEASE_NOTES = [
+  {
+    version: '1.28.0',
+    icon: '🛡️',
+    color: '#a78bfa',
+    title: 'Confirmations fiables + blindage sécurité',
+    body: "Toutes les confirmations (réinitialisation, restauration, déconnexion, révocation de lien…) utilisent désormais la fenêtre intégrée de l'app : plus de blocage possible sur Android/APK où la boîte du navigateur pouvait ne jamais s'afficher. L'import d'un fichier de sauvegarde vérifie maintenant sa structure avant d'écraser quoi que ce soit — un fichier invalide est refusé sans toucher à tes données. Côté coulisses : politique de sécurité CSP sur le site et données météo/partage toujours fraîches (fini le cache qui retardait d'un chargement).",
+  },
   {
     version: '1.27.0',
     icon: '🖼️',

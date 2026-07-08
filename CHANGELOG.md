@@ -5,6 +5,16 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.28.0] — 2026-07-08
+
+### Corrigé
+- **`window.confirm` éliminé partout** (8 sites : réinitialisation, restauration ×2, déconnexion, désactivation sauvegarde cloud, suppression ticket admin, révocation de lien, invite de connexion au partage) au profit de la modale `uiConfirm` maison. Le confirm natif peut être silencieusement bloqué dans la TWA Android (APK Bubblewrap) et le navigateur propose « empêcher les boîtes de dialogue » après plusieurs appels — rendant ces actions impossibles.
+- **Import JSON validé structurellement** (`sanitizeImportedData`) : types vérifiés, entrées invalides filtrées (mesures sans objet/date parsable, bassins sans id), fichier sans donnée exploitable refusé — un JSON quelconque ne peut plus corrompre le localStorage.
+- **Service worker : réseau d'abord pour les API dynamiques** (`*.supabase.co`, `open-meteo.com`) avec cache en secours hors-ligne. Le cache-first servait le mode viewer (lien partagé) et la météo avec un chargement de retard.
+
+### Ajouté
+- **Content-Security-Policy** et en-têtes de sécurité (`Referrer-Policy`, `X-Frame-Options`, `Permissions-Policy`) dans `vercel.json`. Origines autorisées limitées à Supabase, open-meteo, jsdelivr, Google Fonts et Umami ; `'unsafe-inline'` conservé pour les scripts (handlers `onclick` inline de l'UI) — la CSP bloque néanmoins toute injection de script tiers.
+
 ## [1.27.0] — 2026-07-06
 
 ### Corrigé

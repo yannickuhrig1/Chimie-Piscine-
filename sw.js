@@ -1,4 +1,4 @@
-const CACHE = 'chimie-piscine-v90';
+const CACHE = 'chimie-piscine-v91';
 const ASSETS = [
   './',
   './app.js',
@@ -30,6 +30,24 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if(e.request.method !== 'GET') return;
+  const url = new URL(e.request.url);
+  // API dynamiques (Supabase share-view, météo) : réseau d'abord, cache en
+  // secours hors-ligne. Le cache-first servait des données en retard d'un
+  // chargement (mode viewer figé, météo périmée).
+  const isApi = url.hostname.endsWith('.supabase.co') || url.hostname.endsWith('open-meteo.com');
+  if(isApi){
+    e.respondWith(
+      fetch(e.request).then(resp => {
+        if(resp && resp.status === 200 && resp.type !== 'opaque'){
+          const clone = resp.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone)).catch(()=>{});
+        }
+        return resp;
+      }).catch(() => caches.match(e.request).then(c => c || Response.error()))
+    );
+    return;
+  }
+  // Assets statiques : cache d'abord, mise à jour en arrière-plan
   e.respondWith(
     caches.match(e.request).then(cached => {
       const fetchPromise = fetch(e.request).then(resp => {

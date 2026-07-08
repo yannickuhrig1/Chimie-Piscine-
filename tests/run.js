@@ -160,6 +160,24 @@ for(const [name, m] of Object.entries(scenarios)){
     && (joined.includes('vidange') || joined.includes('Vidange')) === (plan.drains.length > 0 || (plan.sel != null && plan.sel.type === 'dilution')));
 }
 
+// ============ 6. Sanitisation de l'import JSON ============
+check('import: null refusé', sanitizeImportedData(null) === null);
+check('import: tableau refusé', sanitizeImportedData([1,2]) === null);
+check('import: measurements non-array refusé', sanitizeImportedData({ measurements: 'hello' }) === null);
+check('import: bassins non-array refusé', sanitizeImportedData({ bassins: 42 }) === null);
+check('import: reminders array refusé', sanitizeImportedData({ reminders: [] }) === null);
+check('import: objet vide refusé (rien d\'exploitable)', sanitizeImportedData({ version: 2 }) === null);
+check('import: export valide accepté', (() => {
+  const d = sanitizeImportedData({ measurements: [{ id: 'm1', date: '2026-07-01T10:00:00.000Z', ph: 7.2 }],
+    bassins: [{ id: 'b1', nom: 'Test' }], activeBassin: 'b1', version: 2 });
+  return d && d.measurements.length === 1 && d.bassins.length === 1 && d.activeBassin === 'b1';
+})());
+check('import: entrées invalides filtrées', (() => {
+  const d = sanitizeImportedData({ measurements: [{ id: 'm1', date: '2026-07-01T10:00:00.000Z' }, 'junk', null, { date: 'pas-une-date' }],
+    bassins: [{ id: 'b1' }, { nom: 'sans-id' }, 7] });
+  return d && d.measurements.length === 1 && d.bassins.length === 1;
+})());
+
 // Cas ciblés hérités de l'audit (les divergences historiques ne doivent pas revenir)
 {
   const bromeM = scenarios['brome_dose'];
