@@ -277,7 +277,12 @@ jobs:
           # signé avec autre chose est refusé à l'import, mais rien dans le build
           # ne le signale : on vérifie donc le bundle réellement produit, et non
           # le keystore présent sur le disque.
-          EXPECTED_SHA1="26:FF:86:86:42:6B:95:10:BB:52:41:F9:2F:BD:2D:DC:75:E8:4F:57"
+          #
+          # L'ancienne clé (`26:FF:86:86:…`) a été perdue ; une réinitialisation a
+          # été demandée le 01/08/2026 et Google bascule sur celle du keystore CI
+          # le 03/08/2026 à 08:42 UTC. Aucun import n'est accepté avant cette date,
+          # quelle que soit la signature.
+          EXPECTED_SHA1="75:90:E3:01:06:39:63:01:24:A1:69:0C:4E:C5:96:7A:00:4D:E2:3B"
 
           AAB=$(find . -name "*.aab" -not -path "*/build/intermediates/*" | head -1)
           if [ -z "$AAB" ]; then
