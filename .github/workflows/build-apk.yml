@@ -37,7 +37,12 @@ jobs:
           java-version: '17'
 
       - name: Install Bubblewrap CLI
-        run: npm install -g @bubblewrap/cli
+        # Version ÉPINGLÉE : c'est bubblewrap (et non ce workflow) qui décide du
+        # targetSdkVersion généré et de la version exacte de build-tools exigée.
+        # Une montée de version silencieuse casse le build ou change la cible API
+        # sans qu'on s'en aperçoive. 1.25.0 → compileSdk/targetSdk 36 (Android 16,
+        # exigé par Google Play au 31/08/2026) et build-tools 36.1.0.
+        run: npm install -g @bubblewrap/cli@1.25.0
 
       - name: Determine PWA URL
         id: url
@@ -111,14 +116,18 @@ jobs:
           fi
           ls -la "$SDK_PATH/tools/bin/sdkmanager" || echo "WARN: tools/bin/sdkmanager absent"
 
-          # Bubblewrap exige EXACTEMENT build-tools/34.0.0 (version codée en dur
-          # dans SUPPORTED_BUILD_TOOLS_VERSION). Les runners n'ont que des versions
-          # plus récentes → on installe la 34.0.0 + platform-34 via sdkmanager.
+          # Bubblewrap exige EXACTEMENT la build-tools de BUILD_TOOLS_VERSION
+          # (codée en dur dans @bubblewrap/core, checkBuildTools() teste la
+          # présence du dossier). En 1.25.0 c'est 36.1.0, et le gabarit gradle
+          # compile/cible l'API 36 → il faut aussi platforms;android-36.
+          # ⚠️ Ces trois valeurs sont liées à la version épinglée du CLI plus
+          # haut : si tu montes bubblewrap, revérifie BUILD_TOOLS_VERSION et le
+          # targetSdkVersion de template_project/app/build.gradle.
           SDKMANAGER="$SDK_PATH/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-          "$SDKMANAGER" "build-tools;34.0.0" "platforms;android-34" "platform-tools" || \
-            (echo "ERREUR : installation build-tools 34.0.0 échouée" && exit 1)
-          ls -la "$SDK_PATH/build-tools/34.0.0/aapt2" || echo "WARN: aapt2 absent"
+          "$SDKMANAGER" "build-tools;36.1.0" "platforms;android-36" "platform-tools" || \
+            (echo "ERREUR : installation build-tools 36.1.0 échouée" && exit 1)
+          ls -la "$SDK_PATH/build-tools/36.1.0/aapt2" || echo "WARN: aapt2 absent"
 
           mkdir -p ~/.bubblewrap
           cat > ~/.bubblewrap/config.json <<EOF
@@ -212,6 +221,20 @@ jobs:
           node -e "const c=require('crypto'),f=require('fs');f.writeFileSync('manifest-checksum.txt',c.createHash('sha1').update(f.readFileSync('twa-manifest.json')).digest('hex'))"
           echo "--- manifest-checksum.txt ---"; cat manifest-checksum.txt; echo
           echo "--- gradlew présent ? ---"; ls -la gradlew
+
+          # Garde-fou niveau d'API cible. Google Play refuse les mises à jour des
+          # applis qui ciblent une API de plus d'un an (Chimie Piscine : API 36
+          # exigée au 31/08/2026). Le targetSdkVersion vient du gabarit de
+          # bubblewrap, pas de twa-manifest.json : une régression est donc
+          # invisible ici et n'apparaît qu'après coup, en notification Play
+          # Console. On échoue le build tout de suite.
+          MIN_TARGET_SDK=36
+          TARGET_SDK=$(grep -oP 'targetSdkVersion\s+\K[0-9]+' app/build.gradle | head -1)
+          echo "targetSdkVersion généré = ${TARGET_SDK:-introuvable}"
+          if [ -z "$TARGET_SDK" ] || [ "$TARGET_SDK" -lt "$MIN_TARGET_SDK" ]; then
+            echo "::error::targetSdkVersion=${TARGET_SDK:-introuvable} < $MIN_TARGET_SDK requis par Google Play. Monte @bubblewrap/cli et aligne build-tools/platforms."
+            exit 1
+          fi
 
       - name: Build APK
         working-directory: android-build
