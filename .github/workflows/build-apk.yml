@@ -236,6 +236,21 @@ jobs:
             exit 1
           fi
 
+      - name: Re-restore keystore before signing
+        working-directory: android-build
+        env:
+          ANDROID_KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          # `bubblewrap update` appelle removeTwaProject(), qui nettoie le dossier
+          # du projet — or android.keystore s'y trouve. Sans cette restauration,
+          # `bubblewrap build` en régénère un avec les MÊMES mots de passe mais un
+          # certificat différent : l'AAB est signé, le build est vert, et c'est
+          # seulement au moment de l'import que Google le refuse (« signé avec la
+          # mauvaise clé »). Vécu le 01/08/2026.
+          echo "$ANDROID_KEYSTORE_B64" | base64 -d > android.keystore
+          keytool -list -v -keystore android.keystore -storepass chimiepiscine \
+            -alias android | grep -i "SHA1:" || true
+
       - name: Build APK
         working-directory: android-build
         env:
@@ -254,6 +269,32 @@ jobs:
             echo "=== build/outputs ==="; find . -path "*outputs*" -name "*.apk" -o -path "*outputs*" -name "*.aab" 2>/dev/null | head
             exit $code
           }
+
+      - name: Verify signing certificate
+        working-directory: android-build
+        run: |
+          # Empreinte de la clé d'IMPORTATION enregistrée chez Google Play. Un AAB
+          # signé avec autre chose est refusé à l'import, mais rien dans le build
+          # ne le signale : on vérifie donc le bundle réellement produit, et non
+          # le keystore présent sur le disque.
+          EXPECTED_SHA1="26:FF:86:86:42:6B:95:10:BB:52:41:F9:2F:BD:2D:DC:75:E8:4F:57"
+
+          AAB=$(find . -name "*.aab" -not -path "*/build/intermediates/*" | head -1)
+          if [ -z "$AAB" ]; then
+            echo "::error::aucun .aab trouvé pour vérifier la signature"; exit 1
+          fi
+
+          ACTUAL_SHA1=$(keytool -printcert -jarfile "$AAB" \
+            | grep -i "SHA1:" | head -1 | sed 's/.*SHA1: *//' | tr -d '[:space:]')
+          echo "AAB          : $AAB"
+          echo "SHA1 attendu : $EXPECTED_SHA1"
+          echo "SHA1 trouvé  : ${ACTUAL_SHA1:-introuvable}"
+
+          if [ "$ACTUAL_SHA1" != "$EXPECTED_SHA1" ]; then
+            echo "::error::L'AAB est signé avec la mauvaise clé (${ACTUAL_SHA1:-introuvable}). Google Play refusera l'import. Vérifie le secret ANDROID_KEYSTORE_B64 et l'étape de re-restauration du keystore."
+            exit 1
+          fi
+          echo "Signature conforme à la clé d'importation Play."
 
       - name: Find APK
         id: find_apk
