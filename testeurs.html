@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Devenir testeur — Chimie Piscine</title>
+<meta name="description" content="Rejoindre le test fermé de l'application Android Chimie Piscine sur le Play Store, en trois étapes.">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --abyss:#041d2e;
+    --deep:#0a3d62;
+    --mid:#1c6b8c;
+    --water:#22b4d4;
+    --shallow:#7fdbda;
+    --foam:#e8f9f8;
+    --coral:#ff6b6b;
+    --lemon:#ffd166;
+    --leaf:#06d6a0;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    background:#0a1f33;color:var(--foam);
+    font-family:'Manrope',sans-serif;min-height:100vh;line-height:1.6;
+    -webkit-text-size-adjust:100%;
+  }
+  a{color:var(--shallow);text-decoration:none;border-bottom:1px solid rgba(127,219,218,.35)}
+  a:hover{border-bottom-color:var(--shallow)}
+  :focus-visible{outline:2px solid var(--shallow);outline-offset:3px;border-radius:4px}
+
+  .toolbar{
+    position:sticky;top:0;z-index:50;
+    display:flex;gap:14px;align-items:center;
+    padding:14px 18px;background:rgba(4,29,46,.92);backdrop-filter:blur(10px);
+    border-bottom:1px solid rgba(127,219,218,.2);
+  }
+  .home{
+    width:34px;height:34px;border-radius:10px;flex-shrink:0;
+    background:linear-gradient(135deg,var(--water),var(--shallow));
+    display:grid;place-items:center;text-decoration:none;color:white;font-size:18px;
+    border:none;
+  }
+  .toolbar .title{font-family:'Fraunces',serif;font-size:17px;font-weight:500}
+  .toolbar .title em{font-style:italic;color:var(--shallow);font-weight:400}
+
+  main{max-width:720px;margin:0 auto;padding:36px 20px 80px}
+
+  h1{
+    font-family:'Fraunces',serif;font-size:clamp(27px,7.5vw,34px);font-weight:500;
+    letter-spacing:-.02em;margin-bottom:8px;line-height:1.15;
+  }
+  h1 em{font-style:italic;color:var(--shallow);font-weight:400}
+  .meta{font-size:13px;color:var(--shallow);opacity:.75;margin-bottom:26px}
+
+  .intro{
+    background:rgba(34,180,212,.08);border:1px solid rgba(127,219,218,.2);
+    border-radius:16px;padding:18px 20px;margin-bottom:22px;font-size:14.5px;
+  }
+  p{margin:10px 0;font-size:14.5px;color:rgba(232,249,248,.92)}
+  strong{color:var(--foam);font-weight:600}
+  code{
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;
+    background:rgba(255,255,255,.08);padding:1px 6px;border-radius:6px;
+    color:var(--shallow);word-break:break-all;
+  }
+
+  /* Avertissement — première cause d'abandon des testeurs, doit sauter aux yeux */
+  .warn{
+    background:rgba(255,209,102,.1);
+    border:1px solid rgba(255,209,102,.45);
+    border-left:4px solid var(--lemon);
+    border-radius:14px;padding:16px 18px;margin:0 0 30px;
+  }
+  .warn .warn-head{
+    display:flex;align-items:center;gap:9px;margin-bottom:7px;
+    font-weight:700;font-size:14.5px;color:var(--lemon);
+  }
+  .warn .warn-head span[aria-hidden]{font-size:18px;line-height:1}
+  .warn p{font-size:14px;color:rgba(232,249,248,.95);margin:6px 0 0}
+
+  .step{
+    background:rgba(255,255,255,.04);border:1px solid rgba(127,219,218,.15);
+    border-radius:16px;padding:18px;margin:0 0 14px;
+  }
+  .step-head{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+  .step-num{
+    flex-shrink:0;width:32px;height:32px;border-radius:11px;
+    background:linear-gradient(135deg,var(--water),var(--mid));
+    display:grid;place-items:center;color:#fff;font-weight:700;font-size:15px;
+    font-family:'Fraunces',serif;
+  }
+  .step-title{
+    font-family:'Fraunces',serif;font-size:19px;font-weight:500;
+    color:var(--foam);letter-spacing:-.01em;line-height:1.25;
+  }
+  .step p{font-size:14px;color:rgba(232,249,248,.85);margin:8px 0}
+
+  .btn{
+    display:inline-block;margin-top:12px;
+    background:linear-gradient(135deg,var(--water),var(--mid));
+    color:#fff;font-weight:600;font-size:14px;
+    padding:11px 20px;border-radius:12px;border:none;
+    box-shadow:0 4px 14px -4px rgba(34,180,212,.6);
+    text-decoration:none;
+  }
+  .btn:hover{filter:brightness(1.08);border:none}
+  .btn-sub{
+    display:block;margin-top:8px;font-size:12px;
+    color:rgba(232,249,248,.5);word-break:break-all;
+  }
+
+  .footer{
+    margin-top:44px;padding-top:24px;
+    border-top:1px solid rgba(127,219,218,.15);
+    font-size:13.5px;color:rgba(232,249,248,.7);
+  }
+  .footer h2{
+    font-family:'Fraunces',serif;font-size:19px;font-weight:500;
+    color:var(--shallow);margin-bottom:8px;
+  }
+  .footer .back{
+    display:block;margin-top:22px;text-align:center;
+    font-size:13px;color:var(--shallow);
+  }
+
+  @media (max-width:400px){
+    main{padding:26px 14px 60px}
+    .step{padding:15px}
+    .btn{display:block;text-align:center}
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <a class="home" href="/" aria-label="Retour à l'application">←</a>
+  <div class="title"><em>Chimie Piscine</em> — Testeurs</div>
+</div>
+
+<main>
+  <h1>Devenir <em>testeur</em></h1>
+  <div class="meta">Test fermé Android — version de l'application : 1.29.0</div>
+
+  <div class="intro">
+    <p>Chimie Piscine existe en application Android, mais Google exige qu'elle soit
+    testée par <strong>12 personnes pendant 14 jours</strong> avant d'autoriser sa
+    publication sur le Play Store. Si vous utilisez déjà l'app pour votre bassin,
+    vous êtes exactement la bonne personne : il suffit de l'installer et de
+    continuer à vous en servir normalement.</p>
+  </div>
+
+  <div class="warn">
+    <div class="warn-head"><span aria-hidden="true">⚠️</span> À lire avant de commencer</div>
+    <p>Le compte Google que vous utilisez pour rejoindre le groupe doit être
+    <strong>exactement celui du Play Store de votre téléphone</strong>. Si vous
+    vous inscrivez avec une autre adresse, le lien de test affichera une erreur et
+    l'application restera introuvable. En cas de doute, ouvrez le Play Store sur
+    votre téléphone et vérifiez l'adresse affichée en haut à droite.</p>
+  </div>
+
+  <div class="step">
+    <div class="step-head">
+      <div class="step-num">1</div>
+      <div class="step-title">Rejoindre le groupe de testeurs</div>
+    </div>
+    <p>Cliquez sur le bouton, puis sur <strong>« Rejoindre le groupe »</strong>.
+    L'adhésion est immédiate, sans validation de ma part. Le groupe ne sert qu'à
+    donner l'accès au test : il n'envoie aucun e-mail.</p>
+    <a class="btn" href="https://groups.google.com/g/chimie-piscine-testeurs" target="_blank" rel="noopener">Rejoindre le groupe</a>
+    <span class="btn-sub">groups.google.com/g/chimie-piscine-testeurs</span>
+  </div>
+
+  <div class="step">
+    <div class="step-head">
+      <div class="step-num">2</div>
+      <div class="step-title">Accepter l'invitation au test</div>
+    </div>
+    <p>Une fois membre du groupe, ouvrez ce lien et cliquez sur
+    <strong>« Devenir testeur »</strong>. C'est l'étape qui vous fait réellement
+    compter dans le test — sans elle, l'inscription au groupe ne suffit pas.</p>
+    <a class="btn" href="https://play.google.com/apps/testing/fr.yannickuhrig.chimiepiscine" target="_blank" rel="noopener">Devenir testeur</a>
+    <span class="btn-sub">play.google.com/apps/testing/fr.yannickuhrig.chimiepiscine</span>
+  </div>
+
+  <div class="step">
+    <div class="step-head">
+      <div class="step-num">3</div>
+      <div class="step-title">Installer et garder 14 jours</div>
+    </div>
+    <p>Installez l'application depuis le Play Store, sur le même téléphone et avec
+    le même compte. Comptez quelques minutes avant qu'elle n'apparaisse&nbsp;:
+    le Play Store met parfois un peu de temps à se mettre à jour.</p>
+    <p>Ensuite, <strong>laissez-la installée pendant 14 jours</strong> et
+    servez-vous-en comme d'habitude. Si vous la désinstallez avant, le compteur de
+    Google repart à zéro pour tout le monde.</p>
+    <a class="btn" href="https://play.google.com/store/apps/details?id=fr.yannickuhrig.chimiepiscine" target="_blank" rel="noopener">Ouvrir sur le Play Store</a>
+    <span class="btn-sub">fr.yannickuhrig.chimiepiscine</span>
+  </div>
+
+  <div class="footer">
+    <h2>Un retour à me faire&nbsp;?</h2>
+    <p>Écrivez-moi à
+    <a href="mailto:support@yannick-uhrig.com?subject=Test%20ferm%C3%A9%20Chimie%20Piscine">support@yannick-uhrig.com</a>,
+    ou passez par le formulaire de contact dans l'application.</p>
+    <p>Même un simple <strong>« tout fonctionne, rien à signaler »</strong> m'est
+    utile&nbsp;: Google me demande de résumer ce que les testeurs ont remonté pour
+    accorder l'accès à la production. Un message d'une ligne suffit.</p>
+    <p>Merci beaucoup pour le coup de main.</p>
+
+    <a class="back" href="/">Retour à Chimie Piscine</a>
+  </div>
+</main>
+
+</body>
+</html>

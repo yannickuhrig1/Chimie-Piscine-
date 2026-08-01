@@ -5,6 +5,12 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.29.0] — 2026-08-01
+
+### Ajouté
+- **Page `/testeurs`** : marche à suivre en trois étapes pour rejoindre le test fermé Android (adhésion au groupe Google, opt-in Play Store, installation). Google exige 12 testeurs inscrits pendant 14 jours consécutifs avant d'autoriser la publication en production ; l'encadré d'avertissement insiste sur le point qui fait échouer la plupart des inscriptions — le compte Google utilisé doit être celui du Play Store du téléphone.
+- **Bannière de recrutement** (`js/tester-banner.js`) proposant de rejoindre le test. Conditions d'affichage : Android, hors application installée, à partir de la 2ᵉ session, jamais après le 30/09/2026. « Plus tard » reporte de 7 jours, la croix et « Je participe » ne la réaffichent jamais. Paramètres de debug `?cp_test=1` (force l'affichage) et `?cp_test=reset` (remet à zéro).
+
 ## [1.28.0] — 2026-07-08
 
 ### Corrigé
