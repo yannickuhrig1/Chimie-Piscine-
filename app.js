@@ -6402,6 +6402,14 @@ const RELEASE_NOTES_KEY = 'cp_release_notes_seen_v1';
 
 const RELEASE_NOTES = [
   {
+    version: '1.29.0',
+    icon: '🤝',
+    color: '#22b4d4',
+    title: 'Coup de main : l’app Android cherche des testeurs',
+    body: "Chimie Piscine existe en application Android, mais Google exige qu'elle soit testée par 12 personnes pendant 14 jours avant d'autoriser sa publication sur le Play Store. Si tu as un téléphone Android et un compte Google, la page « Devenir testeur » explique la marche à suivre en trois étapes — il suffit ensuite d'utiliser l'app normalement. Sur iPhone ou sur ordinateur, rien à faire : le site continue de fonctionner comme avant.",
+    link: { href: '/testeurs', label: 'Devenir testeur' },
+  },
+  {
     version: '1.28.0',
     icon: '🛡️',
     color: '#a78bfa',
@@ -6527,11 +6535,17 @@ window.openReleaseNotes = function(notes){
   notes = notes || RELEASE_NOTES;
   list.innerHTML = notes.map(n => {
     const rgb = _hexToRgbStr(n.color);
+    // Lien optionnel : le corps de la note est échappé, une note qui demande une
+    // action à l'utilisateur a donc besoin de ce champ pour être cliquable.
+    const link = n.link
+      ? `<a href="${escapeHtml(n.link.href)}" style="display:inline-block;margin-top:9px;font-size:13px;font-weight:600;color:#fff;background:rgba(${rgb},.9);padding:7px 13px;border-radius:9px;text-decoration:none">${escapeHtml(n.link.label)}</a>`
+      : '';
     return `<div style="display:flex;gap:12px;padding:14px;margin-bottom:10px;background:rgba(${rgb},.06);border:1px solid rgba(${rgb},.18);border-radius:12px">
       <div style="font-size:28px;flex:0 0 auto;line-height:1">${n.icon}</div>
       <div style="flex:1;min-width:0">
         <div style="font-weight:600;color:#fff;margin-bottom:4px;font-size:14px">${escapeHtml(n.title)}</div>
         <div style="font-size:13px;color:var(--shallow);line-height:1.55">${escapeHtml(n.body)}</div>
+        ${link}
       </div>
     </div>`;
   }).join('');

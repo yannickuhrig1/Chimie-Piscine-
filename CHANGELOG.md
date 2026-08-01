@@ -9,6 +9,7 @@ versionnage selon [SemVer](https://semver.org/lang/fr/).
 
 ### Ajouté
 - **Page `/testeurs`** : marche à suivre en trois étapes pour rejoindre le test fermé Android (adhésion au groupe Google, opt-in Play Store, installation). Google exige 12 testeurs inscrits pendant 14 jours consécutifs avant d'autoriser la publication en production ; l'encadré d'avertissement insiste sur le point qui fait échouer la plupart des inscriptions — le compte Google utilisé doit être celui du Play Store du téléphone.
+- **Note de version « Coup de main : l'app Android cherche des testeurs »**, avec un bouton vers `/testeurs`. La bannière ne cible que les visiteurs Android hors application installée ; la note de version, elle, touche tous les utilisateurs existants au prochain lancement — c'est le second canal de recrutement. Le schéma des notes accepte désormais un champ `link` optionnel (`{ href, label }`), le corps étant échappé et donc incapable de porter un lien.
 - **Bannière de recrutement** (`js/tester-banner.js`) proposant de rejoindre le test. Conditions d'affichage : Android, hors application installée, à partir de la 2ᵉ session, jamais après le 30/09/2026. « Plus tard » reporte de 7 jours, la croix et « Je participe » ne la réaffichent jamais. Paramètres de debug `?cp_test=1` (force l'affichage) et `?cp_test=reset` (remet à zéro).
 
 ## [1.28.0] — 2026-07-08
