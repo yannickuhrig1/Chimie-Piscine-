@@ -4587,9 +4587,11 @@ const EDU_ARTICLES = [
       <h3>❄ Hivernage (octobre-mars)</h3>
       <p>Deux écoles :</p>
       <ul>
-        <li><strong>Actif</strong> : filtration 2-4 h/jour quand T° eau < 12°C, pas de produit hivernage. Plus simple, mais consomme un peu d'électricité.</li>
-        <li><strong>Passif</strong> : couvrir, baisser le niveau d'eau, vidanger les skimmers, ajouter un anti-algues hivernage. Plus économe en énergie, mais demande une remise en route plus longue au printemps.</li>
+        <li><strong>Actif</strong> (climat doux, gel rare et court) : la filtration continue 2-4 h/jour, tôt le matin, niveau d'eau normal. Un coffret hors-gel relance la pompe dès qu'il gèle. La désinfection est maintenue (galet de chlore lent ou produit d'hivernage). Consomme un peu d'électricité, mais la remise en route au printemps est bien plus simple.</li>
+        <li><strong>Passif</strong> (gel fréquent ou prolongé) : filtration arrêtée, niveau baissé sous les buses, canalisations vidangées, flotteurs + bouchons, produit d'hivernage et bâche. Aucune consommation l'hiver, mais une remise en route plus longue.</li>
       </ul>
+      <p><strong>Électrolyse au sel</strong> : la plupart des électrolyseurs coupent leur production sous ~12 °C d'eau. En hivernage actif, prends le relais au chlore lent et garde le sel au-dessus de 2 g/L ; redémarre la cellule au printemps une fois l'eau au-dessus de 15 °C.</p>
+      <p>Les deux méthodes ont leur checklist guidée : <a href="#" onclick="closeEducation();openSeasonGuide('hivernage');return false" style="color:#5eead4">Rappels › Saisons</a>.</p>
       <p>Dans tous les cas : <strong>équilibre l'eau avant</strong> (pH, TAC, TH). Une eau déséquilibrée pendant 5 mois fait beaucoup plus de dégâts qu'une saison entière.</p>
     `
   },
@@ -4606,15 +4608,14 @@ const EDU_ARTICLES = [
       <p>Règle universelle : <strong>temps de filtration (h) = T° eau ÷ 2</strong>.</p>
       <table style="width:100%;border-collapse:collapse;font-size:13px;margin:10px 0">
         <tr style="background:rgba(255,255,255,.05)"><th style="text-align:left;padding:6px">T° eau</th><th style="text-align:left;padding:6px">Heures/jour</th><th style="text-align:left;padding:6px">Phase</th></tr>
-        <tr><td style="padding:6px">&lt; 10 °C</td><td style="padding:6px">1 h (ou arrêt)</td><td style="padding:6px">Hivernage</td></tr>
-        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">10-12 °C</td><td style="padding:6px">2 h</td><td style="padding:6px">Hivernage actif</td></tr>
-        <tr><td style="padding:6px">12-16 °C</td><td style="padding:6px">4-6 h</td><td style="padding:6px">Démarrage / déshivernage</td></tr>
-        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">16-20 °C</td><td style="padding:6px">8-10 h</td><td style="padding:6px">Printemps</td></tr>
-        <tr><td style="padding:6px">20-24 °C</td><td style="padding:6px">10-12 h</td><td style="padding:6px">Été doux</td></tr>
-        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">24-28 °C</td><td style="padding:6px">12-14 h</td><td style="padding:6px">Pleine saison</td></tr>
-        <tr><td style="padding:6px">&gt; 28 °C</td><td style="padding:6px">24 h</td><td style="padding:6px">Canicule (continu)</td></tr>
+        <tr><td style="padding:6px">&lt; 12 °C</td><td style="padding:6px">2-4 h, tôt le matin (actif) · arrêt (passif)</td><td style="padding:6px">Hivernage</td></tr>
+        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">12-16 °C</td><td style="padding:6px">4-6 h</td><td style="padding:6px">Démarrage / déshivernage</td></tr>
+        <tr><td style="padding:6px">16-20 °C</td><td style="padding:6px">8-10 h</td><td style="padding:6px">Printemps</td></tr>
+        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">20-24 °C</td><td style="padding:6px">10-12 h</td><td style="padding:6px">Été doux</td></tr>
+        <tr><td style="padding:6px">24-28 °C</td><td style="padding:6px">12-14 h</td><td style="padding:6px">Pleine saison</td></tr>
+        <tr style="background:rgba(255,255,255,.03)"><td style="padding:6px">&gt; 28 °C</td><td style="padding:6px">24 h</td><td style="padding:6px">Canicule (continu)</td></tr>
       </table>
-      <p><strong>Toujours en journée</strong> (8 h–20 h) : la photosynthèse et la chaleur réveillent les algues le jour, donc c'est le moment où chlore et filtration doivent travailler.</p>
+      <p><strong>Toujours en journée</strong> (8 h–20 h) en saison : la photosynthèse et la chaleur réveillent les algues le jour, donc c'est le moment où chlore et filtration doivent travailler. Exception en hivernage actif : on filtre tôt le matin, aux heures les plus froides, pour que l'eau en mouvement ne gèle pas.</p>
 
       <h3>1 cycle = 1 volume du bassin filtré</h3>
       <p>Un « cycle » signifie que la pompe a fait passer un volume d'eau équivalent à tout le bassin dans le filtre.</p>
@@ -4646,7 +4647,7 @@ const EDU_ARTICLES = [
         <li><strong>Mars-avril (déshivernage)</strong> : démarrer la filtration dès que l'eau atteint 12 °C, T°/2.</li>
         <li><strong>Été</strong> : suivre la règle, passer en 24/24 au-dessus de 28 °C.</li>
         <li><strong>Sept-oct</strong> : descendre progressivement avec la T°.</li>
-        <li><strong>Hivernage actif</strong> (climat doux, gel rare) : 2 h/j sur le créneau le plus chaud (ex. 11h-13h) + produit antigel.</li>
+        <li><strong>Hivernage actif</strong> (climat doux, gel rare) : 2-4 h/j tôt le matin, aux heures les plus froides — l'eau en mouvement ne gèle pas. Coffret hors-gel pour relancer la pompe dès 0 °C, ou filtration 24/24 pendant les gelées.</li>
         <li><strong>Hivernage passif</strong> (gel fréquent) : arrêt total, vidange partielle, flotteurs/gizmo.</li>
       </ul>
 

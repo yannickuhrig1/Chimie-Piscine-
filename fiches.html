@@ -592,7 +592,7 @@ const FICHES = {
     range:{lbl:'Démarrage', val:'< 12 °C', ideal:'eau encore propre'},
     short:'Bassin protégé l\'hiver = saison qui démarre vite au printemps.',
     define:[
-      "L'hivernage <strong>passif</strong> (eau au repos) est le standard pour les bassins enterrés. Il se déclenche quand l'eau passe <strong>sous 12°C de manière stable</strong>, généralement courant novembre.",
+      "Deux méthodes. <strong>Passif</strong> (filtration arrêtée, circuits vidangés) : le standard en région froide, dès que l'eau reste <strong>sous 12°C</strong>, souvent courant novembre. <strong>Actif</strong> (filtration 2-4 h/j tôt le matin, niveau normal, coffret hors-gel) : pour les climats doux, avec une remise en route plus simple — sa checklist est guidée dans l'app.",
       "L'objectif : protéger le bassin du gel, limiter le développement d\'algues, et préparer un redémarrage facile au printemps."
     ],
     checklist:[
@@ -657,7 +657,7 @@ function renderFiche(slug){
   } else if(f.checklist){
     body += `
     <div class="section">
-      <span class="section-label">Checklist — hivernage</span>
+      <span class="section-label">Checklist — hivernage passif</span>
       <div class="checklist">
         ${f.checklist.map(c=>`<div class="check-item">${c}</div>`).join('')}
       </div>
