@@ -4931,9 +4931,10 @@ window.getActiveBassinId = function(){ return _viewerMode && _viewerBassin ? _vi
 const _origLoadActiveMeasurementsVM = loadActiveMeasurements;
 window.loadActiveMeasurements = function(){ return _viewerMode ? _viewerMeasurements.slice() : _origLoadActiveMeasurementsVM(); };
 
-// ============== Mode Saisons (Hivernage / Remise en route) ==============
+// ============== Mode Saisons (Hivernage actif / passif · Remise en route) ==============
 const SEASON_STATE_KEY = 'cp_season_state_v1';
 
+// Hivernage PASSIF : filtration arrêtée, circuits vidangés, niveau baissé.
 const SEASON_HIVERNAGE_STEPS = [
   {title:"Choc chlore préventif", detail:"Effectue un choc chloré (Fcl 5-10 ppm) la veille pour décontaminer l'eau et stocker une réserve oxydante. Filtration 24 h avant de passer à l'étape suivante."},
   {title:"Ajuster pH et TAC", detail:"Le pH doit être stable entre 7.0 et 7.4 et le TAC entre 80 et 120 ppm. Un mauvais équilibre pendant l'hiver attaque les revêtements."},
@@ -4945,25 +4946,120 @@ const SEASON_HIVERNAGE_STEPS = [
   {title:"Couvrir la piscine", detail:"Pose une bâche d'hivernage ou couverture filet. Vérifie qu'elle est bien tendue pour éviter qu'elle ne touche l'eau."},
 ];
 
+// Hivernage ACTIF : la filtration continue à régime réduit, niveau normal, hors-gel.
+// Sources : Bayrol (dépliant hivernage), FPP via Selectra, Piscine Center,
+// guide-piscine.fr (coffret hors-gel), notices CCEI Zelia/ZLT (électrolyse < 12 °C).
+const SEASON_HIVERNAGE_ACTIF_STEPS = [
+  {title:"Nettoyer le bassin à fond", detail:"Brosse parois et ligne d'eau, passe l'aspirateur ou le robot, vide les paniers de skimmer et de pompe. Moins il reste de matière organique, moins le désinfectant s'épuise pendant l'hiver."},
+  {title:"Ajuster pH et TAC", detail:"pH entre 7.0 et 7.4, TAC entre 80 et 120\u00a0ppm. Une eau équilibrée protège revêtement et équipements pendant les mois où tu la surveilles moins."},
+  {title:"Choc chloré de fin de saison", detail:"Choc à 5-10\u00a0ppm de Fcl puis filtration 24\u00a0h/24 pendant 24\u00a0h, pour éliminer la charge organique avant que l'eau ne refroidisse."},
+  {title:"Nettoyer et détartrer le filtre", detail:"Contre-lavage + rinçage (filtre à sable) ou nettoyage de la cartouche. Détartre si besoin : le filtre va tourner tout l'hiver."},
+  {title:"Garder le niveau d'eau normal", detail:"Contrairement à l'hivernage passif, ne baisse pas le niveau et ne bouche pas les buses : l'eau reste au milieu des skimmers pour que la pompe continue d'aspirer sans prendre d'air."},
+  {title:"Programmer la filtration d'hiver", detail:"Réduis à 2-4\u00a0h par jour, tôt le matin (heures les plus froides, souvent en heures creuses). Lors d'un redoux où l'eau remonte au-dessus de 12\u00a0°C, rallonge selon la règle T°/2."},
+  {title:"Installer ou vérifier le coffret hors-gel", detail:"Il relance la pompe quand l'air approche 0\u00a0°C : l'eau en mouvement ne gèle pas dans les canalisations. Place la sonde à l'ombre et contrôle qu'elle déclenche dès la première gelée. Sans coffret : filtration 24\u00a0h/24 pendant les épisodes de gel."},
+  {title:"Assurer la désinfection d'hiver", detail:"Un galet de chlore lent dans le skimmer environ une fois par mois, ou un produit d'hivernage dosé selon ton volume, garde l'eau saine jusqu'au printemps.",
+    sel:"Électrolyse : la plupart des électrolyseurs coupent leur production sous ~12\u00a0°C d'eau — c'est normal. Prends le relais au chlore lent et garde le sel au-dessus de 2\u00a0g/L pour protéger la cellule."},
+  {title:"Couvrir le bassin (recommandé)", detail:"Bâche, volet ou couverture limitent feuilles et débris, donc le travail du filtre et la consommation de désinfectant."},
+  {title:"Contrôle toutes les 2\u00a0semaines", detail:"Vide les paniers, vérifie pH et désinfectant, surveille le niveau d'eau (pluie) et la pression du filtre : contre-lavage si elle monte de 0,3 à 0,5\u00a0bar au-dessus de la pression propre."},
+];
+
+// Remise en route après hivernage PASSIF.
 const SEASON_REMISE_STEPS = [
   {title:"Retirer la bâche + débris", detail:"Nettoie la bâche avant rangement (sèche-la). Retire feuilles et débris en surface au filet avant d'enlever les flotteurs."},
   {title:"Retirer flotteurs antigel + bouchons", detail:"Ôte les gizmos et bouchons d'hivernage. Inspecte qu'aucun joint n'est dégradé."},
   {title:"Compléter le niveau d'eau", detail:"Remets le niveau d'eau au milieu du skimmer. Si nécessaire, vidange une partie pour diluer si la conductivité a augmenté."},
-  {title:"Filtration 24 h non-stop (2-3 jours)", detail:"Lance la pompe en continu pendant 48-72 h pour homogénéiser et oxygéner. Surveille bruit/débit anormaux."},
+  {title:"Filtration 24\u00a0h non-stop (2-3 jours)", detail:"Lance la pompe en continu pendant 48-72\u00a0h pour homogénéiser et oxygéner. Surveille bruit/débit anormaux."},
   {title:"Nettoyer/rincer le filtre", detail:"Lavage à contre-courant si filtre à sable. Démontage + nettoyage si cartouche. Remplace la cartouche si > 2 ans ou très encrassée."},
   {title:"Première analyse complète", detail:"Mesure pH, TAC, Fcl, CYA, T°. Le bassin a probablement dérivé pendant l'hiver — c'est normal."},
-  {title:"Ajuster pH et TAC d'abord", detail:"Vise pH 7.2-7.4 et TAC 80-120 ppm. C'est la base avant tout chlore — sans bon équilibre, le chlore reste inefficace."},
-  {title:"Choc chlore décontamination", detail:"Choc à 5-10 ppm Fcl pour éliminer la charge organique accumulée. Filtration 24 h après le choc."},
-  {title:"Vérifier/compléter CYA", detail:"Si CYA < 25 ppm, ajoute du stabilisant (acide cyanurique) pour atteindre 25-30 ppm — sinon ton chlore sera détruit par les UV."},
-  {title:"Re-mesurer 24-48 h après le choc", detail:"Contrôle que le Fcl est redescendu sous 3 ppm avant baignade. Si tout est aligné, ton bassin est prêt pour la saison."},
+  {title:"Ajuster pH et TAC d'abord", detail:"Vise pH 7.2-7.4 et TAC 80-120\u00a0ppm. C'est la base avant tout chlore — sans bon équilibre, le chlore reste inefficace."},
+  {title:"Choc chlore décontamination", detail:"Choc à 5-10\u00a0ppm Fcl pour éliminer la charge organique accumulée. Filtration 24\u00a0h après le choc."},
+  {title:"Vérifier/compléter CYA", detail:"Si CYA < 25\u00a0ppm, ajoute du stabilisant (acide cyanurique) pour atteindre 25-30\u00a0ppm — sinon ton chlore sera détruit par les UV."},
+  {title:"Re-mesurer 24-48\u00a0h après le choc", detail:"Contrôle que le Fcl est redescendu sous 3\u00a0ppm avant baignade. Si tout est aligné, ton bassin est prêt pour la saison."},
 ];
 
+// Remise en route après hivernage ACTIF : pas de flotteurs/bouchons, filtration jamais coupée.
+// Source principale : MyPiscine (remise en route après hivernage actif).
+const SEASON_REMISE_ACTIF_STEPS = [
+  {title:"Retirer et nettoyer la couverture", detail:"Rince le volet ou la bâche au jet d'eau (pas de nettoyeur haute pression) et fais sécher la bâche avant de la ranger. Retire feuilles et débris au filet."},
+  {title:"Repasser la filtration au régime saison", detail:"Dès que l'eau atteint 12\u00a0°C, rallonge progressivement selon la règle T°/2 : 6\u00a0h à 12\u00a0°C, 9\u00a0h à 18\u00a0°C, 12\u00a0h à 24\u00a0°C."},
+  {title:"Nettoyer le filtre", detail:"Filtre à sable : contre-lavage 2-3\u00a0min puis rinçage 30\u00a0s. Cartouche : rinçage au jet, remplacement si elle a plus de 2\u00a0saisons."},
+  {title:"Nettoyer bassin et ligne d'eau", detail:"Brosse les parois, passe l'aspirateur ou le robot et nettoie la ligne d'eau avec un produit adapté à ton revêtement."},
+  {title:"Analyse complète", detail:"Mesure pH, TAC, Fcl, CYA, TH et T°. L'eau a en général moins dérivé qu'après un hivernage passif, mais vérifie tout avant de corriger."},
+  {title:"Ajuster pH et TAC d'abord", detail:"Vise pH 7.2-7.4 et TAC 80-120\u00a0ppm. C'est la base avant tout chlore — sans bon équilibre, le chlore reste inefficace."},
+  {title:"Choc chloré", detail:"Choc à 5-10\u00a0ppm de Fcl si l'eau est trouble ou verte. Coupe les appareils automatiques (électrolyseur, régulation pH) pendant le choc."},
+  {title:"Reprendre le traitement habituel", detail:"Relance ton traitement 48\u00a0h après le choc. Vérifie le stabilisant (CYA) : la page Doses t'indique s'il faut en ajouter.",
+    sel:"Électrolyse : redémarre la cellule une fois l'eau au-dessus de 15\u00a0°C, après avoir vérifié le taux de sel et étalonné la sonde pH."},
+  {title:"Re-mesurer 24-48\u00a0h après le choc", detail:"Contrôle que le Fcl est redescendu sous 3\u00a0ppm avant baignade. Si tout est aligné, ton bassin est prêt pour la saison."},
+];
+
+const SEASON_TYPE_INTRO = {
+  hivernage: {
+    actif: "Quand ? Dès que l'eau passe durablement sous 15\u00a0°C. La filtration continue tout l'hiver à régime réduit — idéal en climat doux, où le gel est rare et court.",
+    passif: "Quand ? Dès que l'eau reste durablement sous 12\u00a0°C. Filtration arrêtée et circuits vidangés — le choix des régions où le gel est fréquent ou prolongé.",
+  },
+  remise: {
+    actif: "Après un hivernage actif, pas de flotteurs ni de bouchons à retirer : la filtration n'a jamais été coupée, le redémarrage est plus rapide.",
+    passif: "Après un hivernage passif : on remet le circuit en eau, on relance la filtration en continu, puis on rééquilibre l'eau.",
+  },
+};
+
+function _seasonEntry(){ return {year:0, completed:[], dismissedPromo:false}; }
+
 function getSeasonState(){
-  const def = {hivernage:{year:0,completed:[],dismissedPromo:false},remise:{year:0,completed:[],dismissedPromo:false}};
-  return Object.assign({}, def, loadJSON(SEASON_STATE_KEY, {}));
+  const raw = loadJSON(SEASON_STATE_KEY, {}) || {};
+  const s = Object.assign({}, raw);
+  ['hivernage','hivernageActif','remise','remiseActif'].forEach(k => {
+    const e = raw[k];
+    s[k] = (e && typeof e === 'object')
+      ? Object.assign(_seasonEntry(), e, {completed: Array.isArray(e.completed) ? e.completed : []})
+      : _seasonEntry();
+  });
+  s.hivernageType = (raw.hivernageType === 'actif' || raw.hivernageType === 'passif') ? raw.hivernageType : null;
+  return s;
 }
 function saveSeasonState(s){ saveJSON(SEASON_STATE_KEY, s); }
 function currentYear(){ return new Date().getFullYear(); }
+
+// Méthode d'hivernage retenue. Les utilisateurs d'avant la v1.30 qui avaient déjà
+// coché des étapes cette année suivaient forcément la checklist passive.
+function getHivernageType(s){
+  s = s || getSeasonState();
+  if(s.hivernageType) return s.hivernageType;
+  if(s.hivernage.year === currentYear() && s.hivernage.completed.length) return 'passif';
+  return null;
+}
+function setHivernageType(type){
+  if(type !== 'actif' && type !== 'passif') return;
+  const s = getSeasonState();
+  s.hivernageType = type;
+  saveSeasonState(s);
+  const ov = document.getElementById('seasonOverlay');
+  if(ov && ov.style.display === 'flex') renderSeasonModal((ov.dataset && ov.dataset.mode) || 'hivernage');
+  renderSeasonPromo();
+  if(typeof renderFiltration === 'function') renderFiltration();
+}
+
+// Clé de stockage de la checklist pour un onglet (hivernage|remise) et une méthode.
+function seasonKey(mode, type){
+  if(mode === 'remise') return type === 'actif' ? 'remiseActif' : 'remise';
+  return type === 'actif' ? 'hivernageActif' : 'hivernage';
+}
+function seasonSteps(key){
+  return {
+    hivernage: SEASON_HIVERNAGE_STEPS,
+    hivernageActif: SEASON_HIVERNAGE_ACTIF_STEPS,
+    remise: SEASON_REMISE_STEPS,
+    remiseActif: SEASON_REMISE_ACTIF_STEPS,
+  }[key] || SEASON_HIVERNAGE_STEPS;
+}
+// Nouvelle année calendaire : progression et masquage de la carte promo repartent à zéro.
+function ensureSeasonYear(s, key){
+  if(s[key].year === currentYear()) return false;
+  s[key].year = currentYear();
+  s[key].completed = [];
+  s[key].dismissedPromo = false;
+  return true;
+}
 
 function inHivernageWindow(){
   const m = new Date().getMonth(); // 0=jan
@@ -4974,20 +5070,23 @@ function inRemiseWindow(){
   return m === 2 || m === 3; // mars + avril
 }
 
-function toggleSeasonStep(mode, idx){
+function toggleSeasonStep(key, idx, mode){
   const s = getSeasonState();
-  if(s[mode].year !== currentYear()){ s[mode].year = currentYear(); s[mode].completed = []; }
-  const i = s[mode].completed.indexOf(idx);
-  if(i >= 0) s[mode].completed.splice(i, 1);
-  else s[mode].completed.push(idx);
+  if(!s[key]) return;
+  ensureSeasonYear(s, key);
+  const i = s[key].completed.indexOf(idx);
+  if(i >= 0) s[key].completed.splice(i, 1);
+  else s[key].completed.push(idx);
   saveSeasonState(s);
-  renderSeasonModal(mode);
+  renderSeasonModal(mode || (key.indexOf('remise') === 0 ? 'remise' : 'hivernage'));
+  renderSeasonPromo();
 }
 
-function dismissSeasonPromo(mode){
+function dismissSeasonPromo(key){
   const s = getSeasonState();
-  s[mode].year = currentYear();
-  s[mode].dismissedPromo = true;
+  if(!s[key]) return;
+  ensureSeasonYear(s, key);
+  s[key].dismissedPromo = true;
   saveSeasonState(s);
   renderSeasonPromo();
 }
@@ -5009,28 +5108,68 @@ function switchSeasonMode(mode){
   renderSeasonModal(mode);
 }
 
+function renderSeasonTypeChooser(){
+  return `
+    <div class="season-intro">Deux méthodes existent. Choisis celle qui correspond à ton climat et à ton équipement — tu pourras changer à tout moment.</div>
+    <div class="season-choice-grid">
+      <button type="button" class="season-choice" onclick="setHivernageType('actif')">
+        <div class="season-choice-icon">🔄</div>
+        <div class="season-choice-title">Hivernage actif</div>
+        <div class="season-choice-desc">La filtration tourne 2 à 4 h par jour tout l'hiver, niveau d'eau normal, coffret hors-gel. Pour les climats doux où le gel est rare. Remise en route plus simple au printemps.</div>
+      </button>
+      <button type="button" class="season-choice" onclick="setHivernageType('passif')">
+        <div class="season-choice-icon">🛌</div>
+        <div class="season-choice-title">Hivernage passif</div>
+        <div class="season-choice-desc">Filtration arrêtée, circuits vidangés, niveau baissé, flotteurs et bâche. Pour les régions où le gel est fréquent ou prolongé. Aucune consommation électrique l'hiver.</div>
+      </button>
+    </div>`;
+}
+
 function renderSeasonModal(mode){
   const title = document.getElementById('seasonTitle');
   const tabs = document.getElementById('seasonTabs');
   const body = document.getElementById('seasonBody');
   if(!title || !tabs || !body) return;
-  const steps = mode === 'remise' ? SEASON_REMISE_STEPS : SEASON_HIVERNAGE_STEPS;
+  mode = mode === 'remise' ? 'remise' : 'hivernage';
   const state = getSeasonState();
-  // Reset progress si année différente (changement d'année calendaire)
-  if(state[mode].year !== currentYear()){
-    state[mode].year = currentYear();
-    state[mode].completed = [];
-    saveSeasonState(state);
-  }
-  const completed = state[mode].completed || [];
-  const total = steps.length;
-  const done = completed.length;
-  const pct = Math.round((done / total) * 100);
-  title.textContent = mode === 'remise' ? '🌸 Remise en route' : '❄ Hivernage';
+  const type = getHivernageType(state);
+
   tabs.innerHTML = `
     <button class="season-tab${mode==='hivernage'?' active':''}" onclick="switchSeasonMode('hivernage')">❄ Hivernage</button>
     <button class="season-tab${mode==='remise'?' active':''}" onclick="switchSeasonMode('remise')">🌸 Remise en route</button>
   `;
+
+  // Onglet Hivernage sans méthode choisie : on fait choisir avant d'afficher une checklist.
+  if(mode === 'hivernage' && !type){
+    title.textContent = '❄ Hivernage';
+    body.innerHTML = renderSeasonTypeChooser();
+    return;
+  }
+
+  const effType = type || 'passif';
+  const key = seasonKey(mode, effType);
+  const steps = seasonSteps(key);
+  if(ensureSeasonYear(state, key)) saveSeasonState(state);
+  const completed = state[key].completed;
+  const total = steps.length;
+  const done = steps.filter((_, i) => completed.includes(i)).length;
+  const pct = Math.round((done / total) * 100);
+  const isSalt = (typeof getCurrentMode === 'function' ? getCurrentMode() : null) === 'sel';
+
+  if(mode === 'remise'){
+    title.textContent = effType === 'actif' ? '🌸 Remise en route (après hivernage actif)' : '🌸 Remise en route';
+  } else {
+    title.textContent = effType === 'actif' ? '❄ Hivernage actif' : '❄ Hivernage passif';
+  }
+
+  const typeSwitch = `
+    <div class="season-type" role="group" aria-label="Méthode d'hivernage">
+      <span class="season-type-label">${mode === 'remise' ? 'Hivernage suivi' : 'Méthode'}</span>
+      <button type="button" class="season-type-btn${effType==='actif'?' active':''}" onclick="setHivernageType('actif')">Actif</button>
+      <button type="button" class="season-type-btn${effType==='passif'?' active':''}" onclick="setHivernageType('passif')">Passif</button>
+    </div>
+    <div class="season-intro">${escapeHtml(SEASON_TYPE_INTRO[mode][effType])}</div>`;
+
   const progressHtml = `
     <div style="margin-bottom:18px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:12px;color:var(--shallow);text-transform:uppercase;letter-spacing:.5px">
@@ -5042,41 +5181,51 @@ function renderSeasonModal(mode){
     </div>`;
   const stepsHtml = steps.map((step, i) => {
     const isDone = completed.includes(i);
-    return `<div class="season-step${isDone?' done':''}" onclick="toggleSeasonStep('${mode}',${i})">
+    const extra = (isSalt && step.sel) ? `<div class="season-step-detail season-step-extra">⚡ ${escapeHtml(step.sel)}</div>` : '';
+    return `<div class="season-step${isDone?' done':''}" onclick="toggleSeasonStep('${key}',${i},'${mode}')">
       <div class="season-step-check">${isDone ? '✓' : (i+1)}</div>
       <div class="season-step-body">
         <div class="season-step-title">${escapeHtml(step.title)}</div>
-        <div class="season-step-detail">${escapeHtml(step.detail)}</div>
+        <div class="season-step-detail">${escapeHtml(step.detail)}</div>${extra}
       </div>
     </div>`;
   }).join('');
   const completedAll = done === total;
   const footer = completedAll
-    ? `<div style="margin-top:18px;padding:14px;background:rgba(94,234,212,.10);border:1px solid rgba(94,234,212,.30);border-radius:12px;font-size:13px;line-height:1.55;color:#a8f8e8;text-align:center">🎉 <strong>Bravo, tout est coché pour ${currentYear()} !</strong><br>Ton bassin est ${mode === 'remise' ? 'prêt pour la saison' : 'protégé pour l\'hiver'}.</div>`
+    ? `<div style="margin-top:18px;padding:14px;background:rgba(94,234,212,.10);border:1px solid rgba(94,234,212,.30);border-radius:12px;font-size:13px;line-height:1.55;color:#a8f8e8;text-align:center">🎉 <strong>Bravo, tout est coché pour ${currentYear()} !</strong><br>${mode === 'remise' ? 'Ton bassin est prêt pour la saison.' : (effType === 'actif' ? 'Ton bassin est prêt pour l\'hiver — garde le rythme d\'un contrôle toutes les 2 semaines.' : 'Ton bassin est protégé pour l\'hiver.')}</div>`
     : `<div style="margin-top:14px;font-size:11px;color:var(--shallow);opacity:.55;line-height:1.5;text-align:center">Coche chaque étape au fur et à mesure — la progression est sauvegardée automatiquement pour cette année.</div>`;
-  body.innerHTML = progressHtml + stepsHtml + footer;
+  body.innerHTML = typeSwitch + progressHtml + stepsHtml + footer;
 }
 
 function renderSeasonPromo(){
   const wrap = document.getElementById('seasonPromoCard');
   if(!wrap) return;
   const state = getSeasonState();
+  const type = getHivernageType(state);
   let mode = null;
-  if(inHivernageWindow()){
-    const h = state.hivernage;
-    if(h.year !== currentYear() || (!h.dismissedPromo && h.completed.length < SEASON_HIVERNAGE_STEPS.length)) mode = 'hivernage';
-  } else if(inRemiseWindow()){
-    const r = state.remise;
-    if(r.year !== currentYear() || (!r.dismissedPromo && r.completed.length < SEASON_REMISE_STEPS.length)) mode = 'remise';
-  }
-  if(!mode){ wrap.style.display = 'none'; return; }
+  if(inHivernageWindow()) mode = 'hivernage';
+  else if(inRemiseWindow()) mode = 'remise';
+  const key = mode ? seasonKey(mode, type || 'passif') : null;
+  const entry = key ? state[key] : null;
+  const steps = key ? seasonSteps(key) : [];
+  const visible = entry && (entry.year !== currentYear() || (!entry.dismissedPromo && entry.completed.length < steps.length));
+  if(!visible){ wrap.style.display = 'none'; return; }
   const colors = mode === 'remise'
-    ? {bg:'linear-gradient(135deg,rgba(251,191,36,.12),rgba(251,191,36,.04))', border:'rgba(251,191,36,.30)', icon:'🌸', accent:'#fbbf24'}
-    : {bg:'linear-gradient(135deg,rgba(96,165,250,.12),rgba(96,165,250,.04))', border:'rgba(96,165,250,.30)', icon:'❄', accent:'#60a5fa'};
-  const label = mode === 'remise' ? 'Remise en route' : 'Hivernage';
-  const desc = mode === 'remise'
-    ? "C'est la période idéale pour redémarrer le bassin — checklist guidée des 10 étapes pour repartir sans accroc."
-    : "C'est le moment d'hiverner — checklist guidée des 8 étapes pour protéger ton bassin du gel.";
+    ? {bg:'linear-gradient(135deg,rgba(251,191,36,.12),rgba(251,191,36,.04))', border:'rgba(251,191,36,.30)', icon:'🌸'}
+    : {bg:'linear-gradient(135deg,rgba(96,165,250,.12),rgba(96,165,250,.04))', border:'rgba(96,165,250,.30)', icon:'❄'};
+  let label, desc;
+  if(mode === 'remise'){
+    label = 'Remise en route — checklist guidée';
+    desc = `C'est la période idéale pour redémarrer le bassin — checklist guidée des ${steps.length} étapes${type === 'actif' ? ' adaptée à ton hivernage actif' : ''} pour repartir sans accroc.`;
+  } else if(!type){
+    label = 'Hivernage actif ou passif ?';
+    desc = "C'est le moment d'hiverner — choisis ta méthode et suis la checklist guidée étape par étape.";
+  } else {
+    label = (type === 'actif' ? 'Hivernage actif' : 'Hivernage passif') + ' — checklist guidée';
+    desc = type === 'actif'
+      ? `C'est le moment de passer en mode hiver — checklist guidée des ${steps.length} étapes pour une eau saine sans couper la filtration.`
+      : `C'est le moment d'hiverner — checklist guidée des ${steps.length} étapes pour protéger ton bassin du gel.`;
+  }
   wrap.style.display = 'block';
   wrap.style.background = colors.bg;
   wrap.style.border = `1px solid ${colors.border}`;
@@ -5084,10 +5233,10 @@ function renderSeasonPromo(){
     <div style="display:flex;align-items:center;gap:14px">
       <div style="font-size:32px">${colors.icon}</div>
       <div style="flex:1;cursor:pointer" onclick="openSeasonGuide('${mode}')">
-        <div style="font-weight:600;color:#fff;margin-bottom:4px">${label} — checklist guidée</div>
+        <div style="font-weight:600;color:#fff;margin-bottom:4px">${label}</div>
         <div style="font-size:13px;color:var(--shallow);opacity:.85;line-height:1.5">${desc}</div>
       </div>
-      <button onclick="dismissSeasonPromo('${mode}')" style="background:transparent;border:none;color:var(--shallow);opacity:.6;cursor:pointer;font-size:18px;padding:6px 10px;border-radius:8px" title="Masquer pour cette année">×</button>
+      <button onclick="dismissSeasonPromo('${key}')" style="background:transparent;border:none;color:var(--shallow);opacity:.6;cursor:pointer;font-size:18px;padding:6px 10px;border-radius:8px" title="Masquer pour cette année">×</button>
     </div>`;
 }
 

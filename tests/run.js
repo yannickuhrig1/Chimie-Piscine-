@@ -11,7 +11,7 @@
 //     racontent la même chose. Toute règle ajoutée hors du moteur casse ces tests.
 const fs = require('fs');
 const path = require('path');
-const { store } = require('./browser-stubs.js');
+const { store, elStub } = require('./browser-stubs.js');
 const scenarios = require('./scenarios.js');
 
 const src = fs.readFileSync(path.join(__dirname, '..', 'app.js'), 'utf8');
@@ -187,6 +187,70 @@ check('import: entrées invalides filtrées', (() => {
   const acts2 = getActionsTextList(chocM);
   check('audit: fcl<50% → ligne choc, pas de dose normale', acts2.some(a => a.includes('Chlore très bas')) && !acts2.some(a => a.startsWith('Chloration ·')));
 }
+
+// ============ Saisons : hivernage actif / passif ============
+{
+  const SK = 'cp_season_state_v1';
+  const yr = new Date().getFullYear();
+  // getElementById persistant pour lire ce que renderSeasonModal écrit
+  const els = new Map();
+  const origGet = document.getElementById;
+  document.getElementById = id => { if(!els.has(id)) els.set(id, elStub()); return els.get(id); };
+
+  resetStore();
+  let s = getSeasonState();
+  check('saison: état vide → méthode non choisie', s.hivernageType === null && getHivernageType(s) === null);
+  check('saison: 4 checklists initialisées', ['hivernage','hivernageActif','remise','remiseActif'].every(k => Array.isArray(s[k].completed)));
+
+  store.set(SK, JSON.stringify({ hivernage: { year: yr, completed: [0, 1], dismissedPromo: false } }));
+  check('saison: progression passive existante → méthode passive déduite', getHivernageType() === 'passif');
+  store.set(SK, JSON.stringify({ hivernage: { year: yr - 1, completed: [0, 1] } }));
+  check('saison: progression d\'une année passée → méthode non déduite', getHivernageType() === null);
+  store.set(SK, JSON.stringify({ hivernageActif: { year: yr, completed: 'junk' }, hivernageType: 'nimporte' }));
+  s = getSeasonState();
+  check('saison: état corrompu assaini', Array.isArray(s.hivernageActif.completed) && s.hivernageType === null);
+
+  resetStore();
+  setHivernageType('actif');
+  check('saison: méthode actif enregistrée', getHivernageType() === 'actif');
+  check('saison: clés de checklist', seasonKey('hivernage','actif') === 'hivernageActif' && seasonKey('remise','actif') === 'remiseActif'
+    && seasonKey('hivernage','passif') === 'hivernage' && seasonKey('remise','passif') === 'remise');
+  toggleSeasonStep('hivernageActif', 2, 'hivernage');
+  s = getSeasonState();
+  check('saison: coche actif isolée du passif', s.hivernageActif.completed.join() === '2' && s.hivernage.completed.length === 0);
+  setHivernageType('bidon');
+  check('saison: méthode invalide ignorée', getHivernageType() === 'actif');
+
+  store.set(SK, JSON.stringify({ hivernage: { year: yr - 1, completed: [1], dismissedPromo: true } }));
+  s = getSeasonState();
+  ensureSeasonYear(s, 'hivernage');
+  check('saison: nouvelle année → progression et masquage remis à zéro', s.hivernage.completed.length === 0 && s.hivernage.dismissedPromo === false);
+
+  resetStore();
+  renderSeasonModal('hivernage');
+  check('saison: sans méthode → choix actif/passif affiché', els.get('seasonBody').innerHTML.includes("setHivernageType('actif')") && !els.get('seasonBody').innerHTML.includes('season-step'));
+  setHivernageType('actif');
+  renderSeasonModal('hivernage');
+  let html = els.get('seasonBody').innerHTML;
+  check('saison: checklist actif affichée', html.includes('Garder le niveau d') && !html.includes('Baisser le niveau'));
+  check('saison: actif sans électrolyse → pas d\'encart sel', !html.includes('season-step-extra'));
+  renderSeasonModal('remise');
+  html = els.get('seasonBody').innerHTML;
+  check('saison: remise après actif sans flotteurs', !html.includes('Retirer flotteurs') && html.includes('Repasser la filtration'));
+  store.set('cp_last_inputs_v1', JSON.stringify({ modeDesinf: 'sel' }));
+  renderSeasonModal('hivernage');
+  check('saison: électrolyse → encart sel affiché', els.get('seasonBody').innerHTML.includes('season-step-extra'));
+  setHivernageType('passif');
+  renderSeasonModal('hivernage');
+  check('saison: checklist passive inchangée (8 étapes)', seasonSteps('hivernage').length === 8 && els.get('seasonBody').innerHTML.includes('Baisser le niveau'));
+
+  document.getElementById = origGet;
+}
+
+// Filtration en eau froide
+check('filtration: < 12 °C → 2 h/j', filtrationHoursForTemp(6) === 2 && filtrationHoursForTemp(11) === 2);
+check('filtration: hiver → pas de "sous-filtré"', (() => { const f = computeFiltration(8, 50, 10); return f.winter && f.level === 'ok'; })());
+check('filtration: été inchangé', (() => { const f = computeFiltration(26, 70, 14); return !f.winter && f.hours === 13 && f.level === 'warn'; })());
 
 console.log(`\n${pass} OK, ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
