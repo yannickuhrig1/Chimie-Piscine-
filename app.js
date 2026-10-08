@@ -1178,10 +1178,10 @@ function updateStatus(m){
 }
 
 // ============== Recommandation filtration ==============
-// Heures recommandées selon T° eau (règle T°/2 avec paliers saisonniers)
+// Heures recommandées selon T° eau (règle T°/2 avec paliers saisonniers).
+// Sous 12 °C (hivernage actif) : 2 h/j minimum, recommandation de la FPP.
 function filtrationHoursForTemp(t){
   if(t === null || t === undefined || isNaN(t)) return null;
-  if(t < 10) return 1;
   if(t < 12) return 2;
   if(t > 28) return 24;
   return Math.max(2, Math.round(t / 2));
@@ -1191,7 +1191,7 @@ function filtrationHoursForTemp(t){
 function computeFiltration(temp, volume, debit){
   const hours = filtrationHoursForTemp(temp);
   if(hours === null) return null;
-  const out = {hours, temp};
+  const out = {hours, temp, winter: temp < 12};
   if(volume && volume > 0 && debit && debit > 0){
     const cycleTime = volume / debit; // h/cycle
     const cycles = hours / cycleTime;
@@ -1199,6 +1199,9 @@ function computeFiltration(temp, volume, debit){
     let level = 'danger';
     if(cycles >= 3) level = 'ok';
     else if(cycles >= 1.5) level = 'warn';
+    // En eau froide l'objectif 3-4 cycles/j ne s'applique pas : on brasse l'eau
+    // (et on la protège du gel), on ne cherche pas le renouvellement d'été.
+    if(out.winter) level = 'ok';
     out.cycleTime = cycleTime;
     out.cycles = cycles;
     out.renewal = renewal;
@@ -1234,7 +1237,7 @@ function renderFiltration(){
   if(f.level){
     const labels = {ok:'Bonne filtration', warn:'À surveiller', danger:'Sous-filtré'};
     pillEl.className = 'status-pill ' + f.level;
-    pillEl.innerHTML = '<span class="pulse"></span>' + labels[f.level];
+    pillEl.innerHTML = '<span class="pulse"></span>' + (f.winter ? 'Régime hiver' : labels[f.level]);
     pillEl.style.display = '';
   } else {
     pillEl.style.display = 'none';
@@ -1263,12 +1266,18 @@ function renderFiltration(){
 
   // Note explicative
   const notes = [];
-  if(temp < 10) notes.push('Hivernage : eau froide, 1 h/j suffit (ou arrêt total si gel).');
+  if(f.winter){
+    const hivType = (typeof getHivernageType === 'function') ? getHivernageType() : null;
+    if(hivType === 'actif') notes.push('Hivernage actif : 2–4 h/j tôt le matin (heures les plus froides). Pendant le gel, la pompe doit tourner — coffret hors-gel, ou filtration 24/24.');
+    else if(hivType === 'passif') notes.push('Hivernage passif : filtration arrêtée une fois les circuits vidangés. D\'ici là, 2 h/j suffisent en eau froide.');
+    else notes.push('Eau froide : 2 h/j suffisent, tôt le matin. En hivernage actif la pompe doit tourner pendant le gel (coffret hors-gel) ; l\'arrêt total est réservé à l\'hivernage passif, circuits vidangés.');
+  }
   else if(temp > 28) notes.push('Canicule : filtration en continu 24/24 pour éviter le développement d\'algues.');
   else notes.push(`Règle T°/2 : ${f.temp} °C → ${f.hours} h/j en journée (8 h–20 h).`);
   if(f.cycles !== undefined){
     notes.push(`1 cycle = ${f.cycleTime.toFixed(1)} h (volume ${volume} m³ ÷ débit ${debit} m³/h).`);
-    notes.push('Objectif : 3–4 cycles/jour (95–98 % de renouvellement, loi Gage-Bidwell).');
+    if(f.winter) notes.push('En hiver, l\'objectif de 3–4 cycles/jour ne s\'applique pas : la filtration sert surtout à brasser l\'eau.');
+    else notes.push('Objectif : 3–4 cycles/jour (95–98 % de renouvellement, loi Gage-Bidwell).');
     if(f.underpowered){
       notes.push(`⚠ Pompe sous-dimensionnée : 1 cycle &gt; 4 h. Débit minimum recommandé = ${f.minDebit.toFixed(1)} m³/h.`);
     }
