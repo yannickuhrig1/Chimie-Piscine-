@@ -5,6 +5,22 @@ Toutes les évolutions notables de Chimie Piscine sont consignées dans ce fichi
 Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/),
 versionnage selon [SemVer](https://semver.org/lang/fr/).
 
+## [1.30.0] — 2026-10-08
+
+### Ajouté
+- **Hivernage actif** dans la modale Saisons (Rappels › Saisons et carte promo de la page Mesure en octobre-novembre), à la demande d'un utilisateur. L'onglet Hivernage fait d'abord choisir la méthode — actif (climat doux, filtration réduite, hors-gel) ou passif (circuits vidangés) — puis affiche la checklist correspondante : 10 étapes pour l'actif (niveau d'eau conservé, filtration 2-4 h/j tôt le matin, coffret hors-gel, désinfection d'hiver, contrôle toutes les 2 semaines), 8 étapes inchangées pour le passif. La méthode reste modifiable à tout moment par un sélecteur Actif / Passif.
+- **Remise en route après hivernage actif** : 9 étapes sans flotteurs ni bouchons, filtration repassée au régime T°/2 dès 12 °C. L'onglet Remise suit la méthode choisie à l'automne.
+- **Encarts électrolyse** dans les checklists actives quand le bassin est en mode sel : production coupée sous ~12 °C par la plupart des électrolyseurs (relais au chlore lent, sel ≥ 2 g/L), redémarrage de la cellule au-dessus de 15 °C.
+
+### Corrigé
+- **Carte Filtration en eau froide** : sous 12 °C la recommandation passe à 2 h/j (au lieu d'1 h sous 10 °C), la pastille affiche « Régime hiver » au lieu de « Sous-filtré » (l'objectif 3-4 cycles/jour ne s'applique pas l'hiver) et la note ne conseille plus « l'arrêt total si gel », dangereux en hivernage actif : la pompe doit au contraire tourner pendant le gel. Elle s'adapte à la méthode d'hivernage choisie.
+- **Contenus pédagogiques alignés** (Apprendre › Cycle d'une saison et Filtration, fiche imprimable Hivernage) : filtration d'hiver tôt le matin aux heures les plus froides — et non « sur le créneau le plus chaud » —, coffret hors-gel plutôt qu'un « produit antigel », désinfection maintenue en hivernage actif.
+- **Carte promo Saisons** : une carte masquée l'année précédente disparaissait dès la première ouverture de la checklist l'année suivante, même sans rien cocher (le drapeau de masquage n'était pas remis à zéro au changement d'année).
+
+### Technique
+- État `cp_season_state_v1` étendu (`hivernageType`, `hivernageActif`, `remiseActif`), rétro-compatible : une progression passive déjà commencée cette année vaut choix « passif ». Synchronisé par le mécanisme existant.
+- 19 tests ajoutés à `tests/run.js` (état saison, isolement des checklists, rendu, filtration hiver).
+
 ## [1.29.0] — 2026-08-01
 
 ### Ajouté

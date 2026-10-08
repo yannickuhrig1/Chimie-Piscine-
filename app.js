@@ -3,7 +3,7 @@
    Calculs transposés depuis le fichier Excel d'origine
    ========================================================= */
 
-const APP_VERSION = '1.29.0';
+const APP_VERSION = '1.30.0';
 
 const STORAGE_KEYS = {
   measurements: 'cp_measurements_v1',
@@ -6560,6 +6560,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 const RELEASE_NOTES_KEY = 'cp_release_notes_seen_v1';
 
 const RELEASE_NOTES = [
+  {
+    version: '1.30.0',
+    icon: '❄️',
+    color: '#60a5fa',
+    title: 'Hivernage actif ou passif : à toi de choisir',
+    body: "La checklist d'hivernage (Rappels › Saisons) propose désormais les deux méthodes. L'hivernage actif — filtration réduite à 2-4 h par jour tôt le matin, niveau d'eau normal, coffret hors-gel — a sa propre checklist de 10 étapes, et la remise en route du printemps s'adapte à la méthode choisie. En électrolyse au sel, les étapes concernées rappellent que la cellule s'arrête en eau froide et comment prendre le relais. La carte Filtration ne signale plus « sous-filtré » en hiver et rappelle que la pompe doit tourner pendant le gel en hivernage actif. Merci pour vos suggestions !",
+  },
   {
     version: '1.29.0',
     icon: '🤝',
